@@ -32,6 +32,10 @@ async function getNextRepCode(): Promise<string> {
   return `REP-${String(count + 1).padStart(3, "0")}`;
 }
 
+export async function GET() {
+  return NextResponse.json({ status: "webhook online" });
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
