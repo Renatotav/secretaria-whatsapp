@@ -3,9 +3,10 @@ import { createSession, clearSession } from "@/lib/auth";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
-  const password = body.password ?? "";
+  const password = (body.password ?? "").trim();
+  const adminPassword = (process.env.ADMIN_PASSWORD ?? "admin").trim();
 
-  if (password !== process.env.ADMIN_PASSWORD) {
+  if (!password || password !== adminPassword) {
     return NextResponse.json({ error: "Senha inválida" }, { status: 401 });
   }
 
