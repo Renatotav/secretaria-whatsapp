@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── MODELOS ORIGINAIS ────────────────────────────────────────────────────────
+
+model AgentConfig {
+  id              String   @id @default(cuid())
+  name            String   @default("Assistente IA")
+  systemPrompt    String   @default("Você é um assistente prestativo e amigável.")
+  temperature     Float    @default(0.7)
+  maxTokens       Int      @default(1024)
+  evolutionUrl    String   @default("")
+  evolutionApiKey String   @default("")
+  instanceId      String   @default("")
+  historyLimit    Int      @default(10)
+  enabled         Boolean  @default(true)
+  allowedPhones   String   @default("")
+  aiProvider      String   @default("openai")
+  openaiApiKey    String   @default("")
+  openaiModel     String   @default("gpt-4.1-mini")
+  groqApiKey      String   @default("")
+  groqModel       String   @default("llama-3.3-70b-versatile")
+  ownerPhone      String   @default("")
+  ownerName       String   @default("")
+  ownerRole       String   @default("")
+  summaryTime     String   @default("18:00")
+  weeklyTime      String   @default("20:00")
+  reminderHours   Int      @default(3)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  source    String    @default("chat")
+  phone     String?
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  tokens         Int?
+  createdAt      DateTime     @default(now())
+}
+
+// ─── MODELOS NOVOS ────────────────────────────────────────────────────────────
+
+model GroupConfig {
+  id        String   @id @default(cuid())
+  groupJid  String   @unique
+  groupName String   @default("")
+  focus     String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Briefing {
+  id          String   @id @default(cuid())
+  phone       String
+  contactName String   @default("")
+  rawMessage  String
+  summary     String
+  subject     String
+  urgency     String   @default("normal")
+  suggestion  String   @default("")
+  repCode     String   @default("")
+  replied     Boolean  @default(false)
+  receivedAt  DateTime
+  notified    Boolean  @default(false)
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model AgendaItem {
+  id           String    @id @default(cuid())
+  source       String    @default("group")
+  groupJid     String?
+  groupName    String    @default("")
+  category     String
+  title        String
+  description  String
+  dueDate      DateTime?
+  senderName   String    @default("")
+  rawMessage   String
+  suggestion   String    @default("")
+  repCode      String    @default("")
+  replied      Boolean   @default(false)
+  notified     Boolean   @default(false)
+  reminded     Boolean   @default(false)
+  done         Boolean   @default(false)
+  followUpNote String    @default("")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model GroupMessage {
+  id         String   @id @default(cuid())
+  groupJid   String
+  groupName  String   @default("")
+  senderName String   @default("")
+  content    String
+  receivedAt DateTime
+  summarized Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model DailySummary {
+  id        String    @id @default(cuid())
+  groupJid  String
+  groupName String    @default("")
+  date      String
+  summary   String
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model WeeklyReport {
+  id        String    @id @default(cuid())
+  weekStart String
+  weekEnd   String
+  content   String
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Ticket {
+  id        String   @id @default(cuid())
+  ticketId  String
+  prefix    String   @default("")
+  groupJid  String   @default("")
+  groupName String   @default("")
+  status    String   @default("open")
+  title     String   @default("")
+  mentions  String   @default("[]")
+  lastSeen  DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PendingReply {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  targetPhone String
+  targetType  String
+  suggestion  String
+  sourceId    String
+  used        Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}

@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+:root {
+  /* Base */
+  --bg: #0d0d1a;
+  --bg-card: #13131f;
+  --bg-hover: #1a1a2e;
+  --border: #2a2a3d;
+  --border-light: #1e1e30;
+
+  /* Text */
+  --text: #e8e8f0;
+  --text-muted: #7a7a9c;
+  --text-dim: #5a5a7a;
+
+  /* Accent */
+  --accent: #7c6dff;
+  --accent-dim: rgba(124, 109, 255, 0.12);
+  --accent-border: rgba(124, 109, 255, 0.3);
+  --accent-hover: #9585ff;
+
+  /* Status */
+  --success: #4ade80;
+  --warning: #fb923c;
+  --danger: #f87171;
+
+  /* Urgency */
+  --urgency-critical: #F87171;
+  --urgency-critical-dim: rgba(248, 113, 113, 0.1);
+  --urgency-high: #FB923C;
+  --urgency-high-dim: rgba(251, 146, 60, 0.1);
+  --urgency-normal: #2DD4BF;
+  --urgency-normal-dim: rgba(45, 212, 191, 0.09);
+  --urgency-low: #7A7A9C;
+  --urgency-low-dim: rgba(122, 122, 156, 0.1);
+
+  /* Ticket status */
+  --ticket-open: #FB923C;
+  --ticket-resolved: #4ADE80;
+  --ticket-escalated: #F87171;
+  --ticket-pending: #A78BFA;
+
+  /* Categories */
+  --cat-mention: #A78BFA;
+  --cat-task: #F0A020;
+  --cat-event: #2DD4BF;
+  --cat-urgent-call: #F87171;
+  --cat-personal: #60A5FA;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+/* Urgency badges */
+.badge-critical {
+  background: var(--urgency-critical-dim);
+  color: var(--urgency-critical);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+}
+.badge-high {
+  background: var(--urgency-high-dim);
+  color: var(--urgency-high);
+  border: 1px solid rgba(251, 146, 60, 0.25);
+}
+.badge-normal {
+  background: var(--urgency-normal-dim);
+  color: var(--urgency-normal);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+}
+.badge-low {
+  background: var(--urgency-low-dim);
+  color: var(--urgency-low);
+  border: 1px solid rgba(122, 122, 156, 0.2);
+}
+
+/* Ticket status badges */
+.badge-open { color: var(--ticket-open); }
+.badge-resolved { color: var(--ticket-resolved); }
+.badge-escalated { color: var(--ticket-escalated); }
+.badge-pending { color: var(--ticket-pending); }
+
+/* Category badges */
+.cat-mention { color: var(--cat-mention); }
+.cat-task { color: var(--cat-task); }
+.cat-event { color: var(--cat-event); }
+.cat-urgent_call { color: var(--cat-urgent-call); }
+.cat-personal { color: var(--cat-personal); }
+
+/* Form elements */
+input,
+textarea,
+select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.btn-danger {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+}
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.2);
+}
