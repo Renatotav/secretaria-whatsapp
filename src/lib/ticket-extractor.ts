@@ -8,7 +8,7 @@ export async function extractAndSaveTickets(
   groupName: string
 ): Promise<void> {
   for (const rawId of ticketIds) {
-    const match = rawId.match(/^([A-Za-z]*)(\d+)$/);
+    const match = rawId.match(/^([SR]?)(\d{6,7})$/i);
     if (!match) continue;
     const prefix = match[1].toUpperCase();
     const ticketId = rawId.toUpperCase();

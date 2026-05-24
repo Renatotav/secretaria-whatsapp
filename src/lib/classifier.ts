@@ -25,18 +25,22 @@ Grupo: ${groupName} | Foco: ${groupFocus}
 Enviado por: ${senderName}
 
 Exige notificação IMEDIATA se:
-- Menciona diretamente @${ownerName} ou seu nome
-- Atribui tarefa ao ${ownerName}
-- Convoca para reunião ou evento
+- Menciona "@${ownerName}" OU apenas o nome "${ownerName}" na mensagem (com ou sem @)
+- Atribui tarefa diretamente ao ${ownerName}
+- Convoca ${ownerName} para reunião ou evento
 - Chamado urgente que envolve ${ownerName}
-- Escalação ou problema crítico
+- Escalação ou problema crítico direcionado ao ${ownerName}
 
 NÃO exige notificação:
 - Bom dia, boa tarde, figurinhas, brincadeiras
 - Confirmações simples ("ok", "certo", "obrigado")
-- Discussões que não envolvem ${ownerName}
+- Discussões gerais que não envolvem ${ownerName} diretamente
 
-Extraia números de chamados citados (S######, R######, ou só números de 7+ dígitos).
+Extraia APENAS chamados com estes formatos exatos:
+- S seguido de 6 a 7 dígitos (ex: S2363114, S277882)
+- R seguido de 6 a 7 dígitos (ex: R2364186)
+- Número standalone de 6 a 7 dígitos (ex: 2041838)
+NÃO extraia: números de processo judicial (formato XXXXXXX-XX.XXXX), JIDs do WhatsApp (15+ dígitos), datas, qualquer outro número.
 
 Se urgent for true, gere uma sugestão de resposta curta, natural e profissional
 que ${ownerName} poderia enviar ao grupo. Máximo 2 frases.
