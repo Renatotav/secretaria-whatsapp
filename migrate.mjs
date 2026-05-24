@@ -177,6 +177,8 @@ const incremental = [
   `ALTER TABLE "AgendaItem" ADD COLUMN "suggestion" TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE "AgendaItem" ADD COLUMN "repCode" TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE "AgendaItem" ADD COLUMN "replied" INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE "AgentConfig" ADD COLUMN "googleApiKey" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "AgentConfig" ADD COLUMN "googleModel" TEXT NOT NULL DEFAULT 'gemini-2.0-flash'`,
 ];
 
 for (const sql of incremental) {

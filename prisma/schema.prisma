@@ -25,6 +25,8 @@ model AgentConfig {
   openaiModel     String   @default("gpt-4.1-mini")
   groqApiKey      String   @default("")
   groqModel       String   @default("llama-3.3-70b-versatile")
+  googleApiKey    String   @default("")
+  googleModel     String   @default("gemini-2.0-flash")
   ownerPhone      String   @default("")
   ownerName       String   @default("")
   ownerRole       String   @default("")

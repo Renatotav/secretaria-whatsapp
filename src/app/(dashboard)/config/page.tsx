@@ -18,6 +18,8 @@ interface Config {
   openaiModel: string;
   groqApiKey: string;
   groqModel: string;
+  googleApiKey: string;
+  googleModel: string;
   ownerPhone: string;
   ownerName: string;
   ownerRole: string;
@@ -42,6 +44,8 @@ const DEFAULT: Config = {
   openaiModel: "gpt-4.1-mini",
   groqApiKey: "",
   groqModel: "llama-3.3-70b-versatile",
+  googleApiKey: "",
+  googleModel: "gemini-2.0-flash",
   ownerPhone: "",
   ownerName: "",
   ownerRole: "",
@@ -235,6 +239,7 @@ export default function ConfigPage() {
             >
               <option value="openai">OpenAI</option>
               <option value="groq">Groq</option>
+              <option value="google">Google Gemini</option>
             </select>
           </Field>
 
@@ -280,6 +285,30 @@ export default function ConfigPage() {
                   <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
                   <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
                   <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+                </select>
+              </Field>
+            </>
+          )}
+
+          {config.aiProvider === "google" && (
+            <>
+              <Field label="Google AI API Key" hint="Obtenha em aistudio.google.com">
+                <input
+                  type="password"
+                  value={config.googleApiKey}
+                  onChange={(e) => set("googleApiKey", e.target.value)}
+                  placeholder="AIza..."
+                />
+              </Field>
+              <Field label="Modelo Gemini">
+                <select
+                  value={config.googleModel}
+                  onChange={(e) => set("googleModel", e.target.value)}
+                >
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
+                  <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (mais rápido)</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
                 </select>
               </Field>
             </>
