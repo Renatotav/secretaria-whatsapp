@@ -17,7 +17,13 @@ export const POST = withErrorHandling(
       return NextResponse.json({ error: "Configure a Evolution API primeiro" }, { status: 400 });
     }
 
-    const webhookUrl = `${new URL(request.url).origin}/api/webhook`;
+    // Atrás do proxy do Easypanel, request.url pode refletir o host interno
+    // (ex: 0.0.0.0:80) em vez do domínio público — por isso prioriza os
+    // headers X-Forwarded-* que o proxy define com o host original.
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+    const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : new URL(request.url).origin;
+    const webhookUrl = `${origin}/api/webhook`;
     await setInstanceWebhook(config.evolutionUrl, config.evolutionApiKey, instance, webhookUrl);
     return NextResponse.json({ ok: true, webhookUrl });
   }
