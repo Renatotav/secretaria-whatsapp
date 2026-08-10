@@ -118,7 +118,7 @@ function CategoryDonut({
 }: {
   entries: FinanceEntry[];
   selectedCategory: string | null;
-  onSelectCategory: (category: string | null) => void;
+  onSelectCategory: (category: string | null, matchNames: string[]) => void;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -131,9 +131,12 @@ function CategoryDonut({
     }
     const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
     const top = sorted.slice(0, 7);
-    const restTotal = sorted.slice(7).reduce((s, [, v]) => s + v, 0);
-    const result = top.map(([name, value], i) => ({ name, value, color: CATEGORY_COLORS[i] }));
-    if (restTotal > 0) result.push({ name: "Outros", value: restTotal, color: OTHER_COLOR });
+    const rest = sorted.slice(7);
+    const restTotal = rest.reduce((s, [, v]) => s + v, 0);
+    const result = top.map(([name, value], i) => ({ name, value, color: CATEGORY_COLORS[i], matchNames: [name] }));
+    // "Outros" aqui pode juntar VÁRIAS categorias reais (tudo além do top 7) —
+    // guarda os nomes reais que compõem a fatia pra filtrar a tabela certo.
+    if (restTotal > 0) result.push({ name: "Outros", value: restTotal, color: OTHER_COLOR, matchNames: rest.map(([name]) => name) });
     return result;
   }, [entries]);
 
@@ -177,7 +180,7 @@ function CategoryDonut({
         style={{ transition: "stroke-width 0.1s, stroke-opacity 0.1s", cursor: "pointer" }}
         onMouseEnter={() => setHovered(i)}
         onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
-        onClick={() => onSelectCategory(isSelected ? null : seg.name)}
+        onClick={() => onSelectCategory(isSelected ? null : seg.name, isSelected ? [] : seg.matchNames)}
       />
     );
     acc += segLen;
@@ -223,7 +226,7 @@ function CategoryDonut({
               key={seg.name}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
-              onClick={() => onSelectCategory(isSelected ? null : seg.name)}
+              onClick={() => onSelectCategory(isSelected ? null : seg.name, isSelected ? [] : seg.matchNames)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -620,6 +623,7 @@ function CategoryManager({
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [yearEntries, setYearEntries] = useState<FinanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -690,15 +694,20 @@ export default function FinancePage() {
   }, [month, year]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSelectedCategory(null); }, [month]);
+  useEffect(() => { setSelectedCategory(null); setSelectedCategoryMatch([]); }, [month]);
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
   const balance = income - expense;
 
   const visibleEntries = selectedCategory
-    ? entries.filter((e) => (e.category || "Outros") === selectedCategory)
+    ? entries.filter((e) => selectedCategoryMatch.includes(e.category || "Outros"))
     : entries;
+
+  function selectCategory(category: string | null, matchNames: string[]) {
+    setSelectedCategory(category);
+    setSelectedCategoryMatch(matchNames);
+  }
 
   const monthly = useMemo(() => {
     const buckets = Array.from({ length: 12 }, () => ({ income: 0, expense: 0 }));
@@ -825,7 +834,7 @@ export default function FinancePage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 12, marginBottom: 12 }}>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Gastos por categoria — {MONTH_LABELS[Number(month.split("-")[1]) - 1]}</h2>
-            <CategoryDonut entries={entries} selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
+            <CategoryDonut entries={entries} selectedCategory={selectedCategory} onSelectCategory={selectCategory} />
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Receitas x despesas — {year}</h2>
@@ -949,7 +958,7 @@ export default function FinancePage() {
         {selectedCategory && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12, color: "var(--text-muted)" }}>
             Filtrando por: <strong style={{ color: "var(--text)" }}>{selectedCategory}</strong>
-            <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setSelectedCategory(null)}>
+            <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => selectCategory(null, [])}>
               Limpar
             </button>
           </div>
