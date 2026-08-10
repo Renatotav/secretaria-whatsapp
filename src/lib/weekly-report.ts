@@ -4,12 +4,13 @@ import { sendWhatsAppMessage } from "./evolution";
 
 function getWeekBounds(): { weekStart: string; weekEnd: string } {
   const now = new Date();
-  const day = now.getDay();
+  const brtDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const day = brtDate.getUTCDay();
   const diffToMonday = (day === 0 ? -6 : 1 - day);
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + diffToMonday);
+  const monday = new Date(brtDate);
+  monday.setUTCDate(brtDate.getUTCDate() + diffToMonday);
   const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
   return {
     weekStart: monday.toISOString().split("T")[0],
     weekEnd: sunday.toISOString().split("T")[0],

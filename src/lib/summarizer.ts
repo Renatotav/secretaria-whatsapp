@@ -12,7 +12,9 @@ export async function generateDailySummary(
   providerOpts: ProviderOptions,
   evolutionConfig: { evolutionUrl: string; evolutionApiKey: string; instanceId: string }
 ): Promise<void> {
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const brtDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const today = brtDate.toISOString().split("T")[0];
 
   const existing = await prisma.dailySummary.findFirst({
     where: { groupJid, date: today },

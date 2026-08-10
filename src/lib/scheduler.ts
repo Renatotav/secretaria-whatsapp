@@ -15,10 +15,13 @@ export function startScheduler(): void {
       if (!config) return;
 
       const now = new Date();
-      const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-      const todayDate = now.toISOString().split("T")[0];
-      const isSunday = now.getDay() === 0;
-      const currentHour = now.getHours();
+      const brtMillis = now.getTime() - (3 * 60 * 60 * 1000);
+      const brtDate = new Date(brtMillis);
+
+      const hhmm = `${String(brtDate.getUTCHours()).padStart(2, "0")}:${String(brtDate.getUTCMinutes()).padStart(2, "0")}`;
+      const todayDate = brtDate.toISOString().split("T")[0];
+      const isSunday = brtDate.getUTCDay() === 0;
+      const currentHour = brtDate.getUTCHours();
 
       const providerOpts: ProviderOptions = {
         aiProvider: config.aiProvider,
