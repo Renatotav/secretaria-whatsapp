@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           title={collapsed ? "Expandir menu" : "Recolher menu"}
           style={{
             position: "absolute",
-            top: 24,
+            top: 310,
             right: -12,
             width: 24,
             height: 24,
