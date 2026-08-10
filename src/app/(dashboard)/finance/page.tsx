@@ -42,7 +42,7 @@ const DEFAULT_TAXONOMY: Record<"income" | "expense", Record<string, string[]>> =
     "Alimentação": ["Supermercado", "Restaurantes", "Delivery"],
     "Transporte": ["Combustível", "Manutenção veículo", "Seguro", "Transporte público", "Uber/Taxi"],
     "Saúde": ["Plano de saúde", "Medicamentos"],
-    "Imposto": ["IR", "INSS", "IPVA"],
+    "Imposto": ["IR", "INSS", "IPVA", "IOF"],
     "Educação": ["Cursos", "Mensalidade", "Livros"],
     "Assinaturas": ["Streaming", "Apps/Softwares", "Academia"],
     "Pessoal": ["Roupas", "Beleza", "Lazer"],
@@ -62,7 +62,7 @@ function subcategoriesFor(type: string, category: string): string[] {
 }
 
 const CATEGORIES_STORAGE_KEY = "finance_custom_categories";
-const SUBCATEGORIES_STORAGE_KEY = "finance_custom_subcategories";
+const SUBCATEGORIES_STORAGE_KEY = "finance_custom_subcategories_v2";
 
 function loadFromStorage(key: string): string[] {
   if (typeof window === "undefined") return [];
@@ -71,6 +71,16 @@ function loadFromStorage(key: string): string[] {
     return raw ? (JSON.parse(raw) as string[]) : [];
   } catch {
     return [];
+  }
+}
+
+function loadSubcategoriesFromStorage(): Record<string, string[]> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(SUBCATEGORIES_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string[]>) : {};
+  } catch {
+    return {};
   }
 }
 
@@ -443,7 +453,8 @@ function CashFlowLine({ monthly }: { monthly: { income: number; expense: number 
 /* ── Painel de gerenciar categorias/subcategorias personalizadas ────── */
 function CategoryManager({
   categories,
-  subcategories,
+  allCategoryNames,
+  subcategoriesByCategory,
   onAddCategory,
   onRemoveCategory,
   onAddSubcategory,
@@ -451,15 +462,17 @@ function CategoryManager({
   onClose,
 }: {
   categories: string[];
-  subcategories: string[];
+  allCategoryNames: string[];
+  subcategoriesByCategory: Record<string, string[]>;
   onAddCategory: (v: string) => void;
   onRemoveCategory: (v: string) => void;
-  onAddSubcategory: (v: string) => void;
-  onRemoveSubcategory: (v: string) => void;
+  onAddSubcategory: (category: string, v: string) => void;
+  onRemoveSubcategory: (category: string, v: string) => void;
   onClose: () => void;
 }) {
   const [newCategory, setNewCategory] = useState("");
   const [newSubcategory, setNewSubcategory] = useState("");
+  const [subcategoryTarget, setSubcategoryTarget] = useState(allCategoryNames[0] ?? "");
 
   return (
     <div
@@ -540,15 +553,24 @@ function CategoryManager({
 
       <div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Subcategorias</div>
+        <select
+          value={subcategoryTarget}
+          onChange={(e) => setSubcategoryTarget(e.target.value)}
+          style={{ fontSize: 12, padding: "6px 8px", width: "100%", marginBottom: 6 }}
+        >
+          {allCategoryNames.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
         <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
           <input
             value={newSubcategory}
             onChange={(e) => setNewSubcategory(e.target.value)}
-            placeholder="Nova subcategoria"
+            placeholder={`Nova subcategoria de ${subcategoryTarget}`}
             style={{ fontSize: 12, padding: "6px 8px" }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && newSubcategory.trim()) {
-                onAddSubcategory(newSubcategory.trim());
+                onAddSubcategory(subcategoryTarget, newSubcategory.trim());
                 setNewSubcategory("");
               }
             }}
@@ -558,7 +580,7 @@ function CategoryManager({
             style={{ fontSize: 11, padding: "6px 10px" }}
             onClick={() => {
               if (newSubcategory.trim()) {
-                onAddSubcategory(newSubcategory.trim());
+                onAddSubcategory(subcategoryTarget, newSubcategory.trim());
                 setNewSubcategory("");
               }
             }}
@@ -566,11 +588,11 @@ function CategoryManager({
             +
           </button>
         </div>
-        {subcategories.length === 0 ? (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Nenhuma subcategoria extra ainda.</div>
+        {(subcategoriesByCategory[subcategoryTarget] ?? []).length === 0 ? (
+          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Nenhuma subcategoria extra em {subcategoryTarget} ainda.</div>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {subcategories.map((s) => (
+            {(subcategoriesByCategory[subcategoryTarget] ?? []).map((s) => (
               <span
                 key={s}
                 style={{
@@ -581,7 +603,7 @@ function CategoryManager({
               >
                 {s}
                 <button
-                  onClick={() => onRemoveSubcategory(s)}
+                  onClick={() => onRemoveSubcategory(subcategoryTarget, s)}
                   style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "0 4px", fontSize: 12 }}
                 >
                   ×
@@ -606,12 +628,12 @@ export default function FinancePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ type: "expense", amount: "", category: "", subcategory: "", description: "", date: "" });
   const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [customSubcategories, setCustomSubcategories] = useState<string[]>([]);
+  const [customSubcategories, setCustomSubcategories] = useState<Record<string, string[]>>({});
   const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   useEffect(() => {
     setCustomCategories(loadFromStorage(CATEGORIES_STORAGE_KEY));
-    setCustomSubcategories(loadFromStorage(SUBCATEGORIES_STORAGE_KEY));
+    setCustomSubcategories(loadSubcategoriesFromStorage());
   }, []);
 
   function addCustomCategory(value: string) {
@@ -630,26 +652,29 @@ export default function FinancePage() {
       return next;
     });
   }
-  function addCustomSubcategory(value: string) {
+  function addCustomSubcategory(category: string, value: string) {
+    if (!category) return;
     setCustomSubcategories((prev) => {
-      if (prev.includes(value)) return prev;
-      const next = [...prev, value];
+      const existing = prev[category] ?? [];
+      if (existing.includes(value)) return prev;
+      const next = { ...prev, [category]: [...existing, value] };
       window.localStorage.setItem(SUBCATEGORIES_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }
-  function removeCustomSubcategory(value: string) {
+  function removeCustomSubcategory(category: string, value: string) {
     setCustomSubcategories((prev) => {
-      const next = prev.filter((s) => s !== value);
+      const next = { ...prev, [category]: (prev[category] ?? []).filter((s) => s !== value) };
       window.localStorage.setItem(SUBCATEGORIES_STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }
 
   const categoryOptions = [...new Set([...categoriesForType(form.type), ...customCategories])];
-  const subcategoryOptions = [...new Set([...subcategoriesFor(form.type, form.category), ...customSubcategories])];
+  const subcategoryOptions = [...new Set([...subcategoriesFor(form.type, form.category), ...(customSubcategories[form.category] ?? [])])];
   const editCategoryOptions = [...new Set([...categoriesForType(editForm.type), ...customCategories])];
-  const editSubcategoryOptions = [...new Set([...subcategoriesFor(editForm.type, editForm.category), ...customSubcategories])];
+  const editSubcategoryOptions = [...new Set([...subcategoriesFor(editForm.type, editForm.category), ...(customSubcategories[editForm.category] ?? [])])];
+  const allCategoryNames = [...new Set([...categoriesForType("income"), ...categoriesForType("expense"), ...customCategories])];
 
   const year = month.split("-")[0];
 
@@ -818,104 +843,108 @@ export default function FinancePage() {
         </div>
 
         {/* Add form */}
-        <form
-          onSubmit={addEntry}
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 20,
-            display: "grid",
-            gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px auto",
-            gap: 8,
-            alignItems: "end",
-          }}
-        >
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Tipo</label>
-            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-              <option value="expense">Despesa</option>
-              <option value="income">Receita</option>
-            </select>
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Valor</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-              placeholder="0,00"
-              required
-            />
-          </div>
-          <div style={{ position: "relative" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-              <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Categoria</label>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div style={{ position: "relative" }}>
               <button
                 type="button"
+                className="btn-ghost"
+                style={{ fontSize: 12, padding: "6px 12px" }}
                 onClick={() => setShowCategoryManager((v) => !v)}
-                title="Gerenciar categorias"
-                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}
               >
-                ⚙️
+                ⚙️ Categorias
               </button>
+              {showCategoryManager && (
+                <CategoryManager
+                  categories={customCategories}
+                  allCategoryNames={allCategoryNames}
+                  subcategoriesByCategory={customSubcategories}
+                  onAddCategory={addCustomCategory}
+                  onRemoveCategory={removeCustomCategory}
+                  onAddSubcategory={addCustomSubcategory}
+                  onRemoveSubcategory={removeCustomSubcategory}
+                  onClose={() => setShowCategoryManager(false)}
+                />
+              )}
             </div>
-            <input
-              list="finance-categories-add"
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-              placeholder="Alimentação"
-            />
-            <datalist id="finance-categories-add">
-              {categoryOptions.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-            <datalist id="finance-subcategories-add">
-              {subcategoryOptions.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-            {showCategoryManager && (
-              <CategoryManager
-                categories={customCategories}
-                subcategories={customSubcategories}
-                onAddCategory={addCustomCategory}
-                onRemoveCategory={removeCustomCategory}
-                onAddSubcategory={addCustomSubcategory}
-                onRemoveSubcategory={removeCustomSubcategory}
-                onClose={() => setShowCategoryManager(false)}
+          </div>
+          <form
+            onSubmit={addEntry}
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              padding: 16,
+              display: "grid",
+              gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px auto",
+              gap: 8,
+              alignItems: "end",
+            }}
+          >
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Tipo</label>
+              <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+                <option value="expense">Despesa</option>
+                <option value="income">Receita</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Valor</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.amount}
+                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                placeholder="0,00"
+                required
               />
-            )}
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
-            <input
-              list="finance-subcategories-add"
-              value={form.subcategory}
-              onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
-              placeholder="Mercado"
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Descrição</label>
-            <input
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              placeholder="Opcional"
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data</label>
-            <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-          </div>
-          <button className="btn-primary" type="submit" disabled={saving}>
-            {saving ? "..." : "Adicionar"}
-          </button>
-        </form>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Categoria</label>
+              <input
+                list="finance-categories-add"
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                placeholder="Alimentação"
+              />
+              <datalist id="finance-categories-add">
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              <datalist id="finance-subcategories-add">
+                {subcategoryOptions.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
+              <input
+                list="finance-subcategories-add"
+                value={form.subcategory}
+                onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
+                placeholder="Mercado"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Descrição</label>
+              <input
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Opcional"
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data</label>
+              <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+            </div>
+            <button className="btn-primary" type="submit" disabled={saving}>
+              {saving ? "..." : "Adicionar"}
+            </button>
+          </form>
+        </div>
 
         {selectedCategory && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12, color: "var(--text-muted)" }}>

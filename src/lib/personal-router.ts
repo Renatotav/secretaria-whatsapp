@@ -11,7 +11,7 @@ Categorias de DESPESA (expense): Moradia (Aluguel, Financiamento, Condomínio,
 Energia elétrica, Água/Esgoto, Internet, Gás), Alimentação (Supermercado,
 Restaurantes, Delivery), Transporte (Combustível, Manutenção veículo, Seguro,
 Transporte público, Uber/Taxi), Saúde (Plano de saúde, Medicamentos), Imposto
-(IR, INSS, IPVA), Educação (Cursos, Mensalidade, Livros), Assinaturas (Streaming,
+(IR, INSS, IPVA, IOF), Educação (Cursos, Mensalidade, Livros), Assinaturas (Streaming,
 Apps/Softwares, Academia), Pessoal (Roupas, Beleza, Lazer), Financeiro (Cartão de
 crédito, Parcelas no cartão, Tarifas bancárias, Empréstimos), Família (Mesada,
 Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
