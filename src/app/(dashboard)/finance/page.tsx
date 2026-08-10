@@ -28,6 +28,23 @@ const OTHER_COLOR = "#5a5a7a"; // var(--text-dim), pro grupo "Outros"
 
 const MONTH_LABELS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
+const DEFAULT_CATEGORIES = [
+  "Alimentação", "Transporte", "Moradia", "Saúde", "Lazer",
+  "Financeiro", "Assinaturas", "Educação", "Imposto", "Outros",
+];
+const CATEGORIES_STORAGE_KEY = "finance_custom_categories";
+const SUBCATEGORIES_STORAGE_KEY = "finance_custom_subcategories";
+
+function loadFromStorage(key: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 function currentMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -394,6 +411,161 @@ function CashFlowLine({ monthly }: { monthly: { income: number; expense: number 
   );
 }
 
+/* ── Painel de gerenciar categorias/subcategorias personalizadas ────── */
+function CategoryManager({
+  categories,
+  subcategories,
+  onAddCategory,
+  onRemoveCategory,
+  onAddSubcategory,
+  onRemoveSubcategory,
+  onClose,
+}: {
+  categories: string[];
+  subcategories: string[];
+  onAddCategory: (v: string) => void;
+  onRemoveCategory: (v: string) => void;
+  onAddSubcategory: (v: string) => void;
+  onRemoveSubcategory: (v: string) => void;
+  onClose: () => void;
+}) {
+  const [newCategory, setNewCategory] = useState("");
+  const [newSubcategory, setNewSubcategory] = useState("");
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "100%",
+        right: 0,
+        marginTop: 6,
+        width: 280,
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: 14,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        zIndex: 20,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <strong style={{ fontSize: 13 }}>Categorias personalizadas</strong>
+        <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={onClose}>
+          Fechar
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Categorias</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          <input
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            placeholder="Nova categoria"
+            style={{ fontSize: 12, padding: "6px 8px" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newCategory.trim()) {
+                onAddCategory(newCategory.trim());
+                setNewCategory("");
+              }
+            }}
+          />
+          <button
+            className="btn-primary"
+            style={{ fontSize: 11, padding: "6px 10px" }}
+            onClick={() => {
+              if (newCategory.trim()) {
+                onAddCategory(newCategory.trim());
+                setNewCategory("");
+              }
+            }}
+          >
+            +
+          </button>
+        </div>
+        {categories.length === 0 ? (
+          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Nenhuma categoria extra ainda.</div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {categories.map((c) => (
+              <span
+                key={c}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4, fontSize: 11,
+                  background: "var(--bg-hover)", border: "1px solid var(--border)",
+                  borderRadius: 999, padding: "3px 4px 3px 10px",
+                }}
+              >
+                {c}
+                <button
+                  onClick={() => onRemoveCategory(c)}
+                  style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "0 4px", fontSize: 12 }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>Subcategorias</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          <input
+            value={newSubcategory}
+            onChange={(e) => setNewSubcategory(e.target.value)}
+            placeholder="Nova subcategoria"
+            style={{ fontSize: 12, padding: "6px 8px" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newSubcategory.trim()) {
+                onAddSubcategory(newSubcategory.trim());
+                setNewSubcategory("");
+              }
+            }}
+          />
+          <button
+            className="btn-primary"
+            style={{ fontSize: 11, padding: "6px 10px" }}
+            onClick={() => {
+              if (newSubcategory.trim()) {
+                onAddSubcategory(newSubcategory.trim());
+                setNewSubcategory("");
+              }
+            }}
+          >
+            +
+          </button>
+        </div>
+        {subcategories.length === 0 ? (
+          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Nenhuma subcategoria extra ainda.</div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {subcategories.map((s) => (
+              <span
+                key={s}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4, fontSize: 11,
+                  background: "var(--bg-hover)", border: "1px solid var(--border)",
+                  borderRadius: 999, padding: "3px 4px 3px 10px",
+                }}
+              >
+                {s}
+                <button
+                  onClick={() => onRemoveSubcategory(s)}
+                  style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "0 4px", fontSize: 12 }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -404,6 +576,47 @@ export default function FinancePage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>({ type: "expense", amount: "", category: "", subcategory: "", description: "", date: "" });
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [customSubcategories, setCustomSubcategories] = useState<string[]>([]);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+
+  useEffect(() => {
+    setCustomCategories(loadFromStorage(CATEGORIES_STORAGE_KEY));
+    setCustomSubcategories(loadFromStorage(SUBCATEGORIES_STORAGE_KEY));
+  }, []);
+
+  function addCustomCategory(value: string) {
+    setCustomCategories((prev) => {
+      if (prev.includes(value) || DEFAULT_CATEGORIES.includes(value)) return prev;
+      const next = [...prev, value];
+      window.localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+  function removeCustomCategory(value: string) {
+    setCustomCategories((prev) => {
+      const next = prev.filter((c) => c !== value);
+      window.localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+  function addCustomSubcategory(value: string) {
+    setCustomSubcategories((prev) => {
+      if (prev.includes(value)) return prev;
+      const next = [...prev, value];
+      window.localStorage.setItem(SUBCATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+  function removeCustomSubcategory(value: string) {
+    setCustomSubcategories((prev) => {
+      const next = prev.filter((s) => s !== value);
+      window.localStorage.setItem(SUBCATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
 
   const year = month.split("-")[0];
 
@@ -605,8 +818,18 @@ export default function FinancePage() {
               required
             />
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Categoria</label>
+          <div style={{ position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: "var(--text-muted)" }}>Categoria</label>
+              <button
+                type="button"
+                onClick={() => setShowCategoryManager((v) => !v)}
+                title="Gerenciar categorias"
+                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}
+              >
+                ⚙️
+              </button>
+            </div>
             <input
               list="finance-categories"
               value={form.category}
@@ -614,21 +837,31 @@ export default function FinancePage() {
               placeholder="Alimentação"
             />
             <datalist id="finance-categories">
-              <option value="Alimentação" />
-              <option value="Transporte" />
-              <option value="Moradia" />
-              <option value="Saúde" />
-              <option value="Lazer" />
-              <option value="Financeiro" />
-              <option value="Assinaturas" />
-              <option value="Educação" />
-              <option value="Imposto" />
-              <option value="Outros" />
+              {allCategories.map((c) => (
+                <option key={c} value={c} />
+              ))}
             </datalist>
+            <datalist id="finance-subcategories">
+              {customSubcategories.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+            {showCategoryManager && (
+              <CategoryManager
+                categories={customCategories}
+                subcategories={customSubcategories}
+                onAddCategory={addCustomCategory}
+                onRemoveCategory={removeCustomCategory}
+                onAddSubcategory={addCustomSubcategory}
+                onRemoveSubcategory={removeCustomSubcategory}
+                onClose={() => setShowCategoryManager(false)}
+              />
+            )}
           </div>
           <div>
             <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
             <input
+              list="finance-subcategories"
               value={form.subcategory}
               onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
               placeholder="Mercado"
@@ -700,6 +933,7 @@ export default function FinancePage() {
                           </td>
                           <td style={{ padding: "6px 16px" }}>
                             <input
+                              list="finance-subcategories"
                               value={editForm.subcategory}
                               onChange={(ev) => setEditForm((f) => ({ ...f, subcategory: ev.target.value }))}
                               style={{ width: 110 }}
