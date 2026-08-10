@@ -643,7 +643,7 @@ export default function FinancePage() {
                       return (
                         <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
                           <td style={{ padding: "6px 16px" }}>
-                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130 }} />
+                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 155 }} />
                           </td>
                           <td style={{ padding: "6px 16px" }}>
                             <input
