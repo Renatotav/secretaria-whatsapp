@@ -42,6 +42,7 @@ export async function generateDailySummary(
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+    timeZone: "America/Sao_Paulo",
   });
 
   const systemPrompt = `Você é secretária de ${ownerName}, ${ownerRole}.

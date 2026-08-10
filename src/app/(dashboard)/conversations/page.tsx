@@ -12,6 +12,7 @@ interface Conversation {
   id: string;
   source: string;
   phone: string | null;
+  displayName?: string;
   messages: Message[];
   updatedAt: string;
 }
@@ -96,7 +97,7 @@ export default function ConversationsPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ fontSize: 14 }}>{filterSource === "group" ? "👥" : "👤"}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
-                    {c.phone || "—"}
+                    {c.displayName || c.phone || "—"}
                   </span>
                 </div>
                 {lastMsg && (
@@ -151,7 +152,7 @@ export default function ConversationsPage() {
             >
               <span>{selected.source === "group" ? "👥" : "👤"}</span>
               <div>
-                <p style={{ fontWeight: 600 }}>{selected.phone}</p>
+                <p style={{ fontWeight: 600 }}>{selected.displayName || selected.phone}</p>
                 <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
                   {selected.messages.length} mensagens
                 </p>

@@ -27,6 +27,7 @@ export function formatTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString("pt-BR", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
   });
 }
 
@@ -630,7 +631,7 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
           ? "🚨 Chamado urgente"
           : "";
 
-      const notification = `👥 *${groupName}*\n👤 ${meta.senderName} — 🕐 ${hora}\n\n📌 *${classification.title}*\n${classification.description}${classification.dueDate ? `\n📅 ${new Date(classification.dueDate).toLocaleDateString("pt-BR")}` : ""}\n${categoryBadge}`;
+      const notification = `👥 *${groupName}*\n👤 ${meta.senderName} — 🕐 ${hora}\n\n📌 *${classification.title}*\n${classification.description}${classification.dueDate ? `\n📅 ${new Date(classification.dueDate).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : ""}\n${categoryBadge}`;
 
       await notifyOwner(config, notification);
       await prisma.agendaItem.update({ where: { id: agendaItem.id }, data: { notified: true } });
