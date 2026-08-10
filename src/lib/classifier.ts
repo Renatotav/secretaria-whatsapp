@@ -25,17 +25,23 @@ Grupo: ${groupName} | Foco: ${groupFocus}
 Enviado por: ${senderName}
 ${customPrompt ? `\nInstruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : ""}
 
-Exige notificação IMEDIATA se:
-- Menciona "@${ownerName}" OU apenas o nome "${ownerName}" na mensagem (com ou sem @)
-- Atribui tarefa diretamente ao ${ownerName}
-- Convoca ${ownerName} para reunião ou evento
-- Chamado urgente que envolve ${ownerName}
-- Escalação ou problema crítico direcionado ao ${ownerName}
+Isto é pessoal, não é pro time inteiro: exige notificação IMEDIATA SOMENTE se a
+mensagem menciona "@${ownerName}" OU apenas o nome "${ownerName}" (com ou sem @),
+diretamente endereçada a ele. Nenhum outro critério, sozinho, justifica
+notificação — nem tarefa atribuída ao grupo, nem convocação de reunião, nem
+chamado urgente, nem escalação crítica, se ${ownerName} não for mencionado
+diretamente na mensagem. Mensagens graves mas sem menção a ${ownerName} NÃO são
+urgentes — não são para ele.
+
+Quando ${ownerName} FOR mencionado, use "category" pra descrever o tipo
+(tarefa atribuída, convocação de evento, chamado urgente, ou só menção geral),
+e se a mensagem também citar um chamado junto com "urgente", "prioridade" ou
+"parado", destaque o número do chamado em "title"/"description".
 
 NÃO exige notificação:
 - Bom dia, boa tarde, figurinhas, brincadeiras
 - Confirmações simples ("ok", "certo", "obrigado")
-- Discussões gerais que não envolvem ${ownerName} diretamente
+- Qualquer discussão, tarefa, convocação ou chamado que não mencione ${ownerName} diretamente
 
 Extraia APENAS chamados com estes formatos exatos:
 - S seguido de 6 a 7 dígitos (ex: S2363114, S277882)
