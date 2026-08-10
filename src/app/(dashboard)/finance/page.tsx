@@ -174,7 +174,15 @@ function CategoryDonut({ entries }: { entries: FinanceEntry[] }) {
 }
 
 /* ── Gráfico de barras: receitas x despesas por mês ─────────────────── */
-function MonthlyBarChart({ monthly }: { monthly: { income: number; expense: number }[] }) {
+function MonthlyBarChart({
+  monthly,
+  selectedMonth,
+  onSelectMonth,
+}: {
+  monthly: { income: number; expense: number }[];
+  selectedMonth: number;
+  onSelectMonth: (monthIndex: number) => void;
+}) {
   const [hover, setHover] = useState<{ month: number; type: "income" | "expense" } | null>(null);
   const width = 640;
   const height = 220;
@@ -214,8 +222,30 @@ function MonthlyBarChart({ monthly }: { monthly: { income: number; expense: numb
           const gx = padding.left + i * groupW;
           const incomeH = (m.income / max) * chartH;
           const expenseH = (m.expense / max) * chartH;
+          const isSelected = i === selectedMonth;
           return (
-            <g key={i}>
+            <g key={i} style={{ cursor: "pointer" }} onClick={() => onSelectMonth(i)}>
+              {isSelected && (
+                <rect
+                  x={gx + 1}
+                  y={padding.top}
+                  width={groupW - 2}
+                  height={chartH}
+                  rx={4}
+                  fill="var(--accent-dim)"
+                  stroke="var(--accent-border)"
+                  strokeWidth={1}
+                />
+              )}
+              <rect
+                x={gx}
+                y={padding.top}
+                width={groupW}
+                height={chartH}
+                fill="transparent"
+                onMouseEnter={() => setHover({ month: i, type: "expense" })}
+                onMouseLeave={() => setHover(null)}
+              />
               <rect
                 x={gx + groupW / 2 - barW - 2}
                 y={padding.top + chartH - incomeH}
@@ -481,7 +511,11 @@ export default function FinancePage() {
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Receitas x despesas — {year}</h2>
-            <MonthlyBarChart monthly={monthly} />
+            <MonthlyBarChart
+              monthly={monthly}
+              selectedMonth={Number(month.split("-")[1]) - 1}
+              onSelectMonth={(i) => setMonth(`${year}-${String(i + 1).padStart(2, "0")}`)}
+            />
           </div>
         </div>
 

@@ -130,6 +130,11 @@ textarea:focus,
 select:focus {
   border-color: var(--accent);
 }
+/* O ícone nativo de calendário (input date/month) vem preto — invisível no tema escuro */
+input::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
+}
 input::placeholder,
 textarea::placeholder {
   color: var(--text-dim);
