@@ -21,6 +21,7 @@ export type PersonalRouteResult =
       financeType: "income" | "expense";
       amount: number;
       category: string;
+      subcategory: string;
       description: string;
       confirmation: string;
     }
@@ -59,10 +60,15 @@ Tipos:
    Ex: "Quanto gastei esse mês?" → finance_summary
    Ex: "Resumo do grupo PJe ontem" → group_summary
 
-3. finance — menciona valor gasto ou recebido
-   Ex: "Gastei 45 no mercado" → expense, 45, categoria "Alimentação"
-   Ex: "Recebi 3000 de salário" → income, 3000, categoria "Salário"
-   Ex: "Paguei 120 de internet" → expense, 120, categoria "Contas"
+3. finance — menciona valor gasto ou recebido. Extraia categoria (mais ampla,
+   ex: "Alimentação", "Moradia", "Transporte", "Saúde", "Financeiro", "Assinaturas",
+   "Educação", "Imposto", "Lazer", "Pessoal") e subcategoria (mais específica
+   dentro da categoria, ex: categoria "Alimentação" → subcategoria "Delivery" ou
+   "Mercado"; categoria "Moradia" → subcategoria "Aluguel" ou "Água/Luz";
+   categoria "Financeiro" → subcategoria "Cartão de crédito" ou "Parcelas").
+   Ex: "Gastei 45 no mercado" → expense, 45, categoria "Alimentação", subcategoria "Mercado"
+   Ex: "Recebi 3000 de salário" → income, 3000, categoria "Financeiro", subcategoria "Salário"
+   Ex: "Paguei 120 de internet" → expense, 120, categoria "Moradia", subcategoria "Internet"
 
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
    qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
@@ -85,6 +91,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "financeType": "income|expense",
   "amount": 0,
   "financeCategory": "<categoria curta>",
+  "financeSubcategory": "<subcategoria curta>",
   "financeDescription": "<descrição curta>",
   "diaryContent": "<texto real da anotação>",
   "mood": "<humor em uma palavra ou vazio>",
@@ -109,6 +116,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         financeType: parsed.financeType === "income" ? "income" : "expense",
         amount: Number(parsed.amount) || 0,
         category: (parsed.financeCategory as string) || "Outros",
+        subcategory: (parsed.financeSubcategory as string) || "",
         description: (parsed.financeDescription as string) || message.slice(0, 120),
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
@@ -164,6 +172,7 @@ export interface StatementEntry {
   amount: number;
   type: "income" | "expense";
   category: string;
+  subcategory: string;
 }
 
 /**
@@ -185,14 +194,19 @@ Para cada transação, identifique:
 - description: a descrição da transação como aparece no extrato (curta, real).
 - amount: valor numérico positivo (sem sinal, sem "R$").
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
-- category: uma categoria curta inferida (ex: "Alimentação", "Transporte", "Assinaturas", "Saúde", "Outros").
+- category: categoria ampla inferida (ex: "Alimentação", "Moradia", "Transporte",
+  "Saúde", "Financeiro", "Assinaturas", "Educação", "Imposto", "Lazer", "Outros").
+- subcategory: mais específica dentro da categoria (ex: categoria "Alimentação" →
+  "Delivery"/"Mercado"/"Restaurante"; categoria "Financeiro" → "Cartão de crédito"/
+  "Parcelas no cartão"/"IR"/"INSS"; categoria "Moradia" → "Aluguel"/"Água/Luz"). Se
+  não der pra inferir, deixe vazio.
 
 Ignore linhas que não são transações (cabeçalho, total, limite, juros, texto
 institucional). Se não conseguir identificar nenhuma transação real, retorne
 uma lista vazia.
 
 Retorne APENAS um JSON válido no formato:
-{ "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação" } ] }`;
+{ "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado" } ] }`;
 
   const { content } = await generateResponse(
     [{ role: "user", content: statementText.slice(0, 12000) }],
@@ -218,6 +232,7 @@ Retorne APENAS um JSON válido no formato:
           amount: Math.abs(amount),
           type: e.type === "income" ? "income" : "expense",
           category: typeof e.category === "string" ? e.category : "Outros",
+          subcategory: typeof e.subcategory === "string" ? e.subcategory : "",
         };
       })
       .filter((e): e is StatementEntry => e !== null);

@@ -156,6 +156,7 @@ model FinanceEntry {
   type        String
   amount      Float
   category    String   @default("")
+  subcategory String   @default("")
   description String   @default("")
   date        DateTime @default(now())
   source      String   @default("dashboard")

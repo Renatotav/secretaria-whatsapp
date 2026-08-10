@@ -10,13 +10,20 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // formato YYYY-MM
+  const year = searchParams.get("year"); // formato YYYY — usado pelos gráficos
 
   let dateFilter: { gte: Date; lte: Date } | undefined;
   if (month) {
-    const [year, m] = month.split("-").map(Number);
+    const [y, m] = month.split("-").map(Number);
     dateFilter = {
-      gte: new Date(year, m - 1, 1),
-      lte: new Date(year, m, 0, 23, 59, 59),
+      gte: new Date(y, m - 1, 1),
+      lte: new Date(y, m, 0, 23, 59, 59),
+    };
+  } else if (year) {
+    const y = Number(year);
+    dateFilter = {
+      gte: new Date(y, 0, 1),
+      lte: new Date(y, 11, 31, 23, 59, 59),
     };
   }
 
@@ -39,6 +46,7 @@ export const POST = withErrorHandling(async (request: Request) => {
       type: body.type,
       amount: Number(body.amount) || 0,
       category: body.category ?? "",
+      subcategory: body.subcategory ?? "",
       description: body.description ?? "",
       date: body.date ? new Date(body.date) : new Date(),
       source: "dashboard",
