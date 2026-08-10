@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { sendTextWithTyping, getBase64FromMediaMessage } from "./evolution";
+import { sendTextWithTyping, getBase64FromMediaMessage, fetchGroupInfo } from "./evolution";
 import { transcribeAudio, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
@@ -562,8 +562,15 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
 
   let groupConfig = await prisma.groupConfig.findUnique({ where: { groupJid } });
   if (!groupConfig) {
+    let newGroupName = groupJid.split("@")[0];
+    if (config.evolutionUrl && config.evolutionApiKey && config.instanceId) {
+      const info = await fetchGroupInfo(config.evolutionUrl, config.evolutionApiKey, config.instanceId, groupJid);
+      if (info?.subject) {
+        newGroupName = info.subject;
+      }
+    }
     groupConfig = await prisma.groupConfig.create({
-      data: { groupJid, groupName: groupJid.split("@")[0], active: true },
+      data: { groupJid, groupName: newGroupName, active: true },
     });
   }
   if (!groupConfig.active) return;

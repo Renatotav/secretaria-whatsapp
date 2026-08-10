@@ -169,3 +169,25 @@ export async function setInstanceWebhook(
     }),
   });
 }
+
+export async function fetchGroupInfo(
+  evolutionUrl: string,
+  evolutionApiKey: string,
+  instanceId: string,
+  groupJid: string
+): Promise<{ subject: string } | null> {
+  try {
+    const url = `${evolutionUrl}/group/findGroupInfos/${instanceId}?groupJid=${groupJid}`;
+    const response = await evolutionFetch(url, { headers: { apikey: evolutionApiKey } });
+    const data = await response.json();
+    // A API pode retornar um array ou um objeto direto dependendo da versão
+    const group = Array.isArray(data) ? data.find((g) => g.id === groupJid) || data[0] : data;
+    if (group && group.subject) {
+      return { subject: group.subject };
+    }
+    return null;
+  } catch (err) {
+    console.error("[evolution] erro ao buscar info do grupo", err);
+    return null;
+  }
+}
