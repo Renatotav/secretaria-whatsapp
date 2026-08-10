@@ -572,6 +572,17 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
     groupConfig = await prisma.groupConfig.create({
       data: { groupJid, groupName: newGroupName, active: true },
     });
+  } else if (/^\d+$/.test(groupConfig.groupName)) {
+    // Grupo antigo que só tem o JID numérico como nome. Tenta atualizar.
+    if (config.evolutionUrl && config.evolutionApiKey && config.instanceId) {
+      const info = await fetchGroupInfo(config.evolutionUrl, config.evolutionApiKey, config.instanceId, groupJid);
+      if (info?.subject && info.subject !== groupConfig.groupName) {
+        groupConfig = await prisma.groupConfig.update({
+          where: { groupJid },
+          data: { groupName: info.subject },
+        });
+      }
+    }
   }
   if (!groupConfig.active) return;
 
