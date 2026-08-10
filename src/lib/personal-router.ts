@@ -1,5 +1,23 @@
 import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
 
+// Taxonomia de categorias/subcategorias financeiras — mesma usada no seletor
+// manual do painel Financeiro (baseada na planilha antiga do usuário), pra
+// tudo que a IA classifica (mensagem no WhatsApp ou extrato) usar os mesmos
+// nomes de categoria.
+const FINANCE_TAXONOMY = `Categorias de RECEITA (income): Salário (Salário fixo, Vale Alimentação, Bônus),
+Renda Extra (Freelance, Comissões, Venda de produtos), Renda Passiva (Dividendos),
+Dinheiro em Conta (Nubank), Outros (Reembolso, Restituição IR).
+Categorias de DESPESA (expense): Moradia (Aluguel, Financiamento, Condomínio,
+Energia elétrica, Água/Esgoto, Internet, Gás), Alimentação (Supermercado,
+Restaurantes, Delivery), Transporte (Combustível, Manutenção veículo, Seguro,
+Transporte público, Uber/Taxi), Saúde (Plano de saúde, Medicamentos), Imposto
+(IR, INSS, IPVA), Educação (Cursos, Mensalidade, Livros), Assinaturas (Streaming,
+Apps/Softwares, Academia), Pessoal (Roupas, Beleza, Lazer), Financeiro (Cartão de
+crédito, Parcelas no cartão, Tarifas bancárias, Empréstimos), Família (Mesada,
+Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
+Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
+outro nome se nenhuma delas fizer sentido pro caso.`;
+
 export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary";
 
 export type PersonalRouteResult =
@@ -60,14 +78,10 @@ Tipos:
    Ex: "Quanto gastei esse mês?" → finance_summary
    Ex: "Resumo do grupo PJe ontem" → group_summary
 
-3. finance — menciona valor gasto ou recebido. Extraia categoria (mais ampla,
-   ex: "Alimentação", "Moradia", "Transporte", "Saúde", "Financeiro", "Assinaturas",
-   "Educação", "Imposto", "Lazer", "Pessoal") e subcategoria (mais específica
-   dentro da categoria, ex: categoria "Alimentação" → subcategoria "Delivery" ou
-   "Mercado"; categoria "Moradia" → subcategoria "Aluguel" ou "Água/Luz";
-   categoria "Financeiro" → subcategoria "Cartão de crédito" ou "Parcelas").
-   Ex: "Gastei 45 no mercado" → expense, 45, categoria "Alimentação", subcategoria "Mercado"
-   Ex: "Recebi 3000 de salário" → income, 3000, categoria "Financeiro", subcategoria "Salário"
+3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
+   ${FINANCE_TAXONOMY}
+   Ex: "Gastei 45 no mercado" → expense, 45, categoria "Alimentação", subcategoria "Supermercado"
+   Ex: "Recebi 3000 de salário" → income, 3000, categoria "Salário", subcategoria "Salário fixo"
    Ex: "Paguei 120 de internet" → expense, 120, categoria "Moradia", subcategoria "Internet"
 
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
@@ -219,12 +233,8 @@ Para cada transação, identifique:
   contrário, é o mesmo ano do vencimento.
 - amount: valor numérico positivo (sem sinal, sem "R$").
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
-- category: categoria ampla inferida (ex: "Alimentação", "Moradia", "Transporte",
-  "Saúde", "Financeiro", "Assinaturas", "Educação", "Imposto", "Lazer", "Outros").
-- subcategory: mais específica dentro da categoria (ex: categoria "Alimentação" →
-  "Delivery"/"Mercado"/"Restaurante"; categoria "Financeiro" → "Cartão de crédito"/
-  "Parcelas no cartão"/"IR"/"INSS"; categoria "Moradia" → "Aluguel"/"Água/Luz"). Se
-  não der pra inferir, deixe vazio.
+- category e subcategory: ${FINANCE_TAXONOMY}
+  Se não der pra inferir a subcategoria, deixe vazio.
 
 Ignore linhas que não são transações (cabeçalho, total, limite, juros, texto
 institucional). Se não conseguir identificar nenhuma transação real, retorne

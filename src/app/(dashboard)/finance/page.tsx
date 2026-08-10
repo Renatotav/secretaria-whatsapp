@@ -28,10 +28,39 @@ const OTHER_COLOR = "#5a5a7a"; // var(--text-dim), pro grupo "Outros"
 
 const MONTH_LABELS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-const DEFAULT_CATEGORIES = [
-  "Alimentação", "Transporte", "Moradia", "Saúde", "Lazer",
-  "Financeiro", "Assinaturas", "Educação", "Imposto", "Outros",
-];
+// Categoria/subcategoria padrão por tipo, baseado na planilha antiga do usuário.
+const DEFAULT_TAXONOMY: Record<"income" | "expense", Record<string, string[]>> = {
+  income: {
+    "Salário": ["Salário fixo", "Vale Alimentação", "Bônus"],
+    "Renda Extra": ["Freelance", "Comissões", "Venda de produtos"],
+    "Renda Passiva": ["Dividendos"],
+    "Dinheiro em Conta": ["Nubank"],
+    "Outros": ["Reembolso", "Restituição IR"],
+  },
+  expense: {
+    "Moradia": ["Aluguel", "Financiamento", "Condomínio", "Energia elétrica", "Água/Esgoto", "Internet", "Gás"],
+    "Alimentação": ["Supermercado", "Restaurantes", "Delivery"],
+    "Transporte": ["Combustível", "Manutenção veículo", "Seguro", "Transporte público", "Uber/Taxi"],
+    "Saúde": ["Plano de saúde", "Medicamentos"],
+    "Imposto": ["IR", "INSS", "IPVA"],
+    "Educação": ["Cursos", "Mensalidade", "Livros"],
+    "Assinaturas": ["Streaming", "Apps/Softwares", "Academia"],
+    "Pessoal": ["Roupas", "Beleza", "Lazer"],
+    "Financeiro": ["Cartão de crédito", "Parcelas no cartão", "Tarifas bancárias", "Empréstimos"],
+    "Família": ["Mesada", "Gastos com filhos"],
+    "Outros": ["Imprevistos", "Manutenção", "Presentes"],
+  },
+};
+
+function categoriesForType(type: string): string[] {
+  return Object.keys(DEFAULT_TAXONOMY[type === "income" ? "income" : "expense"]);
+}
+
+function subcategoriesFor(type: string, category: string): string[] {
+  const map = DEFAULT_TAXONOMY[type === "income" ? "income" : "expense"];
+  return map[category] ?? [];
+}
+
 const CATEGORIES_STORAGE_KEY = "finance_custom_categories";
 const SUBCATEGORIES_STORAGE_KEY = "finance_custom_subcategories";
 
@@ -587,7 +616,8 @@ export default function FinancePage() {
 
   function addCustomCategory(value: string) {
     setCustomCategories((prev) => {
-      if (prev.includes(value) || DEFAULT_CATEGORIES.includes(value)) return prev;
+      const isDefault = categoriesForType("income").includes(value) || categoriesForType("expense").includes(value);
+      if (prev.includes(value) || isDefault) return prev;
       const next = [...prev, value];
       window.localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(next));
       return next;
@@ -616,7 +646,10 @@ export default function FinancePage() {
     });
   }
 
-  const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
+  const categoryOptions = [...new Set([...categoriesForType(form.type), ...customCategories])];
+  const subcategoryOptions = [...new Set([...subcategoriesFor(form.type, form.category), ...customSubcategories])];
+  const editCategoryOptions = [...new Set([...categoriesForType(editForm.type), ...customCategories])];
+  const editSubcategoryOptions = [...new Set([...subcategoriesFor(editForm.type, editForm.category), ...customSubcategories])];
 
   const year = month.split("-")[0];
 
@@ -831,18 +864,18 @@ export default function FinancePage() {
               </button>
             </div>
             <input
-              list="finance-categories"
+              list="finance-categories-add"
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               placeholder="Alimentação"
             />
-            <datalist id="finance-categories">
-              {allCategories.map((c) => (
+            <datalist id="finance-categories-add">
+              {categoryOptions.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
-            <datalist id="finance-subcategories">
-              {customSubcategories.map((s) => (
+            <datalist id="finance-subcategories-add">
+              {subcategoryOptions.map((s) => (
                 <option key={s} value={s} />
               ))}
             </datalist>
@@ -861,7 +894,7 @@ export default function FinancePage() {
           <div>
             <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
             <input
-              list="finance-subcategories"
+              list="finance-subcategories-add"
               value={form.subcategory}
               onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
               placeholder="Mercado"
@@ -903,6 +936,16 @@ export default function FinancePage() {
           )}
           {!loading && visibleEntries.length > 0 && (
             <div style={{ overflowX: "auto" }}>
+              <datalist id="finance-categories-edit">
+                {editCategoryOptions.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              <datalist id="finance-subcategories-edit">
+                {editSubcategoryOptions.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
@@ -925,7 +968,7 @@ export default function FinancePage() {
                           </td>
                           <td style={{ padding: "6px 16px" }}>
                             <input
-                              list="finance-categories"
+                              list="finance-categories-edit"
                               value={editForm.category}
                               onChange={(ev) => setEditForm((f) => ({ ...f, category: ev.target.value }))}
                               style={{ width: 110 }}
@@ -933,7 +976,7 @@ export default function FinancePage() {
                           </td>
                           <td style={{ padding: "6px 16px" }}>
                             <input
-                              list="finance-subcategories"
+                              list="finance-subcategories-edit"
                               value={editForm.subcategory}
                               onChange={(ev) => setEditForm((f) => ({ ...f, subcategory: ev.target.value }))}
                               style={{ width: 110 }}
