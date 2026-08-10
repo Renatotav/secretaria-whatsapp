@@ -190,3 +190,27 @@ export async function fetchGroupInfo(
     return null;
   }
 }
+
+export async function findContact(
+  evolutionUrl: string,
+  evolutionApiKey: string,
+  instanceId: string,
+  jid: string
+): Promise<{ name?: string; pushName?: string } | null> {
+  try {
+    const url = `${evolutionUrl}/chat/findContacts/${instanceId}`;
+    const response = await evolutionFetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: evolutionApiKey,
+      },
+      body: JSON.stringify({ where: { id: jid } }),
+    });
+    const data = await response.json();
+    return Array.isArray(data) ? data[0] : data;
+  } catch (err) {
+    console.error("[evolution] erro ao buscar contato", err);
+    return null;
+  }
+}

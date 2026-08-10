@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { sendTextWithTyping, getBase64FromMediaMessage, fetchGroupInfo } from "./evolution";
+import { sendTextWithTyping, getBase64FromMediaMessage, fetchGroupInfo, findContact } from "./evolution";
 import { transcribeAudio, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
@@ -43,6 +43,23 @@ function getProviderOpts(config: AgentConfig): ProviderOptions {
     openrouterApiKey: config.openrouterApiKey,
     openrouterModel: config.openrouterModel,
   };
+}
+
+async function resolveMentions(text: string, evoUrl: string, evoKey: string, instanceId: string): Promise<string> {
+  const mentionRegex = /@(\d{10,15})/g;
+  const matches = [...text.matchAll(mentionRegex)];
+  const uniqueNumbers = [...new Set(matches.map((m) => m[1]))];
+
+  let resolvedText = text;
+  for (const num of uniqueNumbers) {
+    const jid = `${num}@s.whatsapp.net`;
+    const contact = await findContact(evoUrl, evoKey, instanceId, jid);
+    if (contact && (contact.name || contact.pushName)) {
+      const name = contact.name || contact.pushName;
+      resolvedText = resolvedText.replace(new RegExp(`@${num}`, "g"), `@${name}`);
+    }
+  }
+  return resolvedText;
 }
 
 function getEvoConfig(config: AgentConfig) {
@@ -586,13 +603,18 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
   if (!groupConfig.active) return;
 
   const groupName = groupConfig.groupName || groupJid.split("@")[0];
+  let processedText = joinedText;
+
+  if (config.evolutionUrl && config.evolutionApiKey && config.instanceId) {
+    processedText = await resolveMentions(joinedText, config.evolutionUrl, config.evolutionApiKey, config.instanceId);
+  }
 
   await prisma.groupMessage.create({
     data: {
       groupJid,
       groupName,
       senderName: meta.senderName,
-      content: joinedText,
+      content: processedText,
       receivedAt: new Date(meta.messageTimestamp * 1000),
     },
   });
@@ -602,11 +624,11 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
     conv = await prisma.conversation.create({ data: { phone: groupJid, source: "group" } });
   }
   await prisma.message.create({
-    data: { conversationId: conv.id, role: "user", content: `[${meta.senderName}] ${joinedText}` },
+    data: { conversationId: conv.id, role: "user", content: `[${meta.senderName}] ${processedText}` },
   });
 
   const classification = await classifyGroupMessage(
-    joinedText,
+    processedText,
     meta.senderName,
     groupName,
     groupConfig.focus,
@@ -617,7 +639,7 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
   );
 
   if (classification.ticketIds.length > 0) {
-    await extractAndSaveTickets(classification.ticketIds, joinedText, meta.senderName, groupJid, groupName);
+    await extractAndSaveTickets(classification.ticketIds, processedText, meta.senderName, groupJid, groupName);
   }
 
   if (classification.urgent && classification.category !== "ignore") {
