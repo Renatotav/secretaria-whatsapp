@@ -17,16 +17,22 @@ export default function InstancesPage() {
   async function load() {
     setLoading(true);
     setError("");
-    const res = await fetch("/api/instances");
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "Erro ao carregar instâncias");
+    try {
+      const res = await fetch("/api/instances", { signal: AbortSignal.timeout(15_000) });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Erro ao carregar instâncias");
+        setInstances([]);
+      } else {
+        setInstances(data.instances ?? []);
+        setActiveInstanceId(data.activeInstanceId ?? "");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao carregar instâncias");
       setInstances([]);
-    } else {
-      setInstances(data.instances ?? []);
-      setActiveInstanceId(data.activeInstanceId ?? "");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => { load(); }, []);
@@ -34,23 +40,33 @@ export default function InstancesPage() {
   async function useInstance(name: string) {
     setBusy(name);
     setMessage("");
-    await fetch("/api/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instanceId: name }),
-    });
-    setActiveInstanceId(name);
-    setBusy(null);
-    setMessage(`✅ "${name}" agora é a instância ativa`);
+    try {
+      await fetch("/api/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instanceId: name }),
+      });
+      setActiveInstanceId(name);
+      setMessage(`✅ "${name}" agora é a instância ativa`);
+    } catch (err) {
+      setMessage(`❌ ${err instanceof Error ? err.message : "Erro ao salvar"}`);
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function configureWebhook(name: string) {
     setBusy(name);
     setMessage("");
-    const res = await fetch(`/api/instances/${encodeURIComponent(name)}/webhook`, { method: "POST" });
-    const data = await res.json();
-    setBusy(null);
-    setMessage(res.ok ? `✅ Webhook configurado: ${data.webhookUrl}` : `❌ ${data.error}`);
+    try {
+      const res = await fetch(`/api/instances/${encodeURIComponent(name)}/webhook`, { method: "POST" });
+      const data = await res.json();
+      setMessage(res.ok ? `✅ Webhook configurado: ${data.webhookUrl}` : `❌ ${data.error}`);
+    } catch (err) {
+      setMessage(`❌ ${err instanceof Error ? err.message : "Erro ao configurar webhook"}`);
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
