@@ -52,6 +52,7 @@ function niceMax(max: number): number {
 }
 
 const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: "" };
+type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string };
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
 function CategoryDonut({ entries }: { entries: FinanceEntry[] }) {
@@ -351,6 +352,8 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm>({ type: "expense", amount: "", category: "", subcategory: "", description: "", date: "" });
 
   const year = month.split("-")[0];
 
@@ -406,6 +409,37 @@ export default function FinancePage() {
     if (!confirm("Excluir este lançamento?")) return;
     await fetch(`/api/finance?id=${id}`, { method: "DELETE" });
     setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function startEdit(entry: FinanceEntry) {
+    setEditingId(entry.id);
+    setEditForm({
+      type: entry.type,
+      amount: String(entry.amount),
+      category: entry.category,
+      subcategory: entry.subcategory,
+      description: entry.description,
+      date: entry.date.slice(0, 10),
+    });
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    await fetch(`/api/finance?id=${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: editForm.type,
+        amount: Number(editForm.amount),
+        category: editForm.category,
+        subcategory: editForm.subcategory,
+        description: editForm.description,
+        date: new Date(editForm.date).toISOString(),
+      }),
+    });
+    setEditingId(null);
+    setSaving(false);
+    load();
   }
 
   return (
@@ -559,33 +593,92 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((e) => (
-                    <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                      <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>{new Date(e.date).toLocaleDateString("pt-BR")}</td>
-                      <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
-                      <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
-                      <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
-                      <td style={{ padding: "10px 16px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                        {e.source === "whatsapp" ? "📱 WhatsApp" : "🖥️ Painel"}
-                      </td>
-                      <td
-                        style={{
-                          padding: "10px 16px",
-                          textAlign: "right",
-                          fontWeight: 600,
-                          whiteSpace: "nowrap",
-                          color: e.type === "income" ? "var(--success)" : "var(--danger)",
-                        }}
-                      >
-                        {e.type === "income" ? "+" : "-"} {formatMoney(e.amount)}
-                      </td>
-                      <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                        <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => deleteEntry(e.id)}>
-                          Excluir
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {entries.map((e) => {
+                    if (editingId === e.id) {
+                      return (
+                        <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
+                          <td style={{ padding: "6px 16px" }}>
+                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130 }} />
+                          </td>
+                          <td style={{ padding: "6px 16px" }}>
+                            <input
+                              list="finance-categories"
+                              value={editForm.category}
+                              onChange={(ev) => setEditForm((f) => ({ ...f, category: ev.target.value }))}
+                              style={{ width: 110 }}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 16px" }}>
+                            <input
+                              value={editForm.subcategory}
+                              onChange={(ev) => setEditForm((f) => ({ ...f, subcategory: ev.target.value }))}
+                              style={{ width: 110 }}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 16px" }}>
+                            <input
+                              value={editForm.description}
+                              onChange={(ev) => setEditForm((f) => ({ ...f, description: ev.target.value }))}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 16px" }}>
+                            <select value={editForm.type} onChange={(ev) => setEditForm((f) => ({ ...f, type: ev.target.value }))}>
+                              <option value="expense">Despesa</option>
+                              <option value="income">Receita</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: "6px 16px", textAlign: "right" }}>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editForm.amount}
+                              onChange={(ev) => setEditForm((f) => ({ ...f, amount: ev.target.value }))}
+                              style={{ width: 90, textAlign: "right" }}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <button className="btn-primary" style={{ fontSize: 11, padding: "4px 8px" }} disabled={saving} onClick={() => saveEdit(e.id)}>
+                              Salvar
+                            </button>{" "}
+                            <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(null)}>
+                              Cancelar
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                        <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>{new Date(e.date).toLocaleDateString("pt-BR")}</td>
+                        <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                          {e.source === "whatsapp" ? "📱 WhatsApp" : "🖥️ Painel"}
+                        </td>
+                        <td
+                          style={{
+                            padding: "10px 16px",
+                            textAlign: "right",
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            color: e.type === "income" ? "var(--success)" : "var(--danger)",
+                          }}
+                        >
+                          {e.type === "income" ? "+" : "-"} {formatMoney(e.amount)}
+                        </td>
+                        <td style={{ padding: "10px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => startEdit(e)}>
+                            Editar
+                          </button>{" "}
+                          <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => deleteEntry(e.id)}>
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
