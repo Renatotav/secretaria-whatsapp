@@ -72,9 +72,12 @@ Tipos:
 
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
    qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
-   quando nada mais se encaixa, inclusive mensagens curtas tipo "teste" ou "oi")
-   Ex: "Hoje foi puxado no trabalho mas terminei o relatório"
-   Ex: "teste" → diary, content: "teste", confirmation reconhecendo que é um teste
+   quando nada mais se encaixa, inclusive mensagens curtas tipo "teste" ou "oi").
+   Infira também "mood" — EXATAMENTE um destes valores, nunca outro texto:
+   "pessimo", "ruim", "neutro", "bom", "otimo". Se não der pra inferir com
+   confiança, use "neutro".
+   Ex: "Hoje foi puxado no trabalho mas terminei o relatório" → mood "neutro" ou "bom"
+   Ex: "teste" → diary, content: "teste", mood "neutro", confirmation reconhecendo que é um teste
 
 IMPORTANTE: os valores abaixo são só EXEMPLOS DE FORMATO — nunca copie o texto
 literal deles. "confirmation" e os outros campos de texto sempre precisam ser
@@ -94,7 +97,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "financeSubcategory": "<subcategoria curta>",
   "financeDescription": "<descrição curta>",
   "diaryContent": "<texto real da anotação>",
-  "mood": "<humor em uma palavra ou vazio>",
+  "mood": "pessimo|ruim|neutro|bom|otimo",
   "confirmation": "<confirmação curta e específica sobre o que foi registrado>"
 }`;
 
@@ -123,10 +126,12 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     }
 
     if (parsed.type === "diary") {
+      const validMoods = ["pessimo", "ruim", "neutro", "bom", "otimo"];
+      const mood = validMoods.includes(parsed.mood as string) ? (parsed.mood as string) : "neutro";
       return {
         type: "diary",
         content: (parsed.diaryContent as string) || message,
-        mood: (parsed.mood as string) || "",
+        mood,
         confirmation: (parsed.confirmation as string) || "✅ Anotado no diário!",
       };
     }
@@ -160,7 +165,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     return {
       type: "diary",
       content: message,
-      mood: "",
+      mood: "neutro",
       confirmation: `✅ Anotado!\n📋 ${message.slice(0, 60)}`,
     };
   }
