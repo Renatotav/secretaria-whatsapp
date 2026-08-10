@@ -132,15 +132,12 @@ select:focus {
 }
 /* O ícone nativo de calendário (input date/month) vem preto — invisível no tema escuro */
 input::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(1.5);
+  filter: invert(1);
   opacity: 0.85;
   cursor: pointer;
-  border-radius: 4px;
-  padding: 2px;
 }
 input::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
-  background: var(--bg-hover);
 }
 input::placeholder,
 textarea::placeholder {
