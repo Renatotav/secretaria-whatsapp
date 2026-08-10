@@ -107,7 +107,7 @@ export default function ConfigPage() {
     fetch("/api/config")
       .then((r) => r.json())
       .then((data) => {
-        setConfig({ ...DEFAULT, ...data });
+        setConfig({ ...DEFAULT, ...data, ownerPhone: data.ownerPhone || "55" });
         setLoading(false);
       });
   }, []);
