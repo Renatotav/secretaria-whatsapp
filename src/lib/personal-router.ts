@@ -188,8 +188,15 @@ depois das primeiras linhas nem resuma: cada transação individual precisa
 aparecer como um item separado no resultado.
 
 Para cada transação, identifique:
-- date: data no formato ISO 8601 (YYYY-MM-DD). Se o extrato não tiver o ano
-  explícito, assuma o ano corrente. Se não der pra identificar, use null.
+- date: data no formato ISO 8601 (YYYY-MM-DD).
+  - Se for FATURA DE CARTÃO DE CRÉDITO: use a DATA DE VENCIMENTO da fatura para
+    TODAS as transações, mesmo as que mostram uma data de compra/parcela diferente
+    impressa na linha (ex: "Parcela 3/12" com data de fevereiro numa fatura que
+    vence em agosto). O dinheiro sai da conta inteiro na data de vencimento —
+    é isso que importa pro controle financeiro, não a data original da compra.
+  - Se for EXTRATO DE CONTA CORRENTE/POUPANÇA: use a data de cada movimentação
+    normalmente, como aparece na linha.
+  - Se não der pra identificar nenhuma data, use null.
 - description: a descrição da transação como aparece no extrato (curta, real).
 - amount: valor numérico positivo (sem sinal, sem "R$").
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
