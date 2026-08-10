@@ -58,7 +58,7 @@ export const POST = withErrorHandling(async (request: Request) => {
   // Se o usuário já digitou "Parcela X/Y" na descrição (com ou sem "(compra
   // em DD/MM)"), projeta as parcelas restantes nos meses seguintes — mesma
   // lógica usada na importação de extrato via WhatsApp, sem notificar.
-  if (/Parcela \d+\/\d+/.test(entry.description)) {
+  if (/Parcela \d+\/\d+/.test(entry.description) || /\(recorrente\)/.test(entry.description)) {
     await projectAndInsertFinanceEntries(
       [{
         date: entry.date.toISOString(),
@@ -93,7 +93,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
 
   // Mesma projeção de parcelas restantes, disparada quando a descrição
   // editada passa a ter "Parcela X/Y" (ex: usuário completou o dado à mão).
-  if (/Parcela \d+\/\d+/.test(updated.description)) {
+  if (/Parcela \d+\/\d+/.test(updated.description) || /\(recorrente\)/.test(updated.description)) {
     await projectAndInsertFinanceEntries(
       [{
         date: updated.date.toISOString(),

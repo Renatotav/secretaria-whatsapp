@@ -356,18 +356,24 @@ export async function projectAndInsertFinanceEntries(
           });
         }
       }
-    } else if (e.category === "Assinaturas") {
-      // Assinatura sem número de parcela = recorrente, sem fim previsto.
-      // Projeta um horizonte fixo; cada reimportação futura da mesma
-      // assinatura estende a janela pra frente automaticamente. Cancelar
-      // é só apagar a entrada daquele mês específico na tabela.
-      candidates.push({ entry: e, date: baseDate, key: subscriptionKey(e.description, e.amount, baseDate) });
+    } else if (e.category === "Assinaturas" || /\(recorrente\)/.test(e.description)) {
+      // Assinatura (categoria "Assinaturas") ou qualquer lançamento marcado
+      // "(recorrente)" pelo usuário (ex: salário) = repete todo mês, sem fim
+      // previsto. Projeta um horizonte fixo; cada reimportação/edição futura
+      // da mesma entrada estende a janela pra frente automaticamente.
+      // Cancelar é só apagar a entrada daquele mês específico na tabela.
+      const baseDescription = e.description.replace(/\s*\(recorrente\)/, "").trim();
+      candidates.push({
+        entry: { ...e, description: baseDescription },
+        date: baseDate,
+        key: subscriptionKey(baseDescription, e.amount, baseDate),
+      });
       for (let i = 1; i <= SUBSCRIPTION_PROJECTION_MONTHS; i++) {
         const futureDate = addMonths(baseDate, i);
         candidates.push({
-          entry: { ...e, description: `${e.description} (previsto)`, date: futureDate.toISOString() },
+          entry: { ...e, description: `${baseDescription} (previsto)`, date: futureDate.toISOString() },
           date: futureDate,
-          key: subscriptionKey(e.description, e.amount, futureDate),
+          key: subscriptionKey(baseDescription, e.amount, futureDate),
         });
       }
     } else {
@@ -378,7 +384,13 @@ export async function projectAndInsertFinanceEntries(
   // Dedupe contra o que já existe no banco (de uma importação anterior, real
   // ou projetada) e dentro do próprio lote que acabou de ser montado.
   const existing = await prisma.financeEntry.findMany({
-    where: { OR: [{ description: { contains: "Parcela " } }, { category: "Assinaturas" }] },
+    where: {
+      OR: [
+        { description: { contains: "Parcela " } },
+        { category: "Assinaturas" },
+        { description: { contains: "(recorrente)" } },
+      ],
+    },
     select: { description: true, date: true, amount: true, category: true },
   });
   const existingKeys = new Set(
@@ -386,8 +398,8 @@ export async function projectAndInsertFinanceEntries(
       .map((e) => {
         const info = parseInstallmentInfo(e.description, e.date);
         if (info) return installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date);
-        if (e.category === "Assinaturas") {
-          const baseDescription = e.description.replace(/\s*\(previsto\)/, "").trim();
+        if (e.category === "Assinaturas" || /\(recorrente\)/.test(e.description)) {
+          const baseDescription = e.description.replace(/\s*\(previsto\)/, "").replace(/\s*\(recorrente\)/, "").trim();
           return subscriptionKey(baseDescription, e.amount, e.date);
         }
         return null;

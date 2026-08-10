@@ -107,7 +107,7 @@ function niceMax(max: number): number {
   return niceNormalized * magnitude;
 }
 
-const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: "" };
+const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: "", recurring: false };
 type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string };
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
@@ -723,6 +723,7 @@ export default function FinancePage() {
     e.preventDefault();
     if (!form.amount) return;
     setSaving(true);
+    const description = form.recurring ? `${form.description} (recorrente)`.trim() : form.description;
     await fetch("/api/finance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -731,7 +732,7 @@ export default function FinancePage() {
         amount: Number(form.amount),
         category: form.category,
         subcategory: form.subcategory,
-        description: form.description,
+        description,
         date: form.date ? new Date(form.date).toISOString() : undefined,
       }),
     });
@@ -885,7 +886,7 @@ export default function FinancePage() {
               borderRadius: 12,
               padding: 16,
               display: "grid",
-              gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px auto",
+              gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px 110px auto",
               gap: 8,
               alignItems: "end",
             }}
@@ -948,6 +949,20 @@ export default function FinancePage() {
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data</label>
               <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div>
+              <label
+                title="Repete todo mês automaticamente (ex: salário, aluguel)"
+                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", height: 38, cursor: "pointer" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={form.recurring}
+                  onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))}
+                  style={{ width: "auto" }}
+                />
+                🔁 Recorrente
+              </label>
             </div>
             <button className="btn-primary" type="submit" disabled={saving}>
               {saving ? "..." : "Adicionar"}
