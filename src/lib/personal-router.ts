@@ -1,4 +1,4 @@
-import { generateResponse, ProviderOptions } from "./openai";
+import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
 
 export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary";
 
@@ -175,17 +175,7 @@ export interface StatementEntry {
   subcategory: string;
 }
 
-/**
- * Extrai todas as transações de um extrato (texto de um PDF de cartão/conta).
- * Diferente de routePersonalMessage, aqui a mensagem inteira vira uma LISTA
- * de lançamentos, não uma classificação única.
- */
-export async function parseStatementEntries(
-  statementText: string,
-  providerOpts: ProviderOptions
-): Promise<StatementEntry[]> {
-  const systemPrompt = `Você recebeu o texto extraído de um extrato de cartão de crédito ou conta
-bancária. Extraia TODAS as transações listadas — cada linha de gasto ou
+const STATEMENT_INSTRUCTIONS = `Extraia TODAS as transações — cada linha de gasto ou
 recebimento vira um item.
 
 Para cada transação, identifique:
@@ -208,14 +198,7 @@ uma lista vazia.
 Retorne APENAS um JSON válido no formato:
 { "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado" } ] }`;
 
-  const { content } = await generateResponse(
-    [{ role: "user", content: statementText.slice(0, 12000) }],
-    systemPrompt,
-    0.2,
-    4096,
-    providerOpts
-  );
-
+function parseStatementResponse(content: string): StatementEntry[] {
   try {
     const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
     const parsed = JSON.parse(json) as { entries?: unknown[] };
@@ -239,4 +222,44 @@ Retorne APENAS um JSON válido no formato:
   } catch {
     return [];
   }
+}
+
+/**
+ * Extrai todas as transações de um extrato (texto de um PDF de cartão/conta).
+ * Diferente de routePersonalMessage, aqui a mensagem inteira vira uma LISTA
+ * de lançamentos, não uma classificação única.
+ */
+export async function parseStatementEntries(
+  statementText: string,
+  providerOpts: ProviderOptions
+): Promise<StatementEntry[]> {
+  const systemPrompt = `Você recebeu o texto extraído de um extrato de cartão de crédito ou conta
+bancária. ${STATEMENT_INSTRUCTIONS}`;
+
+  const { content } = await generateResponse(
+    [{ role: "user", content: statementText.slice(0, 12000) }],
+    systemPrompt,
+    0.2,
+    4096,
+    providerOpts
+  );
+
+  return parseStatementResponse(content);
+}
+
+/**
+ * Igual a parseStatementEntries, mas a partir de uma foto/print de extrato
+ * (base64) em vez de texto — pra PDFs sem camada de texto real (comum em
+ * faturas geradas com fontes customizadas) ou quando o usuário só tira print.
+ */
+export async function parseStatementImage(
+  base64: string,
+  mimetype: string,
+  providerOpts: ProviderOptions
+): Promise<StatementEntry[]> {
+  const systemPrompt = `Você recebeu a foto/print de um extrato de cartão de crédito ou conta
+bancária. ${STATEMENT_INSTRUCTIONS}`;
+
+  const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
+  return parseStatementResponse(content);
 }

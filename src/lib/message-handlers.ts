@@ -3,7 +3,13 @@ import { sendTextWithTyping, getBase64FromMediaMessage } from "./evolution";
 import { transcribeAudio, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
-import { routePersonalMessage, parseStatementEntries, type PersonalQueryIntent } from "./personal-router";
+import {
+  routePersonalMessage,
+  parseStatementEntries,
+  parseStatementImage,
+  type PersonalQueryIntent,
+  type StatementEntry,
+} from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
 import type { AgentConfig } from "@prisma/client";
 
@@ -45,7 +51,7 @@ function getEvoConfig(config: AgentConfig) {
   };
 }
 
-async function notifyOwner(config: AgentConfig, text: string): Promise<void> {
+export async function notifyOwner(config: AgentConfig, text: string): Promise<void> {
   if (!config.ownerPhone || !config.evolutionUrl) return;
   const evo = getEvoConfig(config);
   await sendTextWithTyping(
@@ -95,14 +101,16 @@ export async function transcribeIncomingAudio(
  * Baixa o base64 de um documento (ex: PDF) recebido via webhook, com o
  * mesmo esquema de fallback usado para áudio.
  */
-export async function downloadIncomingDocument(
+export async function downloadIncomingMedia(
   evo: { evolutionUrl: string; evolutionApiKey: string; instanceId: string },
   messageId: string,
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  field: "documentMessage" | "imageMessage",
+  defaultMimetype: string
 ): Promise<{ base64: string; mimetype: string }> {
-  const documentMessage = (message.documentMessage as Record<string, unknown>) ?? {};
-  let base64 = (message.base64 as string) || (documentMessage.base64 as string) || "";
-  let mimetype = (documentMessage.mimetype as string) || "application/pdf";
+  const mediaMessage = (message[field] as Record<string, unknown>) ?? {};
+  let base64 = (message.base64 as string) || (mediaMessage.base64 as string) || "";
+  let mimetype = (mediaMessage.mimetype as string) || defaultMimetype;
 
   if (!base64) {
     const media = await getBase64FromMediaMessage(
@@ -233,20 +241,9 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   }
 }
 
-/**
- * Processa um PDF de extrato: extrai todas as transações e lança de uma vez
- * no Financeiro. É um fluxo à parte de handleSelfMessage porque um extrato
- * vira MUITOS lançamentos, não uma classificação única.
- */
-export async function handleStatementDocument(statementText: string): Promise<void> {
-  const config = await prisma.agentConfig.findFirst();
-  if (!config || !config.ownerPhone) return;
-
-  const providerOpts = getProviderOpts(config);
-  const entries = await parseStatementEntries(statementText, providerOpts);
-
+async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
   if (entries.length === 0) {
-    await notifyOwner(config, "⚠️ Recebi o PDF mas não consegui identificar nenhuma transação nele.");
+    await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
     return;
   }
 
@@ -265,6 +262,34 @@ export async function handleStatementDocument(statementText: string): Promise<vo
   const total = entries.reduce((s, e) => s + (e.type === "expense" ? e.amount : -e.amount), 0);
   const response = `✅ Importei ${entries.length} lançamento(s) do extrato.\n💰 Total em despesas: R$ ${total.toFixed(2)}`;
   await notifyOwner(config, response);
+}
+
+/**
+ * Processa um PDF de extrato: extrai todas as transações e lança de uma vez
+ * no Financeiro. É um fluxo à parte de handleSelfMessage porque um extrato
+ * vira MUITOS lançamentos, não uma classificação única.
+ */
+export async function handleStatementDocument(statementText: string): Promise<void> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config || !config.ownerPhone) return;
+
+  const providerOpts = getProviderOpts(config);
+  const entries = await parseStatementEntries(statementText, providerOpts);
+  await saveStatementEntries(config, entries, "o PDF");
+}
+
+/**
+ * Igual a handleStatementDocument, mas a partir de uma foto/print de extrato
+ * — usado quando o PDF não tem texto extraível ou quando o usuário manda a
+ * imagem direto.
+ */
+export async function handleStatementImage(base64: string, mimetype: string): Promise<void> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config || !config.ownerPhone) return;
+
+  const providerOpts = getProviderOpts(config);
+  const entries = await parseStatementImage(base64, mimetype, providerOpts);
+  await saveStatementEntries(config, entries, "a imagem");
 }
 
 export interface PrivateMessageMeta {

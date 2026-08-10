@@ -96,6 +96,77 @@ export async function generateResponse(
 }
 
 /**
+ * Manda uma imagem (base64) pra um modelo com visão junto de um prompt de
+ * sistema, e devolve o texto da resposta (pra ser parseado como JSON por
+ * quem chama). Groq não entra aqui — os modelos de chat padrão dela não têm
+ * visão. Prioridade: OpenRouter > Google > OpenAI.
+ */
+export async function generateVisionResponse(
+  base64: string,
+  mimetype: string,
+  systemPrompt: string,
+  providerOpts: ProviderOptions
+): Promise<string> {
+  const imageContent = {
+    type: "image_url" as const,
+    image_url: { url: `data:${mimetype};base64,${base64}` },
+  };
+  const messages = [
+    {
+      role: "user" as const,
+      content: [
+        { type: "text" as const, text: "Aqui está a imagem:" },
+        imageContent,
+      ],
+    },
+  ];
+
+  if (providerOpts.openrouterApiKey) {
+    const openrouter = new OpenAI({
+      apiKey: providerOpts.openrouterApiKey,
+      baseURL: "https://openrouter.ai/api/v1",
+    });
+    const model = providerOpts.openrouterModel ?? "openai/gpt-4o-mini";
+    const response = await openrouter.chat.completions.create({
+      model,
+      temperature: 0.2,
+      max_tokens: 4096,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    });
+    return response.choices[0]?.message?.content ?? "";
+  }
+
+  if (providerOpts.googleApiKey) {
+    const google = new OpenAI({
+      apiKey: providerOpts.googleApiKey,
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    });
+    const model = providerOpts.googleModel ?? "gemini-2.0-flash";
+    const response = await google.chat.completions.create({
+      model,
+      temperature: 0.2,
+      max_tokens: 4096,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    });
+    return response.choices[0]?.message?.content ?? "";
+  }
+
+  const apiKey = providerOpts.openaiApiKey ?? process.env.OPENAI_API_KEY ?? "";
+  if (!apiKey) {
+    throw new Error("Nenhuma chave configurada com suporte a visão (OpenRouter, Google ou OpenAI)");
+  }
+  const openai = new OpenAI({ apiKey });
+  const model = providerOpts.openaiModel ?? "gpt-4.1-mini";
+  const response = await openai.chat.completions.create({
+    model,
+    temperature: 0.2,
+    max_tokens: 4096,
+    messages: [{ role: "system", content: systemPrompt }, ...messages],
+  });
+  return response.choices[0]?.message?.content ?? "";
+}
+
+/**
  * Transcreve áudio (base64). Prioridade: Groq (whisper-large-v3) > OpenRouter
  * (openai/whisper-1) > OpenAI (whisper-1). Sem nenhuma chave configurada,
  * lança erro — quem chama deve tratar e logar.

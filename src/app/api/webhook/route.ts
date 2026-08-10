@@ -4,11 +4,13 @@ import { bufferMessage } from "@/lib/debounce";
 import {
   extractText,
   transcribeIncomingAudio,
-  downloadIncomingDocument,
+  downloadIncomingMedia,
   handleSelfMessage,
   handlePrivateMessage,
   handleGroupMessage,
   handleStatementDocument,
+  handleStatementImage,
+  notifyOwner,
 } from "@/lib/message-handlers";
 import { extractPdfText } from "@/lib/pdf";
 
@@ -47,6 +49,8 @@ export async function POST(request: Request) {
     const phone = isGroup ? "" : remoteJid.replace("@s.whatsapp.net", "");
     const isSelfChat = !isGroup && !!config.ownerPhone && phone === config.ownerPhone;
 
+    const evo = { evolutionUrl: config.evolutionUrl, evolutionApiKey: config.evolutionApiKey, instanceId: config.instanceId };
+
     // PDF de extrato: só processado no canal pessoal, vira vários lançamentos
     // de uma vez em vez de passar pela classificação normal de texto.
     const documentMessage = rawMessage.documentMessage as Record<string, unknown> | undefined;
@@ -54,19 +58,34 @@ export async function POST(request: Request) {
     if (isSelfChat && documentMessage && documentMimetype.includes("pdf")) {
       console.log("[webhook] PDF recebido no canal pessoal, processando extrato");
       try {
-        const { base64 } = await downloadIncomingDocument(
-          { evolutionUrl: config.evolutionUrl, evolutionApiKey: config.evolutionApiKey, instanceId: config.instanceId },
-          key.id ?? "",
-          rawMessage
-        );
+        const { base64 } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "documentMessage", "application/pdf");
         const pdfText = base64 ? await extractPdfText(base64) : "";
         if (!pdfText) {
-          console.log("[webhook] PDF sem texto extraível, ignorando");
+          console.log("[webhook] PDF sem texto extraível, avisando pra mandar print");
+          await notifyOwner(
+            config,
+            "⚠️ Não consegui ler o texto desse PDF (fatura sem camada de texto). Manda um print/foto de cada página em vez do arquivo."
+          );
         } else {
           await handleStatementDocument(pdfText);
         }
       } catch (err) {
         console.error("[webhook] falha ao processar PDF", err);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // Foto/print de extrato: mesma ideia, mas lida por visão em vez de texto —
+    // cobre PDFs sem texto extraível e quem já manda print direto.
+    if (isSelfChat && rawMessage.imageMessage) {
+      console.log("[webhook] imagem recebida no canal pessoal, processando extrato por visão");
+      try {
+        const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "imageMessage", "image/jpeg");
+        if (base64) {
+          await handleStatementImage(base64, mimetype);
+        }
+      } catch (err) {
+        console.error("[webhook] falha ao processar imagem", err);
       }
       return NextResponse.json({ ok: true });
     }
@@ -78,11 +97,7 @@ export async function POST(request: Request) {
       try {
         text = (
           await transcribeIncomingAudio(
-            {
-              evolutionUrl: config.evolutionUrl,
-              evolutionApiKey: config.evolutionApiKey,
-              instanceId: config.instanceId,
-            },
+            evo,
             key.id ?? "",
             rawMessage,
             {
