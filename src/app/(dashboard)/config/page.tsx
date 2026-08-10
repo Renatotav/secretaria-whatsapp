@@ -437,7 +437,7 @@ export default function ConfigPage() {
             </span>
           </div>
           <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 16 }}>
-            A transcrição usa a chave Groq (whisper-large-v3) se configurada, ou a chave OpenAI (whisper-1) como alternativa — veja a seção de Provedor de IA acima.
+            A transcrição usa, nessa ordem, a primeira chave configurada na seção de Provedor de IA acima: Groq (whisper-large-v3), OpenRouter (openai/whisper-1) ou OpenAI (whisper-1).
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
             <Field label="Debounce (segundos)" hint="Espera antes de processar mensagens quebradas">
