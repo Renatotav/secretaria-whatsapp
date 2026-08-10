@@ -441,6 +441,12 @@ export default function FinancePage() {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  async function deleteAll() {
+    if (!confirm("Apagar TODOS os lançamentos financeiros? Essa ação não pode ser desfeita.")) return;
+    await fetch(`/api/finance?all=true`, { method: "DELETE" });
+    load();
+  }
+
   function startEdit(entry: FinanceEntry) {
     setEditingId(entry.id);
     setEditForm({
@@ -477,12 +483,17 @@ export default function FinancePage() {
       <div style={{ maxWidth: 1040, margin: "0 auto", padding: "24px 24px 60px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            style={{ width: 160 }}
-          />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteAll}>
+              Apagar tudo
+            </button>
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              style={{ width: 160 }}
+            />
+          </div>
         </div>
 
         {/* Summary cards */}

@@ -81,6 +81,12 @@ export const DELETE = withErrorHandling(async (request: Request) => {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
+
+  if (searchParams.get("all") === "true") {
+    await prisma.financeEntry.deleteMany({});
+    return NextResponse.json({ ok: true });
+  }
+
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 
   await prisma.financeEntry.delete({ where: { id } });
