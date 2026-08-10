@@ -8,7 +8,6 @@ export interface ClassificationResult {
   dueDate: string | null;
   ticketIds: string[];
   reason: string;
-  suggestion: string;
 }
 
 export async function classifyGroupMessage(
@@ -42,8 +41,8 @@ Extraia APENAS chamados com estes formatos exatos:
 - Número standalone de 6 a 7 dígitos (ex: 2041838)
 NÃO extraia: números de processo judicial (formato XXXXXXX-XX.XXXX), JIDs do WhatsApp (15+ dígitos), datas, qualquer outro número.
 
-Se urgent for true, gere uma sugestão de resposta curta, natural e profissional
-que ${ownerName} poderia enviar ao grupo. Máximo 2 frases.
+Você NÃO redige nem sugere respostas — só classifica e resume, para manter
+${ownerName} informado sobre o que acontece no grupo.
 
 Retorne APENAS JSON válido:
 {
@@ -53,8 +52,7 @@ Retorne APENAS JSON válido:
   "description": "descrição clara se urgente",
   "dueDate": "ISO 8601 ou null",
   "ticketIds": [],
-  "reason": "explicação",
-  "suggestion": "texto da sugestão ou vazio"
+  "reason": "explicação"
 }`;
 
   const { content } = await generateResponse(
@@ -77,7 +75,6 @@ Retorne APENAS JSON válido:
       dueDate: null,
       ticketIds: [],
       reason: "Classificação indisponível",
-      suggestion: "",
     };
   }
 }

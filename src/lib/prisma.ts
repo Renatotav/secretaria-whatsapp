@@ -1,16 +1,8 @@
-import path from "path";
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-function resolveDbUrl(raw: string): string {
-  if (raw.startsWith("file:./") || raw.startsWith("file:dev")) {
-    return `file:${path.resolve(raw.slice(5))}`;
-  }
-  return raw;
-}
-
-const url = resolveDbUrl(process.env.DATABASE_URL ?? "file:./dev.db");
-const adapter = new PrismaLibSql({ url });
+const connectionString = process.env.DATABASE_URL ?? "";
+const adapter = new PrismaPg({ connectionString });
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 export const prisma =

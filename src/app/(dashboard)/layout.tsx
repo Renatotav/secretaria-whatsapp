@@ -4,13 +4,16 @@ import Link from "next/link";
 
 const NAV = [
   { href: "/", icon: "💬", label: "Chat de Teste" },
-  { href: "/briefings", icon: "👤", label: "Contatos" },
   { href: "/agenda", icon: "📅", label: "Agenda" },
+  { href: "/finance", icon: "💰", label: "Financeiro" },
+  { href: "/diary", icon: "📓", label: "Diário" },
+  { href: "/briefings", icon: "👤", label: "Contatos" },
+  { href: "/groups", icon: "👥", label: "Grupos" },
   { href: "/tickets", icon: "🎫", label: "Chamados" },
   { href: "/daily-summary", icon: "📋", label: "Resumos Diários" },
   { href: "/weekly-report", icon: "📊", label: "Rel. Semanal" },
   { href: "/conversations", icon: "💬", label: "Conversas" },
-  { href: "/groups", icon: "👥", label: "Grupos" },
+  { href: "/instances", icon: "📡", label: "Instâncias" },
   { href: "/config", icon: "⚙️", label: "Configurações" },
 ];
 

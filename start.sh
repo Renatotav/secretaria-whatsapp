@@ -1,4 +1,4 @@
 #!/bin/sh
-node /app/migrate.mjs
+npx prisma migrate deploy
 node /app/scheduler.mjs &
 node server.js

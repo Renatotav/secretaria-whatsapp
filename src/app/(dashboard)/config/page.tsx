@@ -26,6 +26,10 @@ interface Config {
   summaryTime: string;
   weeklyTime: string;
   reminderHours: number;
+  audioEnabled: boolean;
+  debounceSeconds: number;
+  typingMsPerChar: number;
+  typingMaxSeconds: number;
 }
 
 const DEFAULT: Config = {
@@ -52,6 +56,10 @@ const DEFAULT: Config = {
   summaryTime: "18:00",
   weeklyTime: "20:00",
   reminderHours: 3,
+  audioEnabled: false,
+  debounceSeconds: 8,
+  typingMsPerChar: 35,
+  typingMaxSeconds: 8,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -357,6 +365,73 @@ export default function ConfigPage() {
                 max={50}
                 value={config.historyLimit}
                 onChange={(e) => set("historyLimit", Number(e.target.value))}
+              />
+            </Field>
+          </div>
+        </Section>
+
+        {/* Áudio e Digitação */}
+        <Section title="🎙️ Áudio e Digitação">
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <button
+              onClick={() => set("audioEnabled", !config.audioEnabled)}
+              style={{
+                width: 44,
+                height: 24,
+                borderRadius: 12,
+                background: config.audioEnabled ? "var(--accent)" : "var(--border)",
+                border: "none",
+                cursor: "pointer",
+                position: "relative",
+                transition: "background 0.2s",
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  left: config.audioEnabled ? 22 : 2,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "white",
+                  transition: "left 0.2s",
+                }}
+              />
+            </button>
+            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              {config.audioEnabled ? "Escutar áudios (transcrever automaticamente)" : "Áudios ignorados"}
+            </span>
+          </div>
+          <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 16 }}>
+            A transcrição usa a chave Groq (whisper-large-v3) se configurada, ou a chave OpenAI (whisper-1) como alternativa — veja a seção de Provedor de IA acima.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <Field label="Debounce (segundos)" hint="Espera antes de processar mensagens quebradas">
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={config.debounceSeconds}
+                onChange={(e) => set("debounceSeconds", Number(e.target.value))}
+              />
+            </Field>
+            <Field label="Digitação (ms/caractere)" hint="Tempo de 'digitando' por caractere da resposta">
+              <input
+                type="number"
+                min={0}
+                max={200}
+                value={config.typingMsPerChar}
+                onChange={(e) => set("typingMsPerChar", Number(e.target.value))}
+              />
+            </Field>
+            <Field label="Teto de digitação (segundos)" hint="Tempo máximo de 'digitando'">
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={config.typingMaxSeconds}
+                onChange={(e) => set("typingMaxSeconds", Number(e.target.value))}
               />
             </Field>
           </div>

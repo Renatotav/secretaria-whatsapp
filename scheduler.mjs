@@ -1,28 +1,28 @@
 /**
  * Standalone scheduler process — runs as a background job via start.sh
  * Imports compiled Next.js server-side code is not possible, so this
- * process uses @libsql/client directly for DB access and calls the
+ * process uses `pg` directly for DB access and calls the
  * Next.js API routes internally via localhost HTTP.
  */
 
-import { createClient } from "@libsql/client";
+import pg from "pg";
 
-const DB_URL = process.env.DATABASE_URL ?? "file:/app/data/prod.db";
+const { Pool } = pg;
 const NEXT_URL = process.env.NEXT_URL ?? "http://localhost:3000";
 
-const db = createClient({ url: DB_URL });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
 let lastReminderHour = -1;
 
 async function getConfig() {
-  const result = await db.execute('SELECT * FROM "AgentConfig" LIMIT 1');
+  const result = await pool.query('SELECT * FROM "AgentConfig" LIMIT 1');
   return result.rows[0] ?? null;
 }
 
 async function triggerDailySummaries() {
-  const groups = await db.execute('SELECT * FROM "GroupConfig" WHERE "active" = 1');
+  const groups = await pool.query('SELECT * FROM "GroupConfig" WHERE "active" = true');
   for (const group of groups.rows) {
     try {
       await fetch(`${NEXT_URL}/api/daily-summary`, {

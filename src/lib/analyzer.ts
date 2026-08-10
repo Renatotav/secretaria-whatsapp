@@ -6,7 +6,6 @@ export interface AnalysisResult {
   urgency: "low" | "normal" | "high" | "critical";
   urgencyReason: string;
   ticketIds: string[];
-  suggestion: string;
 }
 
 export async function analyzePrivateMessage(
@@ -16,11 +15,8 @@ export async function analyzePrivateMessage(
   providerOpts: ProviderOptions
 ): Promise<AnalysisResult> {
   const systemPrompt = `Você é secretária pessoal de um ${ownerRole}.
-Analise a mensagem recebida de "${contactName}".
-
-Além da análise, gere uma sugestão de resposta curta, natural e profissional
-que o supervisor poderia enviar. Máximo 2 frases. Tom adequado ao contexto:
-mais formal para superiores, mais direto para colegas de equipe.
+Analise a mensagem recebida de "${contactName}" para manter o supervisor
+informado. Você NÃO redige nem sugere respostas — só analisa e resume.
 
 Retorne APENAS JSON válido:
 {
@@ -28,8 +24,7 @@ Retorne APENAS JSON válido:
   "summary": "resumo claro em 2-3 frases",
   "urgency": "low|normal|high|critical",
   "urgencyReason": "justificativa da urgência",
-  "ticketIds": ["S2058856"],
-  "suggestion": "texto da sugestão aqui"
+  "ticketIds": ["S2058856"]
 }
 
 Critérios de urgência:
@@ -56,7 +51,6 @@ Critérios de urgência:
       urgency: "normal",
       urgencyReason: "Análise indisponível",
       ticketIds: [],
-      suggestion: "",
     };
   }
 }

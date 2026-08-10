@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ─── MODELOS ORIGINAIS ────────────────────────────────────────────────────────
@@ -33,6 +33,10 @@ model AgentConfig {
   summaryTime     String   @default("18:00")
   weeklyTime      String   @default("20:00")
   reminderHours   Int      @default(3)
+  audioEnabled    Boolean  @default(false)
+  debounceSeconds Int      @default(8)
+  typingMsPerChar Int      @default(35)
+  typingMaxSeconds Int     @default(8)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -76,9 +80,6 @@ model Briefing {
   summary     String
   subject     String
   urgency     String   @default("normal")
-  suggestion  String   @default("")
-  repCode     String   @default("")
-  replied     Boolean  @default(false)
   receivedAt  DateTime
   notified    Boolean  @default(false)
   read        Boolean  @default(false)
@@ -96,9 +97,6 @@ model AgendaItem {
   dueDate      DateTime?
   senderName   String    @default("")
   rawMessage   String
-  suggestion   String    @default("")
-  repCode      String    @default("")
-  replied      Boolean   @default(false)
   notified     Boolean   @default(false)
   reminded     Boolean   @default(false)
   done         Boolean   @default(false)
@@ -151,14 +149,22 @@ model Ticket {
   updatedAt DateTime @updatedAt
 }
 
-model PendingReply {
+model FinanceEntry {
   id          String   @id @default(cuid())
-  code        String   @unique
-  targetPhone String
-  targetType  String
-  suggestion  String
-  sourceId    String
-  used        Boolean  @default(false)
-  expiresAt   DateTime
+  type        String
+  amount      Float
+  category    String   @default("")
+  description String   @default("")
+  date        DateTime @default(now())
+  source      String   @default("dashboard")
   createdAt   DateTime @default(now())
+}
+
+model DiaryEntry {
+  id        String   @id @default(cuid())
+  date      DateTime @default(now())
+  content   String
+  mood      String   @default("")
+  source    String   @default("dashboard")
+  createdAt DateTime @default(now())
 }

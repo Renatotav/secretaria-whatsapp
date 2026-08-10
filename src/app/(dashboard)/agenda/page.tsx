@@ -12,9 +12,6 @@ interface AgendaItem {
   dueDate: string | null;
   senderName: string;
   rawMessage: string;
-  suggestion: string;
-  repCode: string;
-  replied: boolean;
   done: boolean;
   followUpNote: string;
   createdAt: string;
@@ -237,23 +234,6 @@ export default function AgendaPage() {
                 {selected.rawMessage}
               </p>
             </div>
-
-            {selected.suggestion && (
-              <div
-                style={{
-                  background: "var(--accent-dim)",
-                  border: "1px solid var(--accent-border)",
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <p style={{ fontSize: 12, color: "var(--accent)", marginBottom: 6 }}>
-                  💬 Sugestão {selected.repCode && `(${selected.repCode})`}
-                </p>
-                <p style={{ lineHeight: 1.6 }}>{selected.suggestion}</p>
-              </div>
-            )}
 
             <div
               style={{

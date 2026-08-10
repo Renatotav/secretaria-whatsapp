@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -73,4 +73,45 @@ export async function generateResponse(
     content: response.choices[0]?.message?.content ?? "",
     tokens: response.usage?.total_tokens ?? 0,
   };
+}
+
+/**
+ * Transcreve áudio (base64) usando Groq (whisper-large-v3) se houver chave
+ * configurada, ou OpenAI (whisper-1) como alternativa. Sem nenhuma das duas
+ * chaves configuradas, lança erro — quem chama deve tratar e logar.
+ */
+export async function transcribeAudio(
+  base64: string,
+  format: string,
+  providerOpts: ProviderOptions
+): Promise<string> {
+  const buffer = Buffer.from(base64, "base64");
+  const filename = `audio.${format || "ogg"}`;
+
+  if (providerOpts.groqApiKey) {
+    const groq = new OpenAI({
+      apiKey: providerOpts.groqApiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+    const file = await toFile(buffer, filename);
+    const result = await groq.audio.transcriptions.create({
+      file,
+      model: "whisper-large-v3",
+      language: "pt",
+    });
+    return result.text ?? "";
+  }
+
+  const apiKey = providerOpts.openaiApiKey ?? process.env.OPENAI_API_KEY ?? "";
+  if (!apiKey) {
+    throw new Error("Nenhuma chave configurada para transcrição de áudio (Groq ou OpenAI)");
+  }
+  const openai = new OpenAI({ apiKey });
+  const file = await toFile(buffer, filename);
+  const result = await openai.audio.transcriptions.create({
+    file,
+    model: "whisper-1",
+    language: "pt",
+  });
+  return result.text ?? "";
 }

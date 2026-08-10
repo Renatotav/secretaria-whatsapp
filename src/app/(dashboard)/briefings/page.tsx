@@ -9,9 +9,6 @@ interface Briefing {
   summary: string;
   subject: string;
   urgency: string;
-  suggestion: string;
-  repCode: string;
-  replied: boolean;
   read: boolean;
   receivedAt: string;
   createdAt: string;
@@ -239,26 +236,6 @@ export default function BriefingsPage() {
                 {selected.rawMessage}
               </p>
             </div>
-
-            {selected.suggestion && (
-              <div
-                style={{
-                  background: "var(--accent-dim)",
-                  border: "1px solid var(--accent-border)",
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 16,
-                }}
-              >
-                <p style={{ fontSize: 12, color: "var(--accent)", marginBottom: 6 }}>
-                  💬 Sugestão de resposta {selected.repCode && `(${selected.repCode})`}
-                </p>
-                <p style={{ lineHeight: 1.6, color: "var(--text)" }}>{selected.suggestion}</p>
-                {selected.replied && (
-                  <p style={{ marginTop: 8, fontSize: 12, color: "var(--success)" }}>✅ Resposta enviada</p>
-                )}
-              </div>
-            )}
 
             <div style={{ display: "flex", gap: 8 }}>
               {!selected.read && (
