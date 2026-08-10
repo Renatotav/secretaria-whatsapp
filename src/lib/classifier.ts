@@ -17,11 +17,13 @@ export async function classifyGroupMessage(
   groupFocus: string,
   ownerName: string,
   ownerRole: string,
-  providerOpts: ProviderOptions
+  providerOpts: ProviderOptions,
+  customPrompt?: string
 ): Promise<ClassificationResult> {
   const systemPrompt = `Você é secretária pessoal de ${ownerName}, ${ownerRole}.
 Grupo: ${groupName} | Foco: ${groupFocus}
 Enviado por: ${senderName}
+${customPrompt ? `\nInstruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : ""}
 
 Exige notificação IMEDIATA se:
 - Menciona "@${ownerName}" OU apenas o nome "${ownerName}" na mensagem (com ou sem @)

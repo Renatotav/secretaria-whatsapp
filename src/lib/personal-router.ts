@@ -35,7 +35,8 @@ export async function routePersonalMessage(
   message: string,
   ownerName: string,
   providerOpts: ProviderOptions,
-  recentContext?: string
+  recentContext?: string,
+  customPrompt?: string
 ): Promise<PersonalRouteResult> {
   const systemPrompt = `Você é a secretária pessoal de ${ownerName}. Ele mandou uma
 mensagem para o próprio número do WhatsApp — é assim que ele te alimenta com
@@ -43,6 +44,7 @@ tarefas, gastos/receitas e anotações pessoais. Classifique a intenção em um
 dos 4 tipos e extraia os dados. Você nunca redige respostas para terceiros,
 só confirma o que foi registrado.
 
+${customPrompt ? `Instruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : ""}
 ${recentContext ? `Contexto recente da conversa:\n${recentContext}\n` : ""}
 
 Tipos:

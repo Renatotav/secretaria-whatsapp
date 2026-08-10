@@ -3,7 +3,6 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const NAV = [
-  { href: "/", icon: "💬", label: "Chat de Teste" },
   { href: "/agenda", icon: "📅", label: "Agenda" },
   { href: "/finance", icon: "💰", label: "Financeiro" },
   { href: "/diary", icon: "📓", label: "Diário" },

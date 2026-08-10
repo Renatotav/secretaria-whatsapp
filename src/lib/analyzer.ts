@@ -12,12 +12,13 @@ export async function analyzePrivateMessage(
   message: string,
   contactName: string,
   ownerRole: string,
-  providerOpts: ProviderOptions
+  providerOpts: ProviderOptions,
+  customPrompt?: string
 ): Promise<AnalysisResult> {
   const systemPrompt = `Você é secretária pessoal de um ${ownerRole}.
 Analise a mensagem recebida de "${contactName}" para manter o supervisor
 informado. Você NÃO redige nem sugere respostas — só analisa e resume.
-
+${customPrompt ? `\nInstruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : ""}
 Retorne APENAS JSON válido:
 {
   "subject": "assunto em até 6 palavras",

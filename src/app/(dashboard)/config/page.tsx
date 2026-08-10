@@ -36,7 +36,7 @@ interface Config {
 
 const DEFAULT: Config = {
   name: "Secretária Eletrônica",
-  systemPrompt: "Você é um assistente prestativo e amigável.",
+  systemPrompt: "",
   temperature: 0.7,
   maxTokens: 1024,
   historyLimit: 10,
@@ -357,50 +357,28 @@ export default function ConfigPage() {
         </Section>
 
         {/* Assistente */}
-        <Section title="💬 Assistente (Chat de Teste)">
-          <Field label="Nome do assistente">
-            <input
-              value={config.name}
-              onChange={(e) => set("name", e.target.value)}
-            />
-          </Field>
-          <Field label="System prompt">
+        <Section title="🧠 Personalidade e instruções">
+          <Field
+            label="Instruções personalizadas"
+            hint="Some às regras da secretária (agenda, financeiro, diário, análise de grupos e contatos). Ex: tom de voz, categorias de gasto que você usa, o que considerar urgente. Deixe em branco para usar só o comportamento padrão."
+          >
             <textarea
               value={config.systemPrompt}
               onChange={(e) => set("systemPrompt", e.target.value)}
               rows={4}
+              placeholder="Ex: Seja bem direta e objetiva. Trate qualquer gasto acima de R$500 como prioridade alta no resumo mensal."
             />
           </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <Field label="Temperature">
-              <input
-                type="number"
-                min={0}
-                max={2}
-                step={0.1}
-                value={config.temperature}
-                onChange={(e) => set("temperature", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Max tokens">
-              <input
-                type="number"
-                min={64}
-                max={8192}
-                value={config.maxTokens}
-                onChange={(e) => set("maxTokens", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Histórico (mensagens)">
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={config.historyLimit}
-                onChange={(e) => set("historyLimit", Number(e.target.value))}
-              />
-            </Field>
-          </div>
+          <Field label="Histórico (mensagens)" hint="Quantas mensagens recentes do canal pessoal entram no contexto da IA">
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={config.historyLimit}
+              onChange={(e) => set("historyLimit", Number(e.target.value))}
+              style={{ maxWidth: 160 }}
+            />
+          </Field>
         </Section>
 
         {/* Áudio e Digitação */}

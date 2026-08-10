@@ -175,7 +175,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     .map((m) => `${m.role === "user" ? "Dono" : "Secretária"}: ${m.content}`)
     .join("\n");
 
-  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext);
+  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt);
 
   if (!conv) {
     conv = await prisma.conversation.create({
@@ -278,7 +278,7 @@ export async function handlePrivateMessage(joinedText: string, meta: PrivateMess
   const providerOpts = getProviderOpts(config);
   const contactName = meta.pushName || meta.phone;
 
-  const analysis = await analyzePrivateMessage(joinedText, contactName, config.ownerRole, providerOpts);
+  const analysis = await analyzePrivateMessage(joinedText, contactName, config.ownerRole, providerOpts, config.systemPrompt);
 
   if (analysis.ticketIds.length > 0) {
     await extractAndSaveTickets(analysis.ticketIds, joinedText, contactName, "", "");
@@ -366,7 +366,8 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
     groupConfig.focus,
     config.ownerName,
     config.ownerRole,
-    providerOpts
+    providerOpts,
+    config.systemPrompt
   );
 
   if (classification.ticketIds.length > 0) {
