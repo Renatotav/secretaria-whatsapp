@@ -198,6 +198,14 @@ Para cada transação, identifique:
     normalmente, como aparece na linha.
   - Se não der pra identificar nenhuma data, use null.
 - description: a descrição da transação como aparece no extrato (curta, real).
+  Se for FATURA DE CARTÃO e a linha mostrar uma data de compra/parcela diferente
+  da data de vencimento (ex: "Parcela 6/10" com "14 fev" impresso na linha),
+  inclua essa data original da compra entre parênteses no final da descrição,
+  no formato "(compra em DD/MM)" — ex: "AMAZON BR - Parcela 6/10 (compra em
+  14/02)". Pra inferir o ano dessa data (raramente vem explícito): se o mês da
+  compra vier DEPOIS do mês de vencimento da fatura no calendário (ex: setembro
+  numa fatura que vence em agosto), foi no ano anterior ao do vencimento; caso
+  contrário, é o mesmo ano do vencimento.
 - amount: valor numérico positivo (sem sinal, sem "R$").
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
 - category: categoria ampla inferida (ex: "Alimentação", "Moradia", "Transporte",
