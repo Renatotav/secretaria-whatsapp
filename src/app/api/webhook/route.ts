@@ -71,6 +71,7 @@ export async function POST(request: Request) {
         }
       } catch (err) {
         console.error("[webhook] falha ao processar PDF", err);
+        await notifyOwner(config, `⚠️ Falha ao processar o PDF: ${err instanceof Error ? err.message : "erro desconhecido"}`);
       }
       return NextResponse.json({ ok: true });
     }
@@ -83,9 +84,13 @@ export async function POST(request: Request) {
         const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "imageMessage", "image/jpeg");
         if (base64) {
           await handleStatementImage(base64, mimetype);
+        } else {
+          console.log("[webhook] imagem sem base64 disponível, avisando");
+          await notifyOwner(config, "⚠️ Não consegui baixar essa imagem pra ler. Tenta mandar de novo.");
         }
       } catch (err) {
         console.error("[webhook] falha ao processar imagem", err);
+        await notifyOwner(config, `⚠️ Falha ao processar a imagem: ${err instanceof Error ? err.message : "erro desconhecido"}`);
       }
       return NextResponse.json({ ok: true });
     }
