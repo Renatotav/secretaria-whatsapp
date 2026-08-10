@@ -130,7 +130,7 @@ export async function generateVisionResponse(
     // de OCR/leitura de tabela densa em foto precisam de um modelo forte em
     // documento, independente do que está configurado pro resto do sistema.
     const response = await openrouter.chat.completions.create({
-      model: "google/gemini-2.0-flash-001",
+      model: "google/gemini-2.5-flash",
       temperature: 0.1,
       max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
