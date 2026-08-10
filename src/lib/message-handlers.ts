@@ -544,14 +544,7 @@ export async function handlePrivateMessage(joinedText: string, meta: PrivateMess
 
   let conv = await prisma.conversation.findFirst({ where: { phone: meta.phone, source: "whatsapp" } });
   if (!conv) {
-    conv = await prisma.conversation.create({
-      data: { phone: meta.phone, source: "whatsapp", contactName: meta.pushName || "" },
-    });
-  } else if (meta.pushName && conv.contactName !== meta.pushName) {
-    conv = await prisma.conversation.update({
-      where: { id: conv.id },
-      data: { contactName: meta.pushName },
-    });
+    conv = await prisma.conversation.create({ data: { phone: meta.phone, source: "whatsapp" } });
   }
   await prisma.message.create({ data: { conversationId: conv.id, role: "user", content: joinedText } });
 

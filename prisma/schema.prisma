@@ -44,11 +44,10 @@ model AgentConfig {
 }
 
 model Conversation {
-  id          String    @id @default(cuid())
-  source      String    @default("chat")
-  phone       String?
-  contactName String    @default("")
-  messages    Message[]
+  id        String    @id @default(cuid())
+  source    String    @default("chat")
+  phone     String?
+  messages  Message[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 }

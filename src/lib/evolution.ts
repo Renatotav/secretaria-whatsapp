@@ -214,26 +214,3 @@ export async function findContact(
     return null;
   }
 }
-
-export async function fetchAllContacts(
-  evolutionUrl: string,
-  evolutionApiKey: string,
-  instanceId: string
-): Promise<Array<{ id: string; name?: string; pushName?: string }>> {
-  try {
-    const url = `${evolutionUrl}/chat/findContacts/${instanceId}`;
-    const response = await evolutionFetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: evolutionApiKey,
-      },
-      body: JSON.stringify({}),
-    });
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    console.error("[evolution] erro ao buscar todos os contatos", err);
-    return [];
-  }
-}
