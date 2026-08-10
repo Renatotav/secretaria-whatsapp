@@ -30,7 +30,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   const entries = await prisma.financeEntry.findMany({
     where: dateFilter ? { date: dateFilter } : {},
-    orderBy: { date: "desc" },
+    orderBy: { date: "asc" },
   });
 
   return NextResponse.json(entries);
