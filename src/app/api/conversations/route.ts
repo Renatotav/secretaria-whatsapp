@@ -49,7 +49,7 @@ export const GET = withErrorHandling(async (request: Request) => {
     if (c.source === "group" && c.phone) {
       displayName = groupNameMap[c.phone] || c.phone;
     } else if (c.source === "whatsapp" && c.phone) {
-      displayName = contactsMap[c.phone] || c.phone;
+      displayName = c.contactName || contactsMap[c.phone] || c.phone;
     }
     return { ...c, displayName };
   });
