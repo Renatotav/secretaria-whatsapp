@@ -11,6 +11,7 @@ import {
   type StatementEntry,
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
+import { parseLocalDate } from "./dates";
 import type { AgentConfig } from "@prisma/client";
 
 export function extractText(message: Record<string, unknown>): string {
@@ -283,20 +284,6 @@ function subscriptionKey(description: string, amount: number, targetDate: Date):
 
 const SUBSCRIPTION_PROJECTION_MONTHS = 11;
 
-/**
- * "2026-08-10" (data pura, sem hora) vira meia-noite UTC quando passada pro
- * construtor de Date, o que em fusos negativos (ex: Brasil, UTC-3) exibe como
- * o dia ANTERIOR — e pode até jogar o lançamento pro mês errado se cair no
- * dia 1. Extrai os componentes Y-M-D manualmente e monta a data no fuso
- * local, tanto pra strings puras quanto pra ISO completas (ignora a hora).
- */
-function parseAiDate(dateStr: string | null | undefined): Date {
-  if (!dateStr) return new Date();
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return new Date(dateStr);
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-}
-
 async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
   if (entries.length === 0) {
     await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
@@ -310,7 +297,7 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
   const candidates: { entry: StatementEntry; date: Date; key: string | null }[] = [];
 
   for (const e of entries) {
-    const baseDate = parseAiDate(e.date);
+    const baseDate = parseLocalDate(e.date);
     const info = parseInstallmentInfo(e.description);
 
     if (info) {
@@ -398,7 +385,7 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
       category: e.category,
       subcategory: e.subcategory,
       description: e.description,
-      date: parseAiDate(e.date),
+      date: parseLocalDate(e.date),
       source: "whatsapp",
     })),
   });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { parseLocalDate } from "@/lib/dates";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
@@ -48,7 +49,7 @@ export const POST = withErrorHandling(async (request: Request) => {
       category: body.category ?? "",
       subcategory: body.subcategory ?? "",
       description: body.description ?? "",
-      date: body.date ? new Date(body.date) : new Date(),
+      date: parseLocalDate(body.date),
       source: "dashboard",
     },
   });
@@ -67,7 +68,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
 
   const body = await request.json();
   const data: Record<string, unknown> = { ...body };
-  if (data.date) data.date = new Date(data.date as string);
+  if (data.date) data.date = parseLocalDate(data.date as string);
   if (data.amount !== undefined) data.amount = Number(data.amount);
 
   const updated = await prisma.financeEntry.update({ where: { id }, data });
