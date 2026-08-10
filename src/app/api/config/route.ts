@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
+import { withErrorHandling } from "@/lib/api-handler";
 
-export async function GET(request: Request) {
+export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -12,9 +13,9 @@ export async function GET(request: Request) {
     config = await prisma.agentConfig.create({ data: {} });
   }
   return NextResponse.json(config);
-}
+});
 
-export async function PUT(request: Request) {
+export const PUT = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -32,4 +33,4 @@ export async function PUT(request: Request) {
   }
 
   return NextResponse.json(config);
-}
+});

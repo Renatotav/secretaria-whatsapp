@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateResponse } from "@/lib/openai";
 import { isAuthenticated } from "@/lib/auth";
+import { withErrorHandling } from "@/lib/api-handler";
 
-export async function GET(request: Request) {
+export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -15,9 +16,9 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(conversations);
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -69,4 +70,4 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ conversationId: conversation.id, message: saved });
-}
+});

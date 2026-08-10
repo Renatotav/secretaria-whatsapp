@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
+import { withErrorHandling } from "@/lib/api-handler";
 
-export async function GET(request: Request) {
+export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -16,9 +17,9 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(entries);
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -34,9 +35,9 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json(entry);
-}
+});
 
-export async function PATCH(request: Request) {
+export const PATCH = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -51,9 +52,9 @@ export async function PATCH(request: Request) {
 
   const updated = await prisma.diaryEntry.update({ where: { id }, data });
   return NextResponse.json(updated);
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
@@ -64,4 +65,4 @@ export async function DELETE(request: Request) {
 
   await prisma.diaryEntry.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}
+});
