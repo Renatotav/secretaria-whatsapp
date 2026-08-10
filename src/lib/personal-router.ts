@@ -180,8 +180,12 @@ export interface StatementEntry {
   subcategory: string;
 }
 
-const STATEMENT_INSTRUCTIONS = `Extraia TODAS as transações — cada linha de gasto ou
-recebimento vira um item.
+const STATEMENT_INSTRUCTIONS = `Extraia TODAS as transações, sem exceção — cada linha de
+gasto ou recebimento vira um item. Extratos de cartão costumam ter entre 10 e 40
+linhas de transação; se você encontrar poucas, provavelmente pulou linhas — releia
+com atenção, de cima pra baixo, linha por linha, até o fim da tabela. Não pare
+depois das primeiras linhas nem resuma: cada transação individual precisa
+aparecer como um item separado no resultado.
 
 Para cada transação, identifique:
 - date: data no formato ISO 8601 (YYYY-MM-DD). Se o extrato não tiver o ano

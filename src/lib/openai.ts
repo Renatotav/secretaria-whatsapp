@@ -126,11 +126,13 @@ export async function generateVisionResponse(
       apiKey: providerOpts.openrouterApiKey,
       baseURL: "https://openrouter.ai/api/v1",
     });
-    const model = providerOpts.openrouterModel ?? "openai/gpt-4o-mini";
+    // Não reaproveita o modelo de chat geral (config.openrouterModel) — tarefas
+    // de OCR/leitura de tabela densa em foto precisam de um modelo forte em
+    // documento, independente do que está configurado pro resto do sistema.
     const response = await openrouter.chat.completions.create({
-      model,
-      temperature: 0.2,
-      max_tokens: 4096,
+      model: "google/gemini-2.0-flash-001",
+      temperature: 0.1,
+      max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
     });
     return response.choices[0]?.message?.content ?? "";
@@ -141,11 +143,10 @@ export async function generateVisionResponse(
       apiKey: providerOpts.googleApiKey,
       baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     });
-    const model = providerOpts.googleModel ?? "gemini-2.0-flash";
     const response = await google.chat.completions.create({
-      model,
-      temperature: 0.2,
-      max_tokens: 4096,
+      model: "gemini-2.0-flash",
+      temperature: 0.1,
+      max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
     });
     return response.choices[0]?.message?.content ?? "";
@@ -156,11 +157,12 @@ export async function generateVisionResponse(
     throw new Error("Nenhuma chave configurada com suporte a visão (OpenRouter, Google ou OpenAI)");
   }
   const openai = new OpenAI({ apiKey });
-  const model = providerOpts.openaiModel ?? "gpt-4.1-mini";
+  // gpt-4o completo, não o -mini configurado pro chat geral — leitura de
+  // tabela densa precisa da versão forte.
   const response = await openai.chat.completions.create({
-    model,
-    temperature: 0.2,
-    max_tokens: 4096,
+    model: "gpt-4o",
+    temperature: 0.1,
+    max_tokens: 8192,
     messages: [{ role: "system", content: systemPrompt }, ...messages],
   });
   return response.choices[0]?.message?.content ?? "";
