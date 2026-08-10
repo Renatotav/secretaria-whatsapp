@@ -16,6 +16,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    console.log("[webhook] evento recebido:", body.event);
 
     if (body.event !== "messages.upsert") {
       return NextResponse.json({ ok: true });
@@ -29,10 +30,15 @@ export async function POST(request: Request) {
     const messageTimestamp: number = data.messageTimestamp ?? Math.floor(Date.now() / 1000);
     const rawMessage: Record<string, unknown> = data.message ?? {};
 
+    console.log("[webhook] messages.upsert", { remoteJid, fromMe, pushName, hasAudio: !!rawMessage.audioMessage });
+
     if (!remoteJid) return NextResponse.json({ ok: true });
 
     const config = await prisma.agentConfig.findFirst();
-    if (!config) return NextResponse.json({ ok: true });
+    if (!config) {
+      console.log("[webhook] sem AgentConfig salvo, ignorando");
+      return NextResponse.json({ ok: true });
+    }
 
     let text = extractText(rawMessage).trim();
 
@@ -62,10 +68,15 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!text) return NextResponse.json({ ok: true });
+    if (!text) {
+      console.log("[webhook] sem texto extraído, ignorando");
+      return NextResponse.json({ ok: true });
+    }
 
     const isGroup = remoteJid.endsWith("@g.us");
     const phone = isGroup ? "" : remoteJid.replace("@s.whatsapp.net", "");
+
+    console.log("[webhook] roteando", { phone, ownerPhone: config.ownerPhone, isGroup, isSelf: !isGroup && phone === config.ownerPhone });
 
     // Conversa com o próprio número: sempre trata como canal pessoal,
     // independente de fromMe (é assim que o dono se auto-alimenta).
@@ -76,7 +87,10 @@ export async function POST(request: Request) {
 
     // Qualquer outra mensagem enviada pelo próprio dono (respondendo alguém
     // manualmente) não deve virar análise.
-    if (fromMe) return NextResponse.json({ ok: true });
+    if (fromMe) {
+      console.log("[webhook] fromMe=true e não é self-chat, ignorando");
+      return NextResponse.json({ ok: true });
+    }
 
     if (isGroup) {
       const senderName = pushName || (key.participant ?? "").replace("@s.whatsapp.net", "");
