@@ -23,17 +23,5 @@ export const GET = withErrorHandling(async (request: Request) => {
     orderBy: { updatedAt: "desc" },
   });
 
-  const groupJids = conversations.filter(c => c.source === "group" && c.phone).map(c => c.phone as string);
-  const groupConfigs = await prisma.groupConfig.findMany({
-    where: { groupJid: { in: groupJids } },
-    select: { groupJid: true, groupName: true }
-  });
-  const groupNameMap = Object.fromEntries(groupConfigs.map(g => [g.groupJid, g.groupName]));
-
-  const enrichedConversations = conversations.map(c => ({
-    ...c,
-    displayName: c.source === "group" && c.phone ? (groupNameMap[c.phone] || c.phone) : c.phone,
-  }));
-
-  return NextResponse.json(enrichedConversations);
+  return NextResponse.json(conversations);
 });

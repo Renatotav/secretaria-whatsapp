@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { sendTextWithTyping, getBase64FromMediaMessage, fetchGroupInfo } from "./evolution";
+import { sendTextWithTyping, getBase64FromMediaMessage } from "./evolution";
 import { transcribeAudio, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
@@ -24,11 +24,10 @@ export function extractText(message: Record<string, unknown>): string {
 }
 
 export function formatTime(ts: number): string {
-  const d = new Date(ts * 1000);
-  let h = d.getUTCHours() - 3;
-  if (h < 0) h += 24;
-  const m = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${String(h).padStart(2, "0")}:${m}`;
+  return new Date(ts * 1000).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getProviderOpts(config: AgentConfig): ProviderOptions {
@@ -562,27 +561,9 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
 
   let groupConfig = await prisma.groupConfig.findUnique({ where: { groupJid } });
   if (!groupConfig) {
-    let newGroupName = groupJid.split("@")[0];
-    if (config.evolutionUrl && config.evolutionApiKey && config.instanceId) {
-      const info = await fetchGroupInfo(config.evolutionUrl, config.evolutionApiKey, config.instanceId, groupJid);
-      if (info?.subject) {
-        newGroupName = info.subject;
-      }
-    }
     groupConfig = await prisma.groupConfig.create({
-      data: { groupJid, groupName: newGroupName, active: true },
+      data: { groupJid, groupName: groupJid.split("@")[0], active: true },
     });
-  } else if (/^\d+$/.test(groupConfig.groupName)) {
-    // Grupo antigo que só tem o JID numérico como nome. Tenta atualizar.
-    if (config.evolutionUrl && config.evolutionApiKey && config.instanceId) {
-      const info = await fetchGroupInfo(config.evolutionUrl, config.evolutionApiKey, config.instanceId, groupJid);
-      if (info?.subject && info.subject !== groupConfig.groupName) {
-        groupConfig = await prisma.groupConfig.update({
-          where: { groupJid },
-          data: { groupName: info.subject },
-        });
-      }
-    }
   }
   if (!groupConfig.active) return;
 
@@ -649,7 +630,7 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
           ? "🚨 Chamado urgente"
           : "";
 
-      const notification = `👥 *${groupName}*\n👤 ${meta.senderName} — 🕐 ${hora}\n\n📌 *${classification.title}*\n${classification.description}${classification.dueDate ? `\n📅 ${new Date(classification.dueDate).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : ""}\n${categoryBadge}`;
+      const notification = `👥 *${groupName}*\n👤 ${meta.senderName} — 🕐 ${hora}\n\n📌 *${classification.title}*\n${classification.description}${classification.dueDate ? `\n📅 ${new Date(classification.dueDate).toLocaleDateString("pt-BR")}` : ""}\n${categoryBadge}`;
 
       await notifyOwner(config, notification);
       await prisma.agendaItem.update({ where: { id: agendaItem.id }, data: { notified: true } });
