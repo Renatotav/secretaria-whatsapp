@@ -441,8 +441,16 @@ export default function FinancePage() {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
+  async function deleteMonth() {
+    const label = new Date(Number(month.split("-")[0]), Number(month.split("-")[1]) - 1, 1)
+      .toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    if (!confirm(`Tem certeza que deseja excluir todos os lançamentos de ${label}? Essa ação não pode ser desfeita.`)) return;
+    await fetch(`/api/finance?month=${month}`, { method: "DELETE" });
+    load();
+  }
+
   async function deleteAll() {
-    if (!confirm("Apagar TODOS os lançamentos financeiros? Essa ação não pode ser desfeita.")) return;
+    if (!confirm("Tem certeza que deseja excluir TODOS os lançamentos financeiros? Essa ação não pode ser desfeita.")) return;
     await fetch(`/api/finance?all=true`, { method: "DELETE" });
     load();
   }
@@ -484,6 +492,9 @@ export default function FinancePage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteMonth}>
+              Apagar mês
+            </button>
             <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteAll}>
               Apagar tudo
             </button>

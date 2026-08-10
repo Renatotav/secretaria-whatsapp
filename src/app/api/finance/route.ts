@@ -81,9 +81,18 @@ export const DELETE = withErrorHandling(async (request: Request) => {
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
+  const month = searchParams.get("month"); // formato YYYY-MM
 
   if (searchParams.get("all") === "true") {
     await prisma.financeEntry.deleteMany({});
+    return NextResponse.json({ ok: true });
+  }
+
+  if (month) {
+    const [y, m] = month.split("-").map(Number);
+    await prisma.financeEntry.deleteMany({
+      where: { date: { gte: new Date(y, m - 1, 1), lte: new Date(y, m, 0, 23, 59, 59) } },
+    });
     return NextResponse.json({ ok: true });
   }
 

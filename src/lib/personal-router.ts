@@ -180,13 +180,24 @@ export interface StatementEntry {
   subcategory: string;
 }
 
-const STATEMENT_INSTRUCTIONS = `Extraia TODAS as transações, sem exceção — cada linha de
+function buildStatementInstructions(ownerName: string): string {
+  const cardFilter = ownerName
+    ? `\nATENÇÃO — fatura com mais de um cartão/titular: se a página mostrar um
+cabeçalho de titular de cartão (ex: "Cartão Final XXXX - NOME DA PESSOA") cujo
+nome NÃO seja "${ownerName}" (ou variação óbvia dele), NÃO extraia as
+transações listadas sob esse cabeçalho — pertencem a outra pessoa. Páginas
+sem nenhum cabeçalho de titular visível são continuação da lista do cartão
+do titular mostrado na página anterior da mesma leva de fotos; nesse caso,
+trate como sendo do titular "${ownerName}" normalmente (não deixe de
+extrair só por falta de cabeçalho repetido).\n`
+    : "";
+  return `Extraia TODAS as transações, sem exceção — cada linha de
 gasto ou recebimento vira um item. Extratos de cartão costumam ter entre 10 e 40
 linhas de transação; se você encontrar poucas, provavelmente pulou linhas — releia
 com atenção, de cima pra baixo, linha por linha, até o fim da tabela. Não pare
 depois das primeiras linhas nem resuma: cada transação individual precisa
 aparecer como um item separado no resultado.
-
+${cardFilter}
 Para cada transação, identifique:
 - date: data no formato ISO 8601 (YYYY-MM-DD).
   - Se for FATURA DE CARTÃO DE CRÉDITO: use a DATA DE VENCIMENTO da fatura para
@@ -221,6 +232,7 @@ uma lista vazia.
 
 Retorne APENAS um JSON válido no formato:
 { "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado" } ] }`;
+}
 
 function parseStatementResponse(content: string, source: string): StatementEntry[] {
   try {
@@ -266,10 +278,11 @@ function parseStatementResponse(content: string, source: string): StatementEntry
  */
 export async function parseStatementEntries(
   statementText: string,
-  providerOpts: ProviderOptions
+  providerOpts: ProviderOptions,
+  ownerName = ""
 ): Promise<StatementEntry[]> {
   const systemPrompt = `Você recebeu o texto extraído de um extrato de cartão de crédito ou conta
-bancária. ${STATEMENT_INSTRUCTIONS}`;
+bancária. ${buildStatementInstructions(ownerName)}`;
 
   const { content } = await generateResponse(
     [{ role: "user", content: statementText.slice(0, 12000) }],
@@ -290,10 +303,11 @@ bancária. ${STATEMENT_INSTRUCTIONS}`;
 export async function parseStatementImage(
   base64: string,
   mimetype: string,
-  providerOpts: ProviderOptions
+  providerOpts: ProviderOptions,
+  ownerName = ""
 ): Promise<StatementEntry[]> {
   const systemPrompt = `Você recebeu a foto/print de um extrato de cartão de crédito ou conta
-bancária. ${STATEMENT_INSTRUCTIONS}`;
+bancária. ${buildStatementInstructions(ownerName)}`;
 
   const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
   return parseStatementResponse(content, "imagem");

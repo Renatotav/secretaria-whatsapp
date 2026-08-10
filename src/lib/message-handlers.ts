@@ -274,7 +274,7 @@ export async function handleStatementDocument(statementText: string): Promise<vo
   if (!config || !config.ownerPhone) return;
 
   const providerOpts = getProviderOpts(config);
-  const entries = await parseStatementEntries(statementText, providerOpts);
+  const entries = await parseStatementEntries(statementText, providerOpts, config.ownerName);
   await saveStatementEntries(config, entries, "o PDF");
 }
 
@@ -288,7 +288,7 @@ export async function handleStatementImage(base64: string, mimetype: string): Pr
   if (!config || !config.ownerPhone) return;
 
   const providerOpts = getProviderOpts(config);
-  const entries = await parseStatementImage(base64, mimetype, providerOpts);
+  const entries = await parseStatementImage(base64, mimetype, providerOpts, config.ownerName);
   await saveStatementEntries(config, entries, "a imagem");
 }
 
