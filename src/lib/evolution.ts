@@ -1,3 +1,22 @@
+const REQUEST_TIMEOUT_MS = 10_000;
+
+async function evolutionFetch(url: string, init: RequestInit): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new Error(`Evolution API não respondeu em ${REQUEST_TIMEOUT_MS / 1000}s: ${url}`);
+    }
+    throw new Error(`Falha ao conectar na Evolution API (${url}): ${err instanceof Error ? err.message : err}`);
+  }
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Evolution API error ${response.status}: ${body}`);
+  }
+  return response;
+}
+
 export async function sendWhatsAppMessage(
   evolutionUrl: string,
   evolutionApiKey: string,
@@ -6,7 +25,7 @@ export async function sendWhatsAppMessage(
   text: string
 ): Promise<void> {
   const url = `${evolutionUrl}/message/sendText/${instanceId}`;
-  const response = await fetch(url, {
+  await evolutionFetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -17,10 +36,6 @@ export async function sendWhatsAppMessage(
       text,
     }),
   });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Evolution API error ${response.status}: ${body}`);
-  }
 }
 
 export async function sendPresence(
@@ -32,7 +47,7 @@ export async function sendPresence(
   delayMs: number
 ): Promise<void> {
   const url = `${evolutionUrl}/chat/sendPresence/${instanceId}`;
-  const response = await fetch(url, {
+  await evolutionFetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -44,10 +59,6 @@ export async function sendPresence(
       presence,
     }),
   });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Evolution API error ${response.status}: ${body}`);
-  }
 }
 
 /**
@@ -91,7 +102,7 @@ export async function getBase64FromMediaMessage(
   messageId: string
 ): Promise<MediaBase64Result> {
   const url = `${evolutionUrl}/chat/getBase64FromMediaMessage/${instanceId}`;
-  const response = await fetch(url, {
+  const response = await evolutionFetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -102,10 +113,6 @@ export async function getBase64FromMediaMessage(
       convertToMp4: false,
     }),
   });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Evolution API error ${response.status}: ${body}`);
-  }
   return response.json();
 }
 
@@ -120,13 +127,9 @@ export async function fetchInstances(
   evolutionApiKey: string
 ): Promise<EvolutionInstance[]> {
   const url = `${evolutionUrl}/instance/fetchInstances`;
-  const response = await fetch(url, {
+  const response = await evolutionFetch(url, {
     headers: { apikey: evolutionApiKey },
   });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Evolution API error ${response.status}: ${body}`);
-  }
   const data = await response.json();
   const list: Record<string, unknown>[] = Array.isArray(data) ? data : [];
 
@@ -149,7 +152,7 @@ export async function setInstanceWebhook(
   webhookUrl: string
 ): Promise<void> {
   const url = `${evolutionUrl}/webhook/set/${instanceId}`;
-  const response = await fetch(url, {
+  await evolutionFetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -165,8 +168,4 @@ export async function setInstanceWebhook(
       },
     }),
   });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Evolution API error ${response.status}: ${body}`);
-  }
 }
