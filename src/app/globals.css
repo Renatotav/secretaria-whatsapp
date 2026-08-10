@@ -130,14 +130,20 @@ textarea:focus,
 select:focus {
   border-color: var(--accent);
 }
-/* O ícone nativo de calendário (input date/month) vem preto — invisível no tema escuro */
-input::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.85;
-  cursor: pointer;
+/* O ícone nativo de calendário (input date/month) some com filtro em algumas
+   telas/zooms (vira um "borrão" branco). Em vez de tentar recolorir o ícone
+   do navegador, escondemos ele e desenhamos o nosso, sempre nítido. */
+input[type="date"],
+input[type="month"] {
+  padding-right: 34px;
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a7a9c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
 }
-input::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  cursor: pointer;
 }
 input::placeholder,
 textarea::placeholder {
