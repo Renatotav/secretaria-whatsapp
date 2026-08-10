@@ -55,7 +55,15 @@ const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "",
 type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string };
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
-function CategoryDonut({ entries }: { entries: FinanceEntry[] }) {
+function CategoryDonut({
+  entries,
+  selectedCategory,
+  onSelectCategory,
+}: {
+  entries: FinanceEntry[];
+  selectedCategory: string | null;
+  onSelectCategory: (category: string | null) => void;
+}) {
   const [hovered, setHovered] = useState<number | null>(null);
 
   const segments = useMemo(() => {
@@ -95,6 +103,8 @@ function CategoryDonut({ entries }: { entries: FinanceEntry[] }) {
   const arcs = segments.map((seg, i) => {
     const segLen = (seg.value / total) * circumference;
     const dash = Math.max(segLen - gap, 0);
+    const isSelected = selectedCategory === seg.name;
+    const isDimmed = selectedCategory !== null && !isSelected;
     const el = (
       <circle
         key={seg.name}
@@ -103,13 +113,15 @@ function CategoryDonut({ entries }: { entries: FinanceEntry[] }) {
         cy={cy}
         fill="none"
         stroke={seg.color}
-        strokeWidth={hovered === i ? stroke + 4 : stroke}
+        strokeWidth={hovered === i || isSelected ? stroke + 4 : stroke}
+        strokeOpacity={isDimmed ? 0.35 : 1}
         strokeDasharray={`${dash} ${circumference - dash}`}
         strokeDashoffset={-acc}
         transform={`rotate(-90 ${cx} ${cy})`}
-        style={{ transition: "stroke-width 0.1s", cursor: "pointer" }}
+        style={{ transition: "stroke-width 0.1s, stroke-opacity 0.1s", cursor: "pointer" }}
         onMouseEnter={() => setHovered(i)}
         onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
+        onClick={() => onSelectCategory(isSelected ? null : seg.name)}
       />
     );
     acc += segLen;
@@ -148,26 +160,33 @@ function CategoryDonut({ entries }: { entries: FinanceEntry[] }) {
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 180 }}>
-        {segments.map((seg, i) => (
-          <div
-            key={seg.name}
-            onMouseEnter={() => setHovered(i)}
-            onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 12,
-              cursor: "pointer",
-              opacity: hovered === null || hovered === i ? 1 : 0.5,
-            }}
-          >
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: seg.color, flexShrink: 0 }} />
-            <span style={{ color: "var(--text)", flex: 1 }}>{seg.name}</span>
-            <span style={{ color: "var(--text-muted)" }}>{((seg.value / total) * 100).toFixed(0)}%</span>
-            <span style={{ color: "var(--text-muted)", minWidth: 70, textAlign: "right" }}>{formatMoney(seg.value)}</span>
-          </div>
-        ))}
+        {segments.map((seg, i) => {
+          const isSelected = selectedCategory === seg.name;
+          return (
+            <div
+              key={seg.name}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
+              onClick={() => onSelectCategory(isSelected ? null : seg.name)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                cursor: "pointer",
+                borderRadius: 6,
+                padding: "2px 4px",
+                background: isSelected ? "var(--accent-dim)" : "transparent",
+                opacity: selectedCategory === null || isSelected ? 1 : 0.5,
+              }}
+            >
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: seg.color, flexShrink: 0 }} />
+              <span style={{ color: "var(--text)", flex: 1 }}>{seg.name}</span>
+              <span style={{ color: "var(--text-muted)" }}>{((seg.value / total) * 100).toFixed(0)}%</span>
+              <span style={{ color: "var(--text-muted)", minWidth: 70, textAlign: "right" }}>{formatMoney(seg.value)}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -377,6 +396,7 @@ function CashFlowLine({ monthly }: { monthly: { income: number; expense: number 
 
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [yearEntries, setYearEntries] = useState<FinanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -399,10 +419,15 @@ export default function FinancePage() {
   }, [month, year]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setSelectedCategory(null); }, [month]);
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
   const balance = income - expense;
+
+  const visibleEntries = selectedCategory
+    ? entries.filter((e) => (e.category || "Outros") === selectedCategory)
+    : entries;
 
   const monthly = useMemo(() => {
     const buckets = Array.from({ length: 12 }, () => ({ income: 0, expense: 0 }));
@@ -529,7 +554,7 @@ export default function FinancePage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 12, marginBottom: 12 }}>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Gastos por categoria — {MONTH_LABELS[Number(month.split("-")[1]) - 1]}</h2>
-            <CategoryDonut entries={entries} />
+            <CategoryDonut entries={entries} selectedCategory={selectedCategory} onSelectCategory={setSelectedCategory} />
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Receitas x despesas — {year}</h2>
@@ -626,15 +651,24 @@ export default function FinancePage() {
           </button>
         </form>
 
+        {selectedCategory && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12, color: "var(--text-muted)" }}>
+            Filtrando por: <strong style={{ color: "var(--text)" }}>{selectedCategory}</strong>
+            <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setSelectedCategory(null)}>
+              Limpar
+            </button>
+          </div>
+        )}
+
         {/* Table */}
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
           {loading && <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>Carregando...</div>}
-          {!loading && entries.length === 0 && (
+          {!loading && visibleEntries.length === 0 && (
             <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>
-              Nenhum lançamento neste mês
+              {selectedCategory ? "Nenhum lançamento nessa categoria" : "Nenhum lançamento neste mês"}
             </div>
           )}
-          {!loading && entries.length > 0 && (
+          {!loading && visibleEntries.length > 0 && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -649,7 +683,7 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((e) => {
+                  {visibleEntries.map((e) => {
                     if (editingId === e.id) {
                       return (
                         <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
