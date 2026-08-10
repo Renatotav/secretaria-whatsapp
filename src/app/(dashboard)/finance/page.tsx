@@ -963,51 +963,55 @@ export default function FinancePage() {
                     if (editingId === e.id) {
                       return (
                         <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
-                          <td style={{ padding: "6px 16px" }}>
-                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 155 }} />
+                          <td style={{ padding: "6px 8px" }}>
+                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} />
                           </td>
-                          <td style={{ padding: "6px 16px" }}>
+                          <td style={{ padding: "6px 8px" }}>
                             <input
                               list="finance-categories-edit"
                               value={editForm.category}
                               onChange={(ev) => setEditForm((f) => ({ ...f, category: ev.target.value }))}
-                              style={{ width: 110 }}
+                              style={{ width: 90, padding: "8px 6px" }}
                             />
                           </td>
-                          <td style={{ padding: "6px 16px" }}>
+                          <td style={{ padding: "6px 8px" }}>
                             <input
                               list="finance-subcategories-edit"
                               value={editForm.subcategory}
                               onChange={(ev) => setEditForm((f) => ({ ...f, subcategory: ev.target.value }))}
-                              style={{ width: 110 }}
+                              style={{ width: 90, padding: "8px 6px" }}
                             />
                           </td>
-                          <td style={{ padding: "6px 16px" }}>
+                          <td style={{ padding: "6px 8px" }}>
                             <input
                               value={editForm.description}
                               onChange={(ev) => setEditForm((f) => ({ ...f, description: ev.target.value }))}
+                              style={{ width: 160, padding: "8px 6px" }}
                             />
                           </td>
-                          <td style={{ padding: "6px 16px" }}>
-                            <select value={editForm.type} onChange={(ev) => setEditForm((f) => ({ ...f, type: ev.target.value }))}>
-                              <option value="expense">Despesa</option>
-                              <option value="income">Receita</option>
-                            </select>
+                          <td style={{ padding: "6px 8px", color: "var(--text-dim)", whiteSpace: "nowrap", textAlign: "center" }} title={e.source === "whatsapp" ? "WhatsApp" : "Painel"}>
+                            {e.source === "whatsapp" ? "📱" : "🖥️"}
                           </td>
-                          <td style={{ padding: "6px 16px", textAlign: "right" }}>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={editForm.amount}
-                              onChange={(ev) => setEditForm((f) => ({ ...f, amount: ev.target.value }))}
-                              style={{ width: 90, textAlign: "right" }}
-                            />
+                          <td style={{ padding: "6px 8px", textAlign: "right" }}>
+                            <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                              <select value={editForm.type} onChange={(ev) => setEditForm((f) => ({ ...f, type: ev.target.value }))} style={{ width: 88, padding: "8px 4px" }}>
+                                <option value="expense">Despesa</option>
+                                <option value="income">Receita</option>
+                              </select>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={editForm.amount}
+                                onChange={(ev) => setEditForm((f) => ({ ...f, amount: ev.target.value }))}
+                                style={{ width: 70, padding: "8px 6px", textAlign: "right" }}
+                              />
+                            </div>
                           </td>
-                          <td style={{ padding: "6px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <button className="btn-primary" style={{ fontSize: 11, padding: "4px 8px" }} disabled={saving} onClick={() => saveEdit(e.id)}>
+                          <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <button className="btn-primary" style={{ fontSize: 11, padding: "4px 6px" }} disabled={saving} onClick={() => saveEdit(e.id)}>
                               Salvar
                             </button>{" "}
-                            <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingId(null)}>
+                            <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 6px" }} onClick={() => setEditingId(null)}>
                               Cancelar
                             </button>
                           </td>
