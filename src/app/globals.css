@@ -135,6 +135,7 @@ select:focus {
    do navegador, escondemos ele e desenhamos o nosso, sempre nítido. */
 input[type="date"],
 input[type="month"] {
+  position: relative;
   padding-right: 34px;
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -144,6 +145,12 @@ input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="month"]::-webkit-calendar-picker-indicator {
   opacity: 0;
   cursor: pointer;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
 }
 input::placeholder,
 textarea::placeholder {
