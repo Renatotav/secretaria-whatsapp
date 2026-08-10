@@ -3,7 +3,7 @@ import { sendTextWithTyping, getBase64FromMediaMessage } from "./evolution";
 import { transcribeAudio, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
-import { routePersonalMessage, type PersonalQueryIntent } from "./personal-router";
+import { routePersonalMessage, parseStatementEntries, type PersonalQueryIntent } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
 import type { AgentConfig } from "@prisma/client";
 
@@ -89,6 +89,33 @@ export async function transcribeIncomingAudio(
 
   const format = mimetype.includes("ogg") ? "ogg" : mimetype.split("/")[1]?.split(";")[0] || "ogg";
   return transcribeAudio(base64, format, providerOpts);
+}
+
+/**
+ * Baixa o base64 de um documento (ex: PDF) recebido via webhook, com o
+ * mesmo esquema de fallback usado para áudio.
+ */
+export async function downloadIncomingDocument(
+  evo: { evolutionUrl: string; evolutionApiKey: string; instanceId: string },
+  messageId: string,
+  message: Record<string, unknown>
+): Promise<{ base64: string; mimetype: string }> {
+  const documentMessage = (message.documentMessage as Record<string, unknown>) ?? {};
+  let base64 = (message.base64 as string) || (documentMessage.base64 as string) || "";
+  let mimetype = (documentMessage.mimetype as string) || "application/pdf";
+
+  if (!base64) {
+    const media = await getBase64FromMediaMessage(
+      evo.evolutionUrl,
+      evo.evolutionApiKey,
+      evo.instanceId,
+      messageId
+    );
+    base64 = media.base64;
+    mimetype = media.mimetype || mimetype;
+  }
+
+  return { base64, mimetype };
 }
 
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
@@ -203,6 +230,39 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   if (response) {
     await notifyOwner(config, response);
   }
+}
+
+/**
+ * Processa um PDF de extrato: extrai todas as transações e lança de uma vez
+ * no Financeiro. É um fluxo à parte de handleSelfMessage porque um extrato
+ * vira MUITOS lançamentos, não uma classificação única.
+ */
+export async function handleStatementDocument(statementText: string): Promise<void> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config || !config.ownerPhone) return;
+
+  const providerOpts = getProviderOpts(config);
+  const entries = await parseStatementEntries(statementText, providerOpts);
+
+  if (entries.length === 0) {
+    await notifyOwner(config, "⚠️ Recebi o PDF mas não consegui identificar nenhuma transação nele.");
+    return;
+  }
+
+  await prisma.financeEntry.createMany({
+    data: entries.map((e) => ({
+      type: e.type,
+      amount: e.amount,
+      category: e.category,
+      description: e.description,
+      date: e.date ? new Date(e.date) : new Date(),
+      source: "whatsapp",
+    })),
+  });
+
+  const total = entries.reduce((s, e) => s + (e.type === "expense" ? e.amount : -e.amount), 0);
+  const response = `✅ Importei ${entries.length} lançamento(s) do extrato.\n💰 Total em despesas: R$ ${total.toFixed(2)}`;
+  await notifyOwner(config, response);
 }
 
 export interface PrivateMessageMeta {

@@ -155,3 +155,71 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     };
   }
 }
+
+export interface StatementEntry {
+  date: string | null;
+  description: string;
+  amount: number;
+  type: "income" | "expense";
+  category: string;
+}
+
+/**
+ * Extrai todas as transações de um extrato (texto de um PDF de cartão/conta).
+ * Diferente de routePersonalMessage, aqui a mensagem inteira vira uma LISTA
+ * de lançamentos, não uma classificação única.
+ */
+export async function parseStatementEntries(
+  statementText: string,
+  providerOpts: ProviderOptions
+): Promise<StatementEntry[]> {
+  const systemPrompt = `Você recebeu o texto extraído de um extrato de cartão de crédito ou conta
+bancária. Extraia TODAS as transações listadas — cada linha de gasto ou
+recebimento vira um item.
+
+Para cada transação, identifique:
+- date: data no formato ISO 8601 (YYYY-MM-DD). Se o extrato não tiver o ano
+  explícito, assuma o ano corrente. Se não der pra identificar, use null.
+- description: a descrição da transação como aparece no extrato (curta, real).
+- amount: valor numérico positivo (sem sinal, sem "R$").
+- type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
+- category: uma categoria curta inferida (ex: "Alimentação", "Transporte", "Assinaturas", "Saúde", "Outros").
+
+Ignore linhas que não são transações (cabeçalho, total, limite, juros, texto
+institucional). Se não conseguir identificar nenhuma transação real, retorne
+uma lista vazia.
+
+Retorne APENAS um JSON válido no formato:
+{ "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação" } ] }`;
+
+  const { content } = await generateResponse(
+    [{ role: "user", content: statementText.slice(0, 12000) }],
+    systemPrompt,
+    0.2,
+    4096,
+    providerOpts
+  );
+
+  try {
+    const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
+    const parsed = JSON.parse(json) as { entries?: unknown[] };
+    if (!Array.isArray(parsed.entries)) return [];
+
+    return parsed.entries
+      .map((raw): StatementEntry | null => {
+        const e = raw as Record<string, unknown>;
+        const amount = Number(e.amount);
+        if (!amount || !e.description) return null;
+        return {
+          date: typeof e.date === "string" ? e.date : null,
+          description: String(e.description).slice(0, 200),
+          amount: Math.abs(amount),
+          type: e.type === "income" ? "income" : "expense",
+          category: typeof e.category === "string" ? e.category : "Outros",
+        };
+      })
+      .filter((e): e is StatementEntry => e !== null);
+  } catch {
+    return [];
+  }
+}

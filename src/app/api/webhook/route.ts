@@ -4,10 +4,13 @@ import { bufferMessage } from "@/lib/debounce";
 import {
   extractText,
   transcribeIncomingAudio,
+  downloadIncomingDocument,
   handleSelfMessage,
   handlePrivateMessage,
   handleGroupMessage,
+  handleStatementDocument,
 } from "@/lib/message-handlers";
+import { extractPdfText } from "@/lib/pdf";
 
 export async function GET() {
   return NextResponse.json({ status: "webhook online" });
@@ -37,6 +40,34 @@ export async function POST(request: Request) {
     const config = await prisma.agentConfig.findFirst();
     if (!config) {
       console.log("[webhook] sem AgentConfig salvo, ignorando");
+      return NextResponse.json({ ok: true });
+    }
+
+    const isGroup = remoteJid.endsWith("@g.us");
+    const phone = isGroup ? "" : remoteJid.replace("@s.whatsapp.net", "");
+    const isSelfChat = !isGroup && !!config.ownerPhone && phone === config.ownerPhone;
+
+    // PDF de extrato: só processado no canal pessoal, vira vários lançamentos
+    // de uma vez em vez de passar pela classificação normal de texto.
+    const documentMessage = rawMessage.documentMessage as Record<string, unknown> | undefined;
+    const documentMimetype = (documentMessage?.mimetype as string) || "";
+    if (isSelfChat && documentMessage && documentMimetype.includes("pdf")) {
+      console.log("[webhook] PDF recebido no canal pessoal, processando extrato");
+      try {
+        const { base64 } = await downloadIncomingDocument(
+          { evolutionUrl: config.evolutionUrl, evolutionApiKey: config.evolutionApiKey, instanceId: config.instanceId },
+          key.id ?? "",
+          rawMessage
+        );
+        const pdfText = base64 ? await extractPdfText(base64) : "";
+        if (!pdfText) {
+          console.log("[webhook] PDF sem texto extraível, ignorando");
+        } else {
+          await handleStatementDocument(pdfText);
+        }
+      } catch (err) {
+        console.error("[webhook] falha ao processar PDF", err);
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -73,14 +104,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    const isGroup = remoteJid.endsWith("@g.us");
-    const phone = isGroup ? "" : remoteJid.replace("@s.whatsapp.net", "");
-
-    console.log("[webhook] roteando", { phone, ownerPhone: config.ownerPhone, isGroup, isSelf: !isGroup && phone === config.ownerPhone });
+    console.log("[webhook] roteando", { phone, ownerPhone: config.ownerPhone, isGroup, isSelf: isSelfChat });
 
     // Conversa com o próprio número: sempre trata como canal pessoal,
     // independente de fromMe (é assim que o dono se auto-alimenta).
-    if (!isGroup && config.ownerPhone && phone === config.ownerPhone) {
+    if (isSelfChat) {
       bufferMessage(`self:${phone}`, text, { messageTimestamp }, config.debounceSeconds, handleSelfMessage);
       return NextResponse.json({ ok: true });
     }
