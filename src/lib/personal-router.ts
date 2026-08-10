@@ -207,13 +207,16 @@ uma lista vazia.
 Retorne APENAS um JSON válido no formato:
 { "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado" } ] }`;
 
-function parseStatementResponse(content: string): StatementEntry[] {
+function parseStatementResponse(content: string, source: string): StatementEntry[] {
   try {
     const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
     const parsed = JSON.parse(json) as { entries?: unknown[] };
-    if (!Array.isArray(parsed.entries)) return [];
+    if (!Array.isArray(parsed.entries)) {
+      console.error(`[statement:${source}] resposta sem "entries" array. Conteúdo bruto (500 chars):`, content.slice(0, 500));
+      return [];
+    }
 
-    return parsed.entries
+    const result = parsed.entries
       .map((raw): StatementEntry | null => {
         const e = raw as Record<string, unknown>;
         const amount = Number(e.amount);
@@ -228,7 +231,15 @@ function parseStatementResponse(content: string): StatementEntry[] {
         };
       })
       .filter((e): e is StatementEntry => e !== null);
-  } catch {
+
+    if (result.length === 0) {
+      console.error(`[statement:${source}] 0 transações extraídas. Conteúdo bruto (500 chars):`, content.slice(0, 500));
+    } else {
+      console.log(`[statement:${source}] ${result.length} transações extraídas`);
+    }
+    return result;
+  } catch (err) {
+    console.error(`[statement:${source}] falha ao parsear JSON. Conteúdo bruto (500 chars):`, content.slice(0, 500), err);
     return [];
   }
 }
@@ -253,7 +264,7 @@ bancária. ${STATEMENT_INSTRUCTIONS}`;
     providerOpts
   );
 
-  return parseStatementResponse(content);
+  return parseStatementResponse(content, "pdf");
 }
 
 /**
@@ -270,5 +281,5 @@ export async function parseStatementImage(
 bancária. ${STATEMENT_INSTRUCTIONS}`;
 
   const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
-  return parseStatementResponse(content);
+  return parseStatementResponse(content, "imagem");
 }
