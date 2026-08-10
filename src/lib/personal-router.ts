@@ -62,25 +62,31 @@ Tipos:
    Ex: "Recebi 3000 de salário" → income, 3000, categoria "Salário"
    Ex: "Paguei 120 de internet" → expense, 120, categoria "Contas"
 
-4. diary — reflexão, nota pessoal ou qualquer coisa que não seja
-   claramente tarefa/gasto/pergunta (é o padrão quando nada mais se encaixa)
+4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
+   qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
+   quando nada mais se encaixa, inclusive mensagens curtas tipo "teste" ou "oi")
    Ex: "Hoje foi puxado no trabalho mas terminei o relatório"
+   Ex: "teste" → diary, content: "teste", confirmation reconhecendo que é um teste
+
+IMPORTANTE: os valores abaixo são só EXEMPLOS DE FORMATO — nunca copie o texto
+literal deles. "confirmation" e os outros campos de texto sempre precisam ser
+gerados a partir da mensagem real do usuário, nunca um placeholder genérico.
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
   "type": "agenda_add|agenda_query|finance|diary",
   "category": "task|event|reminder|personal",
-  "title": "título do item",
-  "description": "descrição detalhada",
+  "title": "<título real extraído da mensagem>",
+  "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
   "queryIntent": "pending_today|open_tickets|finance_summary|group_summary",
   "financeType": "income|expense",
   "amount": 0,
-  "financeCategory": "categoria curta",
-  "financeDescription": "descrição curta",
-  "diaryContent": "texto da anotação",
-  "mood": "humor em uma palavra ou vazio",
-  "confirmation": "✅ Anotado!\\n📋 Título\\nDetalhes formatados"
+  "financeCategory": "<categoria curta>",
+  "financeDescription": "<descrição curta>",
+  "diaryContent": "<texto real da anotação>",
+  "mood": "<humor em uma palavra ou vazio>",
+  "confirmation": "<confirmação curta e específica sobre o que foi registrado>"
 }`;
 
   const { content } = await generateResponse(
