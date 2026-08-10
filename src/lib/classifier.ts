@@ -41,6 +41,7 @@ Extraia APENAS chamados com estes formatos exatos:
 - S seguido de 6 a 7 dígitos (ex: S2363114, S277882)
 - R seguido de 6 a 7 dígitos (ex: R2364186)
 - Número standalone de 6 a 7 dígitos (ex: 2041838)
+- "redmine" seguido de # opcional e número (ex: redmine #123456, redmine123456) — extraia como aparece, ex: "redmine #123456"
 NÃO extraia: números de processo judicial (formato XXXXXXX-XX.XXXX), JIDs do WhatsApp (15+ dígitos), datas, qualquer outro número.
 
 Você NÃO redige nem sugere respostas — só classifica e resume, para manter

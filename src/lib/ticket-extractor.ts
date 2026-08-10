@@ -1,5 +1,36 @@
 import { prisma } from "./prisma";
 
+interface ParsedTicketId {
+  prefix: string;
+  ticketId: string;
+}
+
+/**
+ * Normaliza os formatos de chamado aceitos: S/R + 6-7 dígitos, número solto
+ * de 6-7 dígitos, ou "redmine" (com # opcional) + número.
+ */
+function parseTicketId(rawId: string): ParsedTicketId | null {
+  const trimmed = rawId.trim();
+
+  const srMatch = trimmed.match(/^([SR])(\d{6,7})$/i);
+  if (srMatch) {
+    const prefix = srMatch[1].toUpperCase();
+    return { prefix, ticketId: `${prefix}${srMatch[2]}` };
+  }
+
+  const bareMatch = trimmed.match(/^(\d{6,7})$/);
+  if (bareMatch) {
+    return { prefix: "", ticketId: bareMatch[1] };
+  }
+
+  const redmineMatch = trimmed.match(/^redmine\s*#?\s*(\d+)$/i);
+  if (redmineMatch) {
+    return { prefix: "REDMINE", ticketId: `REDMINE${redmineMatch[1]}` };
+  }
+
+  return null;
+}
+
 export async function extractAndSaveTickets(
   ticketIds: string[],
   context: string,
@@ -8,10 +39,9 @@ export async function extractAndSaveTickets(
   groupName: string
 ): Promise<void> {
   for (const rawId of ticketIds) {
-    const match = rawId.match(/^([SR]?)(\d{6,7})$/i);
-    if (!match) continue;
-    const prefix = match[1].toUpperCase();
-    const ticketId = rawId.toUpperCase();
+    const parsed = parseTicketId(rawId);
+    if (!parsed) continue;
+    const { prefix, ticketId } = parsed;
 
     const existing = await prisma.ticket.findFirst({ where: { ticketId } });
 
