@@ -13,6 +13,8 @@ export interface ProviderOptions {
   groqModel?: string;
   googleApiKey?: string;
   googleModel?: string;
+  openrouterApiKey?: string;
+  openrouterModel?: string;
 }
 
 export async function generateResponse(
@@ -60,6 +62,24 @@ export async function generateResponse(
     };
   }
 
+  if (provider === "openrouter" && providerOpts?.openrouterApiKey) {
+    const openrouter = new OpenAI({
+      apiKey: providerOpts.openrouterApiKey,
+      baseURL: "https://openrouter.ai/api/v1",
+    });
+    const model = providerOpts.openrouterModel ?? "openai/gpt-4o-mini";
+    const response = await openrouter.chat.completions.create({
+      model,
+      temperature,
+      max_tokens: maxTokens,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    });
+    return {
+      content: response.choices[0]?.message?.content ?? "",
+      tokens: response.usage?.total_tokens ?? 0,
+    };
+  }
+
   const apiKey = providerOpts?.openaiApiKey ?? process.env.OPENAI_API_KEY ?? "";
   const openai = new OpenAI({ apiKey });
   const model = providerOpts?.openaiModel ?? "gpt-4.1-mini";
@@ -76,9 +96,9 @@ export async function generateResponse(
 }
 
 /**
- * Transcreve áudio (base64) usando Groq (whisper-large-v3) se houver chave
- * configurada, ou OpenAI (whisper-1) como alternativa. Sem nenhuma das duas
- * chaves configuradas, lança erro — quem chama deve tratar e logar.
+ * Transcreve áudio (base64). Prioridade: Groq (whisper-large-v3) > OpenRouter
+ * (openai/whisper-1) > OpenAI (whisper-1). Sem nenhuma chave configurada,
+ * lança erro — quem chama deve tratar e logar.
  */
 export async function transcribeAudio(
   base64: string,
@@ -102,9 +122,23 @@ export async function transcribeAudio(
     return result.text ?? "";
   }
 
+  if (providerOpts.openrouterApiKey) {
+    const openrouter = new OpenAI({
+      apiKey: providerOpts.openrouterApiKey,
+      baseURL: "https://openrouter.ai/api/v1",
+    });
+    const file = await toFile(buffer, filename);
+    const result = await openrouter.audio.transcriptions.create({
+      file,
+      model: "openai/whisper-1",
+      language: "pt",
+    });
+    return result.text ?? "";
+  }
+
   const apiKey = providerOpts.openaiApiKey ?? process.env.OPENAI_API_KEY ?? "";
   if (!apiKey) {
-    throw new Error("Nenhuma chave configurada para transcrição de áudio (Groq ou OpenAI)");
+    throw new Error("Nenhuma chave configurada para transcrição de áudio (Groq, OpenRouter ou OpenAI)");
   }
   const openai = new OpenAI({ apiKey });
   const file = await toFile(buffer, filename);

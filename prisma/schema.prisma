@@ -27,6 +27,8 @@ model AgentConfig {
   groqModel       String   @default("llama-3.3-70b-versatile")
   googleApiKey    String   @default("")
   googleModel     String   @default("gemini-2.0-flash")
+  openrouterApiKey String  @default("")
+  openrouterModel  String  @default("openai/gpt-4o-mini")
   ownerPhone      String   @default("")
   ownerName       String   @default("")
   ownerRole       String   @default("")

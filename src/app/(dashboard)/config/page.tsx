@@ -20,6 +20,8 @@ interface Config {
   groqModel: string;
   googleApiKey: string;
   googleModel: string;
+  openrouterApiKey: string;
+  openrouterModel: string;
   ownerPhone: string;
   ownerName: string;
   ownerRole: string;
@@ -50,6 +52,8 @@ const DEFAULT: Config = {
   groqModel: "llama-3.3-70b-versatile",
   googleApiKey: "",
   googleModel: "gemini-2.0-flash",
+  openrouterApiKey: "",
+  openrouterModel: "openai/gpt-4o-mini",
   ownerPhone: "",
   ownerName: "",
   ownerRole: "",
@@ -248,6 +252,7 @@ export default function ConfigPage() {
               <option value="openai">OpenAI</option>
               <option value="groq">Groq</option>
               <option value="google">Google Gemini</option>
+              <option value="openrouter">OpenRouter</option>
             </select>
           </Field>
 
@@ -318,6 +323,34 @@ export default function ConfigPage() {
                   <option value="gemini-1.5-pro">gemini-1.5-pro</option>
                   <option value="gemini-1.5-flash">gemini-1.5-flash</option>
                 </select>
+              </Field>
+            </>
+          )}
+
+          {config.aiProvider === "openrouter" && (
+            <>
+              <Field label="OpenRouter API Key" hint="Obtenha em openrouter.ai/keys">
+                <input
+                  type="password"
+                  value={config.openrouterApiKey}
+                  onChange={(e) => set("openrouterApiKey", e.target.value)}
+                  placeholder="sk-or-v1-..."
+                />
+              </Field>
+              <Field label="Modelo" hint="Slug do modelo no OpenRouter, ex: openai/gpt-4o-mini">
+                <input
+                  list="openrouter-models"
+                  value={config.openrouterModel}
+                  onChange={(e) => set("openrouterModel", e.target.value)}
+                  placeholder="openai/gpt-4o-mini"
+                />
+                <datalist id="openrouter-models">
+                  <option value="openai/gpt-4o-mini" />
+                  <option value="openai/gpt-4o" />
+                  <option value="anthropic/claude-sonnet-4.5" />
+                  <option value="google/gemini-2.0-flash-001" />
+                  <option value="meta-llama/llama-3.3-70b-instruct" />
+                </datalist>
               </Field>
             </>
           )}

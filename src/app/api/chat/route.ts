@@ -57,6 +57,10 @@ export async function POST(request: Request) {
       openaiModel: config.openaiModel,
       groqApiKey: config.groqApiKey,
       groqModel: config.groqModel,
+      googleApiKey: config.googleApiKey,
+      googleModel: config.googleModel,
+      openrouterApiKey: config.openrouterApiKey,
+      openrouterModel: config.openrouterModel,
     }
   );
 

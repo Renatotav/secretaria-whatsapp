@@ -32,6 +32,8 @@ function getProviderOpts(config: AgentConfig): ProviderOptions {
     groqModel: config.groqModel,
     googleApiKey: config.googleApiKey,
     googleModel: config.googleModel,
+    openrouterApiKey: config.openrouterApiKey,
+    openrouterModel: config.openrouterModel,
   };
 }
 

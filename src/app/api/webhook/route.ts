@@ -52,6 +52,7 @@ export async function POST(request: Request) {
               aiProvider: config.aiProvider,
               openaiApiKey: config.openaiApiKey,
               groqApiKey: config.groqApiKey,
+              openrouterApiKey: config.openrouterApiKey,
             }
           )
         ).trim();
