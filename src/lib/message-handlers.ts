@@ -24,11 +24,11 @@ export function extractText(message: Record<string, unknown>): string {
 }
 
 export function formatTime(ts: number): string {
-  return new Date(ts * 1000).toLocaleTimeString("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "America/Sao_Paulo",
-  });
+  const d = new Date(ts * 1000);
+  let h = d.getUTCHours() - 3;
+  if (h < 0) h += 24;
+  const m = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${String(h).padStart(2, "0")}:${m}`;
 }
 
 function getProviderOpts(config: AgentConfig): ProviderOptions {
