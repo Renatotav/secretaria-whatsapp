@@ -277,6 +277,26 @@ function installmentKey(baseDescription: string, purchaseDate: string, total: nu
   return `${baseDescription}|${purchaseDate}|${total}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
 }
 
+function subscriptionKey(description: string, amount: number, targetDate: Date): string {
+  return `sub|${description}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
+}
+
+const SUBSCRIPTION_PROJECTION_MONTHS = 11;
+
+/**
+ * "2026-08-10" (data pura, sem hora) vira meia-noite UTC quando passada pro
+ * construtor de Date, o que em fusos negativos (ex: Brasil, UTC-3) exibe como
+ * o dia ANTERIOR — e pode até jogar o lançamento pro mês errado se cair no
+ * dia 1. Extrai os componentes Y-M-D manualmente e monta a data no fuso
+ * local, tanto pra strings puras quanto pra ISO completas (ignora a hora).
+ */
+function parseAiDate(dateStr: string | null | undefined): Date {
+  if (!dateStr) return new Date();
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return new Date(dateStr);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
 async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
   if (entries.length === 0) {
     await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
@@ -284,40 +304,67 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
   }
 
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
-  // meses futuros) com as entradas reais desse extrato, pra já projetar o
-  // fluxo de caixa dos próximos meses em vez de só lançar a fatura atual.
+  // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
+  // parcela — ex: Anthropic, Netflix) com as entradas reais desse extrato,
+  // pra já projetar o fluxo de caixa dos próximos meses.
   const candidates: { entry: StatementEntry; date: Date; key: string | null }[] = [];
 
   for (const e of entries) {
-    const baseDate = e.date ? new Date(e.date) : new Date();
+    const baseDate = parseAiDate(e.date);
     const info = parseInstallmentInfo(e.description);
-    const baseKey = info ? installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, baseDate) : null;
-    candidates.push({ entry: e, date: baseDate, key: baseKey });
 
-    if (info && info.current < info.total) {
-      for (let i = info.current + 1; i <= info.total; i++) {
-        const futureDate = addMonths(baseDate, i - info.current);
-        const futureDescription = `${info.baseDescription} - Parcela ${i}/${info.total} (compra em ${info.purchaseDate.split("-")[1]}/${info.purchaseDate.split("-")[0]}) (previsto)`;
+    if (info) {
+      candidates.push({
+        entry: e,
+        date: baseDate,
+        key: installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, baseDate),
+      });
+      if (info.current < info.total) {
+        for (let i = info.current + 1; i <= info.total; i++) {
+          const futureDate = addMonths(baseDate, i - info.current);
+          const futureDescription = `${info.baseDescription} - Parcela ${i}/${info.total} (compra em ${info.purchaseDate.split("-")[1]}/${info.purchaseDate.split("-")[0]}) (previsto)`;
+          candidates.push({
+            entry: { ...e, description: futureDescription, date: futureDate.toISOString() },
+            date: futureDate,
+            key: installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, futureDate),
+          });
+        }
+      }
+    } else if (e.category === "Assinaturas") {
+      // Assinatura sem número de parcela = recorrente, sem fim previsto.
+      // Projeta um horizonte fixo; cada reimportação futura da mesma
+      // assinatura estende a janela pra frente automaticamente. Cancelar
+      // é só apagar a entrada daquele mês específico na tabela.
+      candidates.push({ entry: e, date: baseDate, key: subscriptionKey(e.description, e.amount, baseDate) });
+      for (let i = 1; i <= SUBSCRIPTION_PROJECTION_MONTHS; i++) {
+        const futureDate = addMonths(baseDate, i);
         candidates.push({
-          entry: { ...e, description: futureDescription, date: futureDate.toISOString() },
+          entry: { ...e, description: `${e.description} (previsto)`, date: futureDate.toISOString() },
           date: futureDate,
-          key: installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, futureDate),
+          key: subscriptionKey(e.description, e.amount, futureDate),
         });
       }
+    } else {
+      candidates.push({ entry: e, date: baseDate, key: null });
     }
   }
 
   // Dedupe contra o que já existe no banco (de uma importação anterior, real
   // ou projetada) e dentro do próprio lote que acabou de ser montado.
   const existing = await prisma.financeEntry.findMany({
-    where: { description: { contains: "Parcela " } },
-    select: { description: true, date: true, amount: true },
+    where: { OR: [{ description: { contains: "Parcela " } }, { category: "Assinaturas" }] },
+    select: { description: true, date: true, amount: true, category: true },
   });
   const existingKeys = new Set(
     existing
       .map((e) => {
         const info = parseInstallmentInfo(e.description);
-        return info ? installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date) : null;
+        if (info) return installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date);
+        if (e.category === "Assinaturas") {
+          const baseDescription = e.description.replace(/\s*\(previsto\)/, "").trim();
+          return subscriptionKey(baseDescription, e.amount, e.date);
+        }
+        return null;
       })
       .filter((k): k is string => k !== null)
   );
@@ -351,7 +398,7 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
       category: e.category,
       subcategory: e.subcategory,
       description: e.description,
-      date: e.date ? new Date(e.date) : new Date(),
+      date: parseAiDate(e.date),
       source: "whatsapp",
     })),
   });
