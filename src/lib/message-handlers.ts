@@ -210,16 +210,39 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
       });
       break;
     case "finance":
-      await prisma.financeEntry.create({
-        data: {
-          type: route.financeType,
-          amount: route.amount,
-          category: route.category,
-          subcategory: route.subcategory,
-          description: route.description,
-          source: "whatsapp",
-        },
-      });
+      if (route.installments) {
+        // Compra parcelada relatada por mensagem (não veio de extrato) — usa
+        // o mesmo formato "Parcela X/Y (compra em DD/MM)" pra reaproveitar a
+        // projeção/dedupe de saveStatementEntries em vez de duplicar a lógica.
+        const today = new Date();
+        const compraEm = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
+        await saveStatementEntries(
+          config,
+          [
+            {
+              date: today.toISOString(),
+              description: `${route.description} - Parcela 1/${route.installments} (compra em ${compraEm})`,
+              amount: route.amount,
+              type: route.financeType,
+              category: route.category,
+              subcategory: route.subcategory,
+            },
+          ],
+          "a mensagem"
+        );
+        response = "";
+      } else {
+        await prisma.financeEntry.create({
+          data: {
+            type: route.financeType,
+            amount: route.amount,
+            category: route.category,
+            subcategory: route.subcategory,
+            description: route.description,
+            source: "whatsapp",
+          },
+        });
+      }
       break;
     case "diary":
       await prisma.diaryEntry.create({
@@ -243,16 +266,21 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
 }
 
 /**
- * Detecta "Parcela X/Y" e "(compra em DD/MM)" numa descrição gerada pelo
- * parser de extrato, e devolve a descrição "base" sem esses dois pedaços
- * (pra comparar entradas da mesma compra parcelada entre si).
+ * Detecta "Parcela X/Y" (e opcionalmente "(compra em DD/MM)") numa descrição
+ * — seja gerada pelo parser de extrato ou digitada à mão pelo usuário direto
+ * no campo de edição — e devolve a descrição "base" sem esses pedaços (pra
+ * comparar entradas da mesma compra parcelada entre si). Se a descrição não
+ * tiver "(compra em DD/MM)" explícito, usa a data do próprio lançamento
+ * (fallbackDate) como referência — é o caso de quem só digita "Parcela 3/12"
+ * na edição, sem se preocupar com a data original da compra.
  */
 function parseInstallmentInfo(
-  description: string
+  description: string,
+  fallbackDate?: Date
 ): { current: number; total: number; purchaseDate: string; baseDescription: string } | null {
   const parcelaMatch = description.match(/Parcela (\d+)\/(\d+)/);
+  if (!parcelaMatch) return null;
   const compraMatch = description.match(/\(compra em (\d{2})\/(\d{2})\)/);
-  if (!parcelaMatch || !compraMatch) return null;
 
   const baseDescription = description
     .replace(/\s*-?\s*Parcela \d+\/\d+/, "")
@@ -260,10 +288,17 @@ function parseInstallmentInfo(
     .replace(/\s*\(previsto\)/, "")
     .trim();
 
+  const purchaseDate = compraMatch
+    ? `${compraMatch[2]}-${compraMatch[1]}` // MM-DD, estável entre reimportações
+    : fallbackDate
+    ? `${String(fallbackDate.getMonth() + 1).padStart(2, "0")}-${String(fallbackDate.getDate()).padStart(2, "0")}`
+    : null;
+  if (!purchaseDate) return null;
+
   return {
     current: Number(parcelaMatch[1]),
     total: Number(parcelaMatch[2]),
-    purchaseDate: `${compraMatch[2]}-${compraMatch[1]}`, // MM-DD, estável entre reimportações
+    purchaseDate,
     baseDescription,
   };
 }
@@ -284,12 +319,16 @@ function subscriptionKey(description: string, amount: number, targetDate: Date):
 
 const SUBSCRIPTION_PROJECTION_MONTHS = 11;
 
-async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
-  if (entries.length === 0) {
-    await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
-    return;
-  }
-
+/**
+ * Núcleo compartilhado: expande parcelas restantes e assinaturas recorrentes
+ * em entradas futuras "(previsto)", dedupe contra o banco, e insere o que é
+ * novo. Não notifica o dono — quem chama decide se/como avisar (o fluxo de
+ * extrato via WhatsApp avisa; edição manual no painel não precisa).
+ */
+export async function projectAndInsertFinanceEntries(
+  entries: StatementEntry[],
+  source: "whatsapp" | "dashboard" = "whatsapp"
+): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number }> {
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
   // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
   // parcela — ex: Anthropic, Netflix) com as entradas reais desse extrato,
@@ -298,7 +337,7 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
 
   for (const e of entries) {
     const baseDate = parseLocalDate(e.date);
-    const info = parseInstallmentInfo(e.description);
+    const info = parseInstallmentInfo(e.description, baseDate);
 
     if (info) {
       candidates.push({
@@ -345,7 +384,7 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
   const existingKeys = new Set(
     existing
       .map((e) => {
-        const info = parseInstallmentInfo(e.description);
+        const info = parseInstallmentInfo(e.description, e.date);
         if (info) return installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date);
         if (e.category === "Assinaturas") {
           const baseDescription = e.description.replace(/\s*\(previsto\)/, "").trim();
@@ -373,22 +412,35 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
     toInsert.push(c.entry);
   }
 
+  if (toInsert.length > 0) {
+    await prisma.financeEntry.createMany({
+      data: toInsert.map((e) => ({
+        type: e.type,
+        amount: e.amount,
+        category: e.category,
+        subcategory: e.subcategory,
+        description: e.description,
+        date: parseLocalDate(e.date),
+        source,
+      })),
+    });
+  }
+
+  return { toInsert, duplicates, projected };
+}
+
+export async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
+  if (entries.length === 0) {
+    await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
+    return;
+  }
+
+  const { toInsert, duplicates, projected } = await projectAndInsertFinanceEntries(entries, "whatsapp");
+
   if (toInsert.length === 0) {
     await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já tinham sido importadas antes.`);
     return;
   }
-
-  await prisma.financeEntry.createMany({
-    data: toInsert.map((e) => ({
-      type: e.type,
-      amount: e.amount,
-      category: e.category,
-      subcategory: e.subcategory,
-      description: e.description,
-      date: parseLocalDate(e.date),
-      source: "whatsapp",
-    })),
-  });
 
   const real = toInsert.length - projected;
   const total = toInsert

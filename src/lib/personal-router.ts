@@ -41,6 +41,7 @@ export type PersonalRouteResult =
       category: string;
       subcategory: string;
       description: string;
+      installments: number | null;
       confirmation: string;
     }
   | {
@@ -84,6 +85,15 @@ Tipos:
    Ex: "Recebi 3000 de salário" → income, 3000, categoria "Salário", subcategoria "Salário fixo"
    Ex: "Paguei 120 de internet" → expense, 120, categoria "Moradia", subcategoria "Internet"
 
+   Se a mensagem mencionar que a compra foi PARCELADA (ex: "em 17x", "parcelado
+   em 12 vezes", "10 parcelas de 50"), extraia o número TOTAL de parcelas em
+   "installments" (ex: 17). O "amount" continua sendo o valor de UMA parcela
+   (não o total da compra). Se não for parcelado ou vier só à vista, deixe
+   "installments" null. As parcelas restantes são lançadas automaticamente nos
+   meses seguintes — não precisa mencionar isso na "confirmation".
+   Ex: "Comprei um Samsung S25 de 291 no cartão do Bruno, em 17x" → expense,
+   291, categoria "Financeiro", subcategoria "Parcelas no cartão", installments: 17
+
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
    qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
    quando nada mais se encaixa, inclusive mensagens curtas tipo "teste" ou "oi").
@@ -110,6 +120,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "financeCategory": "<categoria curta>",
   "financeSubcategory": "<subcategoria curta>",
   "financeDescription": "<descrição curta>",
+  "installments": "número total de parcelas ou null",
   "diaryContent": "<texto real da anotação>",
   "mood": "pessimo|ruim|neutro|bom|otimo",
   "confirmation": "<confirmação curta e específica sobre o que foi registrado>"
@@ -128,6 +139,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     const parsed = JSON.parse(json) as Record<string, unknown>;
 
     if (parsed.type === "finance") {
+      const installmentsNum = Number(parsed.installments);
       return {
         type: "finance",
         financeType: parsed.financeType === "income" ? "income" : "expense",
@@ -135,6 +147,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         category: (parsed.financeCategory as string) || "Outros",
         subcategory: (parsed.financeSubcategory as string) || "",
         description: (parsed.financeDescription as string) || message.slice(0, 120),
+        installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
     }

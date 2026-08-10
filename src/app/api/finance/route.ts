@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
 import { parseLocalDate } from "@/lib/dates";
+import { projectAndInsertFinanceEntries } from "@/lib/message-handlers";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
@@ -54,6 +55,23 @@ export const POST = withErrorHandling(async (request: Request) => {
     },
   });
 
+  // Se o usuário já digitou "Parcela X/Y" na descrição (com ou sem "(compra
+  // em DD/MM)"), projeta as parcelas restantes nos meses seguintes — mesma
+  // lógica usada na importação de extrato via WhatsApp, sem notificar.
+  if (/Parcela \d+\/\d+/.test(entry.description)) {
+    await projectAndInsertFinanceEntries(
+      [{
+        date: entry.date.toISOString(),
+        description: entry.description,
+        amount: entry.amount,
+        type: entry.type as "income" | "expense",
+        category: entry.category,
+        subcategory: entry.subcategory,
+      }],
+      "dashboard"
+    );
+  }
+
   return NextResponse.json(entry);
 });
 
@@ -72,6 +90,23 @@ export const PATCH = withErrorHandling(async (request: Request) => {
   if (data.amount !== undefined) data.amount = Number(data.amount);
 
   const updated = await prisma.financeEntry.update({ where: { id }, data });
+
+  // Mesma projeção de parcelas restantes, disparada quando a descrição
+  // editada passa a ter "Parcela X/Y" (ex: usuário completou o dado à mão).
+  if (/Parcela \d+\/\d+/.test(updated.description)) {
+    await projectAndInsertFinanceEntries(
+      [{
+        date: updated.date.toISOString(),
+        description: updated.description,
+        amount: updated.amount,
+        type: updated.type as "income" | "expense",
+        category: updated.category,
+        subcategory: updated.subcategory,
+      }],
+      "dashboard"
+    );
+  }
+
   return NextResponse.json(updated);
 });
 
