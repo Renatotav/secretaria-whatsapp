@@ -1,6 +1,9 @@
 "use client";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+
+const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
 
 const NAV = [
   { href: "/agenda", icon: "📅", label: "Agenda" },
@@ -19,6 +22,19 @@ const NAV = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
 
   async function handleLogout() {
     await fetch("/api/auth", { method: "DELETE" });
@@ -31,22 +47,53 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <aside
         style={{
-          width: 216,
+          position: "relative",
+          width: collapsed ? 64 : 216,
           flexShrink: 0,
           background: "var(--bg-card)",
           borderRight: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           padding: "20px 0",
+          transition: "width 0.15s",
         }}
       >
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          style={{
+            position: "absolute",
+            top: 24,
+            right: -12,
+            width: 24,
+            height: 24,
+            borderRadius: "50%",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            color: "var(--text-muted)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 12,
+            cursor: "pointer",
+            padding: 0,
+            zIndex: 10,
+          }}
+        >
+          {collapsed ? "›" : "‹"}
+        </button>
+
         {/* Logo */}
-        <div style={{ padding: "0 16px 20px", borderBottom: "1px solid var(--border-light)" }}>
+        <div style={{ padding: collapsed ? "0 0 20px" : "0 16px 20px", borderBottom: "1px solid var(--border-light)", textAlign: collapsed ? "center" : "left" }}>
           <div style={{ fontSize: 22 }}>🤖</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginTop: 4 }}>
-            Secretária
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Eletrônica</div>
+          {!collapsed && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginTop: 4 }}>
+                Secretária
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Eletrônica</div>
+            </>
+          )}
         </div>
 
         {/* Nav */}
@@ -57,9 +104,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
+                title={collapsed ? item.label : undefined}
                 style={{
                   display: "flex",
                   alignItems: "center",
+                  justifyContent: collapsed ? "center" : "flex-start",
                   gap: 10,
                   padding: "8px 10px",
                   borderRadius: 8,
@@ -74,9 +123,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }}
               >
                 <span style={{ fontSize: 16 }}>{item.icon}</span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {item.label}
-                </span>
+                {!collapsed && (
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.label}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -86,10 +137,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div style={{ padding: "12px 8px", borderTop: "1px solid var(--border-light)" }}>
           <button
             onClick={handleLogout}
+            title={collapsed ? "Sair" : undefined}
             style={{
               width: "100%",
               display: "flex",
               alignItems: "center",
+              justifyContent: collapsed ? "center" : "flex-start",
               gap: 10,
               padding: "8px 10px",
               borderRadius: 8,
@@ -100,7 +153,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }}
           >
             <span>🚪</span>
-            <span>Sair</span>
+            {!collapsed && <span>Sair</span>}
           </button>
         </div>
       </aside>
