@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { fetchAllContacts } from "@/lib/evolution";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
@@ -30,10 +31,27 @@ export const GET = withErrorHandling(async (request: Request) => {
   });
   const groupNameMap = Object.fromEntries(groupConfigs.map(g => [g.groupJid, g.groupName]));
 
-  const enrichedConversations = conversations.map(c => ({
-    ...c,
-    displayName: c.source === "group" && c.phone ? (groupNameMap[c.phone] || c.phone) : c.phone,
-  }));
+  const config = await prisma.agentConfig.findFirst();
+  let contactsMap: Record<string, string> = {};
+  if (config && config.evolutionUrl && config.evolutionApiKey && config.instanceId) {
+    const allContacts = await fetchAllContacts(config.evolutionUrl, config.evolutionApiKey, config.instanceId);
+    for (const c of allContacts) {
+      const num = c.id.split("@")[0];
+      if (c.name || c.pushName) {
+        contactsMap[num] = c.name || c.pushName || num;
+      }
+    }
+  }
+
+  const enrichedConversations = conversations.map(c => {
+    let displayName = c.phone;
+    if (c.source === "group" && c.phone) {
+      displayName = groupNameMap[c.phone] || c.phone;
+    } else if (c.source === "whatsapp" && c.phone) {
+      displayName = contactsMap[c.phone] || c.phone;
+    }
+    return { ...c, displayName };
+  });
 
   return NextResponse.json(enrichedConversations);
 });
