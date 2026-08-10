@@ -241,14 +241,111 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   }
 }
 
+/**
+ * Detecta "Parcela X/Y" e "(compra em DD/MM)" numa descrição gerada pelo
+ * parser de extrato, e devolve a descrição "base" sem esses dois pedaços
+ * (pra comparar entradas da mesma compra parcelada entre si).
+ */
+function parseInstallmentInfo(
+  description: string
+): { current: number; total: number; purchaseDate: string; baseDescription: string } | null {
+  const parcelaMatch = description.match(/Parcela (\d+)\/(\d+)/);
+  const compraMatch = description.match(/\(compra em (\d{2})\/(\d{2})\)/);
+  if (!parcelaMatch || !compraMatch) return null;
+
+  const baseDescription = description
+    .replace(/\s*-?\s*Parcela \d+\/\d+/, "")
+    .replace(/\s*\(compra em \d{2}\/\d{2}\)/, "")
+    .replace(/\s*\(previsto\)/, "")
+    .trim();
+
+  return {
+    current: Number(parcelaMatch[1]),
+    total: Number(parcelaMatch[2]),
+    purchaseDate: `${compraMatch[2]}-${compraMatch[1]}`, // MM-DD, estável entre reimportações
+    baseDescription,
+  };
+}
+
+function addMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+function installmentKey(baseDescription: string, purchaseDate: string, total: number, amount: number, targetDate: Date): string {
+  return `${baseDescription}|${purchaseDate}|${total}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
+}
+
 async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
   if (entries.length === 0) {
     await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
     return;
   }
 
+  // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
+  // meses futuros) com as entradas reais desse extrato, pra já projetar o
+  // fluxo de caixa dos próximos meses em vez de só lançar a fatura atual.
+  const candidates: { entry: StatementEntry; date: Date; key: string | null }[] = [];
+
+  for (const e of entries) {
+    const baseDate = e.date ? new Date(e.date) : new Date();
+    const info = parseInstallmentInfo(e.description);
+    const baseKey = info ? installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, baseDate) : null;
+    candidates.push({ entry: e, date: baseDate, key: baseKey });
+
+    if (info && info.current < info.total) {
+      for (let i = info.current + 1; i <= info.total; i++) {
+        const futureDate = addMonths(baseDate, i - info.current);
+        const futureDescription = `${info.baseDescription} - Parcela ${i}/${info.total} (compra em ${info.purchaseDate.split("-")[1]}/${info.purchaseDate.split("-")[0]}) (previsto)`;
+        candidates.push({
+          entry: { ...e, description: futureDescription, date: futureDate.toISOString() },
+          date: futureDate,
+          key: installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, futureDate),
+        });
+      }
+    }
+  }
+
+  // Dedupe contra o que já existe no banco (de uma importação anterior, real
+  // ou projetada) e dentro do próprio lote que acabou de ser montado.
+  const existing = await prisma.financeEntry.findMany({
+    where: { description: { contains: "Parcela " } },
+    select: { description: true, date: true, amount: true },
+  });
+  const existingKeys = new Set(
+    existing
+      .map((e) => {
+        const info = parseInstallmentInfo(e.description);
+        return info ? installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date) : null;
+      })
+      .filter((k): k is string => k !== null)
+  );
+
+  const toInsert: StatementEntry[] = [];
+  let duplicates = 0;
+  let projected = 0;
+  const seenThisBatch = new Set<string>();
+
+  for (const c of candidates) {
+    if (c.key) {
+      if (existingKeys.has(c.key) || seenThisBatch.has(c.key)) {
+        duplicates++;
+        continue;
+      }
+      seenThisBatch.add(c.key);
+    }
+    if (c.entry.description.includes("(previsto)")) projected++;
+    toInsert.push(c.entry);
+  }
+
+  if (toInsert.length === 0) {
+    await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já tinham sido importadas antes.`);
+    return;
+  }
+
   await prisma.financeEntry.createMany({
-    data: entries.map((e) => ({
+    data: toInsert.map((e) => ({
       type: e.type,
       amount: e.amount,
       category: e.category,
@@ -259,8 +356,14 @@ async function saveStatementEntries(config: AgentConfig, entries: StatementEntry
     })),
   });
 
-  const total = entries.reduce((s, e) => s + (e.type === "expense" ? e.amount : -e.amount), 0);
-  const response = `✅ Importei ${entries.length} lançamento(s) do extrato.\n💰 Total em despesas: R$ ${total.toFixed(2)}`;
+  const real = toInsert.length - projected;
+  const total = toInsert
+    .filter((e) => !e.description.includes("(previsto)"))
+    .reduce((s, e) => s + (e.type === "expense" ? e.amount : -e.amount), 0);
+
+  let response = `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: R$ ${total.toFixed(2)}`;
+  if (projected > 0) response += `\n📅 +${projected} parcela(s) futura(s) projetada(s) nos próximos meses.`;
+  if (duplicates > 0) response += `\n♻️ ${duplicates} já estavam lançadas (ignoradas pra não duplicar).`;
   await notifyOwner(config, response);
 }
 
