@@ -778,10 +778,10 @@ export default function FinancePage() {
     setLoading(true);
     try {
       const [monthRes, yearRes, budgetsRes, balanceRes, accountsRes] = await Promise.all([
-        fetch(`/api/finance?month=${month}&account=${selectedAccount}`),
-        fetch(`/api/finance?year=${year}&account=${selectedAccount}`),
+        fetch(`/api/finance?month=${month}&account=${encodeURIComponent(selectedAccount)}`),
+        fetch(`/api/finance?year=${year}&account=${encodeURIComponent(selectedAccount)}`),
         fetch(`/api/finance/budgets?month=${month}`),
-        fetch(`/api/finance/balance?month=${month}&account=${selectedAccount}`),
+        fetch(`/api/finance/balance?month=${month}&account=${encodeURIComponent(selectedAccount)}`),
         fetch(`/api/finance/accounts`),
       ]);
       const mData = await monthRes.json();

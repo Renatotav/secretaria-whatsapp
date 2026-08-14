@@ -53,13 +53,13 @@ export const POST = withErrorHandling(async (request: Request) => {
     data: {
       type: body.type,
       amount: Number(body.amount) || 0,
-      category: body.category ?? "",
-      subcategory: body.subcategory ?? "",
-      description: body.description ?? "",
+      category: body.category?.trim() ?? "",
+      subcategory: body.subcategory?.trim() ?? "",
+      description: body.description?.trim() ?? "",
       date: parseLocalDate(body.date),
       purchaseDate: body.purchaseDate ? parseLocalDate(body.purchaseDate) : null,
       paymentMethod: body.paymentMethod || "pix",
-      account: body.account || "Principal",
+      account: body.account?.trim() || "Principal",
       source: "dashboard",
       status: body.status || "paid",
     },
@@ -103,6 +103,10 @@ export const PATCH = withErrorHandling(async (request: Request) => {
   if (data.date) data.date = parseLocalDate(data.date as string);
   if (data.purchaseDate) data.purchaseDate = parseLocalDate(data.purchaseDate as string);
   if (data.amount !== undefined) data.amount = Number(data.amount);
+  if (typeof data.account === "string") data.account = data.account.trim();
+  if (typeof data.category === "string") data.category = data.category.trim();
+  if (typeof data.subcategory === "string") data.subcategory = data.subcategory.trim();
+  if (typeof data.description === "string") data.description = data.description.trim();
 
   const updated = await prisma.financeEntry.update({ where: { id }, data });
 
