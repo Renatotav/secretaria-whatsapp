@@ -695,13 +695,22 @@ export default function FinancePage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [monthRes, yearRes] = await Promise.all([
-      fetch(`/api/finance?month=${month}`),
-      fetch(`/api/finance?year=${year}`),
-    ]);
-    setEntries(await monthRes.json());
-    setYearEntries(await yearRes.json());
-    setLoading(false);
+    try {
+      const [monthRes, yearRes] = await Promise.all([
+        fetch(`/api/finance?month=${month}`),
+        fetch(`/api/finance?year=${year}`),
+      ]);
+      const mData = await monthRes.json();
+      const yData = await yearRes.json();
+      setEntries(Array.isArray(mData) ? mData : []);
+      setYearEntries(Array.isArray(yData) ? yData : []);
+    } catch (err) {
+      console.error(err);
+      setEntries([]);
+      setYearEntries([]);
+    } finally {
+      setLoading(false);
+    }
   }, [month, year]);
 
   useEffect(() => { load(); }, [load]);
