@@ -77,8 +77,8 @@ export async function GET(request: Request) {
 
           if (result.type === "finance") {
             const entry = {
-              date: result.date || null,
-              purchaseDate: result.purchaseDate || null,
+              date: result.date || undefined,
+              purchaseDate: result.purchaseDate || undefined,
               description: result.description,
               amount: result.amount,
               type: result.financeType,
