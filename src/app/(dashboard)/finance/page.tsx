@@ -693,6 +693,7 @@ export default function FinancePage() {
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [yearEntries, setYearEntries] = useState<FinanceEntry[]>([]);
+  const [allAccounts, setAllAccounts] = useState<string[]>([]);
   const [previousBalance, setPreviousBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -776,25 +777,29 @@ export default function FinancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [monthRes, yearRes, budgetsRes, balanceRes] = await Promise.all([
+      const [monthRes, yearRes, budgetsRes, balanceRes, accountsRes] = await Promise.all([
         fetch(`/api/finance?month=${month}&account=${selectedAccount}`),
         fetch(`/api/finance?year=${year}&account=${selectedAccount}`),
         fetch(`/api/finance/budgets?month=${month}`),
         fetch(`/api/finance/balance?month=${month}&account=${selectedAccount}`),
+        fetch(`/api/finance/accounts`),
       ]);
       const mData = await monthRes.json();
       const yData = await yearRes.json();
       const bData = await budgetsRes.json();
       const balData = await balanceRes.json();
+      const accData = await accountsRes.json();
       setEntries(Array.isArray(mData) ? mData : []);
       setYearEntries(Array.isArray(yData) ? yData : []);
       setBudgets(Array.isArray(bData) ? bData : []);
       setPreviousBalance(balData.previousBalance || 0);
+      setAllAccounts(Array.isArray(accData) ? accData : []);
     } catch (err) {
       console.error(err);
       setEntries([]);
       setYearEntries([]);
       setBudgets([]);
+      setAllAccounts([]);
     } finally {
       setLoading(false);
     }
@@ -938,7 +943,7 @@ export default function FinancePage() {
             >
               <option value="all">💳 Todas as Contas</option>
               <option value="Principal">🏦 Conta Principal</option>
-              {Array.from(new Set(entries.map((e) => e.account).filter(a => a && a !== "Principal"))).map(acc => (
+              {allAccounts.filter(a => a !== "Principal").map(acc => (
                 <option key={acc} value={acc}>
                   {acc.toLowerCase().includes("ticket") ? "🍔 " : "🏦 "}{acc}
                 </option>
@@ -1090,7 +1095,7 @@ export default function FinancePage() {
                 placeholder="Ex: Ticket, BB..."
               />
               <datalist id="finance-accounts-add">
-                {Array.from(new Set(entries.map((e) => e.account).filter(Boolean))).map((acc) => (
+                {allAccounts.map((acc) => (
                   <option key={acc} value={acc} />
                 ))}
               </datalist>
@@ -1227,7 +1232,7 @@ export default function FinancePage() {
                 ))}
               </datalist>
               <datalist id="finance-accounts-edit">
-                {Array.from(new Set(entries.map((e) => e.account).filter(Boolean))).map((acc) => (
+                {allAccounts.map((acc) => (
                   <option key={acc} value={acc} />
                 ))}
               </datalist>
