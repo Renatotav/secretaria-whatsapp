@@ -1077,8 +1077,8 @@ export default function FinancePage() {
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Status</label>
               <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" }))}>
-                <option value="paid">Pago</option>
-                <option value="pending">Pendente</option>
+                <option value="paid">{form.type === "income" ? "Recebido" : "Pago"}</option>
+                <option value="pending">{form.type === "income" ? "A receber" : "Pendente"}</option>
               </select>
             </div>
             <div>
@@ -1180,8 +1180,8 @@ export default function FinancePage() {
                           </td>
                           <td style={{ padding: "6px 8px" }}>
                             <select value={editForm.status} onChange={(ev) => setEditForm((f) => ({ ...f, status: ev.target.value as "paid" | "pending" }))} style={{ width: 90, padding: "8px 6px" }}>
-                              <option value="paid">Pago</option>
-                              <option value="pending">Pendente</option>
+                              <option value="paid">{editForm.type === "income" ? "Recebido" : "Pago"}</option>
+                              <option value="pending">{editForm.type === "income" ? "A receber" : "Pendente"}</option>
                             </select>
                           </td>
                           <td style={{ padding: "6px 8px", color: "var(--text-dim)", whiteSpace: "nowrap", textAlign: "center" }} title={e.source === "whatsapp" ? "WhatsApp" : "Painel"}>
@@ -1225,7 +1225,9 @@ export default function FinancePage() {
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
                         <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: e.status === "paid" ? "var(--success-dim)" : "var(--warning-dim)", color: e.status === "paid" ? "var(--success)" : "var(--warning)", border: `1px solid ${e.status === "paid" ? "var(--success)" : "var(--warning)"}` }}>
-                            {e.status === "paid" ? "Pago" : "Pendente"}
+                            {e.type === "income" 
+                              ? (e.status === "paid" ? "Recebido" : "A receber") 
+                              : (e.status === "paid" ? "Pago" : "Pendente")}
                           </span>
                         </td>
                         <td style={{ padding: "10px 16px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>

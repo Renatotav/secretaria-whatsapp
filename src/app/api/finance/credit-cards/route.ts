@@ -10,6 +10,7 @@ export async function GET() {
     const entries = await prisma.financeEntry.findMany({
       where: {
         type: "expense",
+        status: "pending",
         date: { gte: startOfMonth },
         OR: [
           { category: { contains: "Cartão", mode: "insensitive" } },
