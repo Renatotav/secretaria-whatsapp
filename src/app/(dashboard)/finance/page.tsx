@@ -1068,7 +1068,7 @@ export default function FinancePage() {
               gap: 8,
               alignItems: "end",
             }}
-            className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-[100px_110px_1fr_1fr_1fr_130px_130px_110px_auto]"
+            className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-[115px_110px_1fr_1fr_1fr_130px_130px_110px_auto]"
           >
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Tipo</label>
