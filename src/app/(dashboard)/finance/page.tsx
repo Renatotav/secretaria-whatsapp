@@ -16,9 +16,40 @@ interface FinanceEntry {
   date: string;
   purchaseDate?: string;
   paymentMethod: string;
+  account: string;
   status: "paid" | "pending";
   source: string;
 }
+
+type FormState = {
+  type: string;
+  amount: string;
+  category: string;
+  subcategory: string;
+  description: string;
+  date: string;
+  purchaseDate: string;
+  paymentMethod: string;
+  account: string;
+  status: "paid" | "pending";
+  recurring: boolean;
+};
+
+const EMPTY_FORM: FormState = {
+  type: "expense",
+  amount: "",
+  category: "",
+  subcategory: "",
+  description: "",
+  date: new Date().toISOString().slice(0, 10),
+  purchaseDate: "",
+  paymentMethod: "pix",
+  account: "Principal",
+  status: "paid",
+  recurring: false,
+};
+
+type EditForm = Omit<FormState, "recurring">;
 
 // Paleta categórica validada (modo escuro) — ordem fixa, nunca reciclada.
 // Ver skill de dataviz: node scripts/validate_palette.js ... --mode dark --surface #13131f
@@ -119,8 +150,7 @@ function currentDay() {
   return new Date().toISOString().split("T")[0];
 }
 
-const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: currentDay(), purchaseDate: "", paymentMethod: "pix", status: "paid" as "paid" | "pending", recurring: false };
-type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string; purchaseDate: string; paymentMethod: string; status: "paid" | "pending" };
+
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
 function CategoryDonut({
@@ -657,6 +687,7 @@ function CategoryManager({
 
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
+  const [selectedAccount, setSelectedAccount] = useState<string>("Principal");
   const [selectedType, setSelectedType] = useState<"income" | "expense" | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
@@ -746,10 +777,10 @@ export default function FinancePage() {
     setLoading(true);
     try {
       const [monthRes, yearRes, budgetsRes, balanceRes] = await Promise.all([
-        fetch(`/api/finance?month=${month}`),
-        fetch(`/api/finance?year=${year}`),
+        fetch(`/api/finance?month=${month}&account=${selectedAccount}`),
+        fetch(`/api/finance?year=${year}&account=${selectedAccount}`),
         fetch(`/api/finance/budgets?month=${month}`),
-        fetch(`/api/finance/balance?month=${month}`),
+        fetch(`/api/finance/balance?month=${month}&account=${selectedAccount}`),
       ]);
       const mData = await monthRes.json();
       const yData = await yearRes.json();
@@ -767,7 +798,7 @@ export default function FinancePage() {
     } finally {
       setLoading(false);
     }
-  }, [month, year]);
+  }, [month, year, selectedAccount]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setSelectedCategory(null); setSelectedCategoryMatch([]); setSelectedType(null); }, [month]);
@@ -816,6 +847,8 @@ export default function FinancePage() {
         description,
         date: form.date ? new Date(form.date).toISOString() : undefined,
         purchaseDate: form.purchaseDate ? new Date(form.purchaseDate).toISOString() : undefined,
+        paymentMethod: form.paymentMethod,
+        account: form.account,
         status: form.status,
       }),
     });
@@ -855,6 +888,7 @@ export default function FinancePage() {
       date: entry.date.slice(0, 10),
       purchaseDate: entry.purchaseDate ? entry.purchaseDate.slice(0, 10) : "",
       paymentMethod: entry.paymentMethod || "pix",
+      account: entry.account || "Principal",
       status: entry.status,
     });
   }
@@ -873,6 +907,7 @@ export default function FinancePage() {
         date: new Date(editForm.date).toISOString(),
         purchaseDate: editForm.purchaseDate ? new Date(editForm.purchaseDate).toISOString() : null,
         paymentMethod: editForm.paymentMethod,
+        account: editForm.account,
         status: editForm.status,
       }),
     });
@@ -896,11 +931,20 @@ export default function FinancePage() {
             <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteAll}>
               Apagar tudo
             </button>
+            <select
+              value={selectedAccount}
+              onChange={(e) => setSelectedAccount(e.target.value)}
+              style={{ width: 160 }}
+            >
+              <option value="all">💳 Todas as Contas</option>
+              <option value="Principal">🏦 Conta Principal</option>
+              <option value="Ticket Alimentação">🍔 Ticket Alimentação</option>
+            </select>
             <input
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              style={{ width: 190 }}
+              style={{ width: 170 }}
             />
           </div>
         </div>

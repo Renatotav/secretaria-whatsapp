@@ -10,6 +10,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // formato YYYY-MM
+  const account = searchParams.get("account");
 
   if (!month) {
     return NextResponse.json({ error: "Mês obrigatório" }, { status: 400 });
@@ -17,11 +18,16 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   const [y, m] = month.split("-").map(Number);
   
+  const whereClause: any = {
+    date: { lt: new Date(y, m - 1, 1) }
+  };
+  if (account && account !== "all") {
+    whereClause.account = account;
+  }
+
   // Calcula o saldo anterior (tudo que for estritamente menor que o primeiro dia do mês requisitado)
   const previousEntries = await prisma.financeEntry.findMany({
-    where: {
-      date: { lt: new Date(y, m - 1, 1) },
-    },
+    where: whereClause,
     select: {
       type: true,
       amount: true,

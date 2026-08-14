@@ -45,6 +45,7 @@ export type PersonalRouteResult =
       date: string | null;
       purchaseDate: string | null;
       paymentMethod: "cartão" | "pix" | "boleto" | "dinheiro";
+      account: string;
       status: "paid" | "pending";
       confirmation: string;
     }
@@ -134,6 +135,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "date": "ISO8601 de quando a despesa acontece/vence (se o usuário disser 'amanhã', calcule a data) ou null. Se for recorrente ou futuro, infira a data. ATENÇÃO MÁXIMA AO MÊS! Se ele disser 'proximo mes', coloque o proximo mes de fato.",
   "purchaseDate": "ISO8601 da data real em que a compra foi feita (se aplicável), senão null. Se o usuário disser 'ontem fiz uma compra parcelada', a purchaseDate é ontem e a date da primeira parcela pode ser hoje ou no futuro.",
   "paymentMethod": "Obrigatório: 'cartão', 'pix', 'boleto' ou 'dinheiro'. Se for compra parcelada ou mencionar cartão, retorne 'cartão'. Caso contrário, retorne 'pix' ou outro meio.",
+  "account": "Obrigatório. De qual conta/carteira isso saiu ou entrou? Se mencionar 'Ticket', 'Vale', 'Alimentação' (o cartão benefício), retorne 'Ticket Alimentação'. Caso não mencione ou seja banco/dinheiro comum, retorne 'Principal'.",
   "status": "Obrigatório: 'paid' ou 'pending'. Se o usuário fala 'vou pagar', 'vence dia X', 'boleto de luz', assuma 'pending' (pendente). Se fala 'comprei', 'paguei', 'gastei', assuma 'paid' (pago).",
   "diaryContent": "<texto real da anotação>",
   "mood": "pessimo|ruim|neutro|bom|otimo",
@@ -165,6 +167,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         date: (parsed.date as string) || (parsed.financeDate as string) || null,
         purchaseDate: (parsed.purchaseDate as string) || (parsed.financePurchaseDate as string) || null,
         paymentMethod: ["cartão", "pix", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix",
+        account: (parsed.account as string) || "Principal",
         status: parsed.status === "pending" ? "pending" : "paid",
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
@@ -225,6 +228,7 @@ export interface StatementEntry {
   category: string;
   subcategory: string;
   paymentMethod?: string;
+  account?: string;
   status?: "paid" | "pending";
 }
 
@@ -270,13 +274,14 @@ Para cada transação, identifique:
 - category e subcategory: ${FINANCE_TAXONOMY}
   Se não der pra inferir a subcategoria, deixe vazio.
 - paymentMethod: OBRIGATÓRIO. Se for extrato/fatura de cartão de crédito, retorne "cartão" para todas as linhas. Se for extrato de conta corrente, tente inferir ("pix", "boleto", "dinheiro" ou "cartão" se for compra no débito). Se não souber, retorne "pix".
+- account: OBRIGATÓRIO. Tente inferir a conta ("Principal" ou "Ticket Alimentação"). Faturas de cartão e extratos bancários normais são "Principal". Ticket, Vale, Sodexo, VR, VA são "Ticket Alimentação".
 
 Ignore linhas que não são transações (cabeçalho, total, limite, juros, texto
 institucional). Se não conseguir identificar nenhuma transação real, retorne
 uma lista vazia.
 
 Retorne APENAS um JSON válido no formato:
-{ "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado", "paymentMethod": "cartão" } ] }`;
+{ "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado", "paymentMethod": "cartão", "account": "Principal" } ] }`;
 }
 
 function parseStatementResponse(content: string, source: string): StatementEntry[] {
@@ -302,6 +307,8 @@ function parseStatementResponse(content: string, source: string): StatementEntry
           category: typeof e.category === "string" ? e.category : "Outros",
           subcategory: typeof e.subcategory === "string" ? e.subcategory : "",
           paymentMethod: ["cartão", "pix", "boleto", "dinheiro"].includes(e.paymentMethod as string) ? (e.paymentMethod as any) : "pix",
+          account: (e.account as string) || "Principal",
+          status: e.status === "pending" ? "pending" : "paid",
         };
       })
       .filter((e): e is StatementEntry => e !== null);

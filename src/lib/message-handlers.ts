@@ -527,6 +527,7 @@ export async function projectAndInsertFinanceEntries(
         date: parseLocalDate(e.date),
         purchaseDate: e.purchaseDate ? parseLocalDate(e.purchaseDate) : null,
         paymentMethod: e.paymentMethod || "pix",
+        account: e.account || "Principal",
         status: e.status || "paid",
         source,
       })),

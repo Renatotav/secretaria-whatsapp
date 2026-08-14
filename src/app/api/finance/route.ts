@@ -13,6 +13,7 @@ export const GET = withErrorHandling(async (request: Request) => {
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // formato YYYY-MM
   const year = searchParams.get("year"); // formato YYYY — usado pelos gráficos
+  const account = searchParams.get("account");
 
   let dateFilter: { gte: Date; lte: Date } | undefined;
   if (month) {
@@ -29,8 +30,13 @@ export const GET = withErrorHandling(async (request: Request) => {
     };
   }
 
+  const whereClause: any = dateFilter ? { date: dateFilter } : {};
+  if (account && account !== "all") {
+    whereClause.account = account;
+  }
+
   const entries = await prisma.financeEntry.findMany({
-    where: dateFilter ? { date: dateFilter } : {},
+    where: whereClause,
     orderBy: { date: "asc" },
   });
 
@@ -53,6 +59,7 @@ export const POST = withErrorHandling(async (request: Request) => {
       date: parseLocalDate(body.date),
       purchaseDate: body.purchaseDate ? parseLocalDate(body.purchaseDate) : null,
       paymentMethod: body.paymentMethod || "pix",
+      account: body.account || "Principal",
       source: "dashboard",
       status: body.status || "paid",
     },
@@ -72,6 +79,7 @@ export const POST = withErrorHandling(async (request: Request) => {
         category: entry.category,
         subcategory: entry.subcategory,
         paymentMethod: entry.paymentMethod,
+        account: entry.account,
         status: entry.status as "paid" | "pending",
       }],
       "dashboard"
@@ -110,6 +118,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
         type: updated.type as "income" | "expense",
         category: updated.category,
         subcategory: updated.subcategory,
+        account: updated.account,
       }],
       "dashboard"
     );
