@@ -934,11 +934,15 @@ export default function FinancePage() {
             <select
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
-              style={{ width: 160 }}
+              style={{ width: "auto", minWidth: 160, maxWidth: 220 }}
             >
               <option value="all">💳 Todas as Contas</option>
               <option value="Principal">🏦 Conta Principal</option>
-              <option value="Ticket Alimentação">🍔 Ticket Alimentação</option>
+              {Array.from(new Set(financeEntries.map((e) => e.account).filter(a => a && a !== "Principal"))).map(acc => (
+                <option key={acc} value={acc}>
+                  {acc.toLowerCase().includes("ticket") ? "🍔 " : "🏦 "}{acc}
+                </option>
+              ))}
             </select>
             <input
               type="month"
