@@ -662,6 +662,7 @@ export default function FinancePage() {
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [yearEntries, setYearEntries] = useState<FinanceEntry[]>([]);
+  const [previousBalance, setPreviousBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -744,17 +745,20 @@ export default function FinancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [monthRes, yearRes, budgetsRes] = await Promise.all([
+      const [monthRes, yearRes, budgetsRes, balanceRes] = await Promise.all([
         fetch(`/api/finance?month=${month}`),
         fetch(`/api/finance?year=${year}`),
         fetch(`/api/finance/budgets?month=${month}`),
+        fetch(`/api/finance/balance?month=${month}`),
       ]);
       const mData = await monthRes.json();
       const yData = await yearRes.json();
       const bData = await budgetsRes.json();
+      const balData = await balanceRes.json();
       setEntries(Array.isArray(mData) ? mData : []);
       setYearEntries(Array.isArray(yData) ? yData : []);
       setBudgets(Array.isArray(bData) ? bData : []);
+      setPreviousBalance(balData.previousBalance || 0);
     } catch (err) {
       console.error(err);
       setEntries([]);
@@ -770,7 +774,8 @@ export default function FinancePage() {
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-  const balance = income - expense;
+  const monthBalance = income - expense;
+  const accumulatedBalance = previousBalance + monthBalance;
 
   let visibleEntries = entries;
   if (selectedType) {
@@ -913,9 +918,16 @@ export default function FinancePage() {
             <p style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatMoney(expense)}</p>
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo</p>
-            <p style={{ fontSize: 20, fontWeight: 700, color: balance >= 0 ? "var(--accent)" : "var(--danger)" }}>
-              {formatMoney(balance)}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo Acumulado</p>
+              {previousBalance !== 0 && (
+                <p style={{ fontSize: 10, color: "var(--text-dim)", textAlign: "right" }}>
+                  Mês: {monthBalance >= 0 ? "+" : ""}{formatMoney(monthBalance)}
+                </p>
+              )}
+            </div>
+            <p style={{ fontSize: 20, fontWeight: 700, color: accumulatedBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>
+              {formatMoney(accumulatedBalance)}
             </p>
           </div>
         </div>
