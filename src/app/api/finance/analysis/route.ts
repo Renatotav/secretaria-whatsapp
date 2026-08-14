@@ -12,8 +12,8 @@ export async function GET(request: Request) {
     }
 
     const config = await prisma.agentConfig.findFirst();
-    if (!config || !config.openaiApiKey) {
-      return NextResponse.json({ error: "OpenAI API Key not configured" }, { status: 500 });
+    if (!config) {
+      return NextResponse.json({ error: "Configuração não encontrada" }, { status: 500 });
     }
 
     const providerOpts = {
@@ -22,6 +22,10 @@ export async function GET(request: Request) {
       openaiModel: config.openaiModel,
       groqApiKey: config.groqApiKey,
       groqModel: config.groqModel,
+      googleApiKey: config.googleApiKey,
+      googleModel: config.googleModel,
+      openrouterApiKey: config.openrouterApiKey,
+      openrouterModel: config.openrouterModel,
     };
 
     const [yearStr, monthStr] = month.split("-");
