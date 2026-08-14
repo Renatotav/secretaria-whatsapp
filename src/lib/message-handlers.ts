@@ -238,7 +238,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           config,
           [
             {
-              date: today.toISOString(),
+              date: route.date || today.toISOString(),
+              purchaseDate: route.purchaseDate || today.toISOString(),
               description: `${route.description} - Parcela 1/${route.installments} (compra em ${compraEm})`,
               amount: route.amount,
               type: route.financeType,
@@ -257,6 +258,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             category: route.category,
             subcategory: route.subcategory,
             description: route.description,
+            date: route.date ? parseLocalDate(route.date) : new Date(),
+            purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : null,
             source: "whatsapp",
           },
         });

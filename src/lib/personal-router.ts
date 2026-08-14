@@ -42,6 +42,8 @@ export type PersonalRouteResult =
       subcategory: string;
       description: string;
       installments: number | null;
+      date: string | null;
+      purchaseDate: string | null;
       confirmation: string;
     }
   | {
@@ -94,6 +96,10 @@ Tipos:
    Ex: "Comprei um Samsung S25 de 291 no cartão do Bruno, em 17x" → expense,
    291, categoria "Financeiro", subcategoria "Parcelas no cartão", installments: 17
 
+   DATAS:
+   Se a mensagem especificar a data do vencimento (ou quando o dinheiro de fato sai/entra na conta), extraia em "financeDate" no formato ISO (ex: "2026-09-10T00:00:00.000Z"). Se especificar também quando a compra foi feita, extraia em "financePurchaseDate" no formato ISO.
+   Ex: "Mercantil 182, 58 e vencimento no cartão de crédito 10 de setembro" (hoje é 14/08/2026) -> financeDate: "2026-09-10T00:00:00.000Z", financePurchaseDate: "2026-08-14T00:00:00.000Z"
+
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
    qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
    quando nada mais se encaixa, inclusive mensagens curtas tipo "teste" ou "oi").
@@ -121,6 +127,8 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "financeSubcategory": "<subcategoria curta>",
   "financeDescription": "<descrição curta>",
   "installments": "número total de parcelas ou null",
+  "financeDate": "Data do vencimento em ISO 8601 ou null se não informado",
+  "financePurchaseDate": "Data da compra em ISO 8601 ou null se não informado",
   "diaryContent": "<texto real da anotação>",
   "mood": "pessimo|ruim|neutro|bom|otimo",
   "confirmation": "<confirmação curta e específica sobre o que foi registrado>"
@@ -148,6 +156,8 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         subcategory: (parsed.financeSubcategory as string) || "",
         description: (parsed.financeDescription as string) || message.slice(0, 120),
         installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
+        date: (parsed.financeDate as string) || null,
+        purchaseDate: (parsed.financePurchaseDate as string) || null,
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
     }
