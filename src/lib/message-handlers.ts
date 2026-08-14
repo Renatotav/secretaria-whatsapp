@@ -436,7 +436,7 @@ export async function projectAndInsertFinanceEntries(
           const futureDate = addMonths(baseDate, i - info.current);
           const futureDescription = `${info.baseDescription} - Parcela ${i}/${info.total} (compra em ${info.purchaseDate.split("-")[1]}/${info.purchaseDate.split("-")[0]}) (previsto)`;
           candidates.push({
-            entry: { ...e, description: futureDescription, date: futureDate.toISOString() },
+            entry: { ...e, description: futureDescription, date: futureDate.toISOString(), status: "pending" },
             date: futureDate,
             key: installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, futureDate),
           });
@@ -457,7 +457,7 @@ export async function projectAndInsertFinanceEntries(
       for (let i = 1; i <= SUBSCRIPTION_PROJECTION_MONTHS; i++) {
         const futureDate = addMonths(baseDate, i);
         candidates.push({
-          entry: { ...e, description: `${baseDescription} (previsto)`, date: futureDate.toISOString() },
+          entry: { ...e, description: `${baseDescription} (previsto)`, date: futureDate.toISOString(), status: "pending" },
           date: futureDate,
           key: subscriptionKey(baseDescription, e.amount, futureDate),
         });
@@ -520,6 +520,7 @@ export async function projectAndInsertFinanceEntries(
         description: e.description,
         date: parseLocalDate(e.date),
         purchaseDate: e.purchaseDate ? parseLocalDate(e.purchaseDate) : null,
+        status: e.status || "paid",
         source,
       })),
     });
