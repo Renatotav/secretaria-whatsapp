@@ -200,6 +200,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 
 export interface StatementEntry {
   date: string | null;
+  purchaseDate?: string;
   description: string;
   amount: number;
   type: "income" | "expense";
@@ -235,15 +236,15 @@ Para cada transação, identifique:
   - Se for EXTRATO DE CONTA CORRENTE/POUPANÇA: use a data de cada movimentação
     normalmente, como aparece na linha.
   - Se não der pra identificar nenhuma data, use null.
-- description: a descrição da transação como aparece no extrato (curta, real).
+- purchaseDate: a data original da compra no formato ISO 8601 (YYYY-MM-DD).
   Se for FATURA DE CARTÃO e a linha mostrar uma data de compra/parcela diferente
-  da data de vencimento (ex: "Parcela 6/10" com "14 fev" impresso na linha),
-  inclua essa data original da compra entre parênteses no final da descrição,
-  no formato "(compra em DD/MM)" — ex: "AMAZON BR - Parcela 6/10 (compra em
-  14/02)". Pra inferir o ano dessa data (raramente vem explícito): se o mês da
-  compra vier DEPOIS do mês de vencimento da fatura no calendário (ex: setembro
-  numa fatura que vence em agosto), foi no ano anterior ao do vencimento; caso
-  contrário, é o mesmo ano do vencimento.
+  da data de vencimento (ex: "14 fev" impresso na linha), extraia essa data.
+  Pra inferir o ano dessa data (raramente vem explícito): se o mês da compra
+  vier DEPOIS do mês de vencimento da fatura no calendário (ex: setembro numa
+  fatura que vence em agosto), foi no ano anterior ao do vencimento; caso
+  contrário, é o mesmo ano do vencimento. Se não for possível identificar, use null.
+- description: a descrição da transação como aparece no extrato (curta, real).
+  Se for FATURA DE CARTÃO, inclua também a indicação da parcela se houver (ex: "AMAZON BR - Parcela 6/10").
 - amount: valor numérico positivo (sem sinal, sem "R$").
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
 - category e subcategory: ${FINANCE_TAXONOMY}
@@ -254,7 +255,7 @@ institucional). Se não conseguir identificar nenhuma transação real, retorne
 uma lista vazia.
 
 Retorne APENAS um JSON válido no formato:
-{ "entries": [ { "date": "2026-08-05", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado" } ] }`;
+{ "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado" } ] }`;
 }
 
 function parseStatementResponse(content: string, source: string): StatementEntry[] {
@@ -273,6 +274,7 @@ function parseStatementResponse(content: string, source: string): StatementEntry
         if (!amount || !e.description) return null;
         return {
           date: typeof e.date === "string" ? e.date : null,
+          purchaseDate: typeof e.purchaseDate === "string" ? e.purchaseDate : undefined,
           description: String(e.description).slice(0, 200),
           amount: Math.abs(amount),
           type: e.type === "income" ? "income" : "expense",

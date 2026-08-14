@@ -51,6 +51,7 @@ export const POST = withErrorHandling(async (request: Request) => {
       subcategory: body.subcategory ?? "",
       description: body.description ?? "",
       date: parseLocalDate(body.date),
+      purchaseDate: body.purchaseDate ? parseLocalDate(body.purchaseDate) : null,
       source: "dashboard",
     },
   });
@@ -62,6 +63,7 @@ export const POST = withErrorHandling(async (request: Request) => {
     await projectAndInsertFinanceEntries(
       [{
         date: entry.date.toISOString(),
+        purchaseDate: entry.purchaseDate?.toISOString(),
         description: entry.description,
         amount: entry.amount,
         type: entry.type as "income" | "expense",
@@ -87,6 +89,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
   const body = await request.json();
   const data: Record<string, unknown> = { ...body };
   if (data.date) data.date = parseLocalDate(data.date as string);
+  if (data.purchaseDate) data.purchaseDate = parseLocalDate(data.purchaseDate as string);
   if (data.amount !== undefined) data.amount = Number(data.amount);
 
   const updated = await prisma.financeEntry.update({ where: { id }, data });
@@ -97,6 +100,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
     await projectAndInsertFinanceEntries(
       [{
         date: updated.date.toISOString(),
+        purchaseDate: updated.purchaseDate?.toISOString(),
         description: updated.description,
         amount: updated.amount,
         type: updated.type as "income" | "expense",

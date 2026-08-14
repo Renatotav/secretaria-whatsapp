@@ -159,6 +159,7 @@ model FinanceEntry {
   subcategory String   @default("")
   description String   @default("")
   date        DateTime @default(now())
+  purchaseDate DateTime?
   source      String   @default("dashboard")
   createdAt   DateTime @default(now())
 }

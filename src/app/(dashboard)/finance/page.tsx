@@ -9,6 +9,7 @@ interface FinanceEntry {
   subcategory: string;
   description: string;
   date: string;
+  purchaseDate?: string;
   source: string;
 }
 
@@ -107,8 +108,8 @@ function niceMax(max: number): number {
   return niceNormalized * magnitude;
 }
 
-const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: "", recurring: false };
-type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string };
+const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: "", purchaseDate: "", recurring: false };
+type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string; purchaseDate: string };
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
 function CategoryDonut({
@@ -255,11 +256,13 @@ function CategoryDonut({
 function MonthlyBarChart({
   monthly,
   selectedMonth,
+  selectedType,
   onSelectMonth,
 }: {
   monthly: { income: number; expense: number }[];
   selectedMonth: number;
-  onSelectMonth: (monthIndex: number) => void;
+  selectedType: "income" | "expense" | null;
+  onSelectMonth: (monthIndex: number, type: "income" | "expense" | null) => void;
 }) {
   const [hover, setHover] = useState<{ month: number; type: "income" | "expense" } | null>(null);
   const width = 640;
@@ -302,7 +305,7 @@ function MonthlyBarChart({
           const expenseH = (m.expense / max) * chartH;
           const isSelected = i === selectedMonth;
           return (
-            <g key={i} style={{ cursor: "pointer" }} onClick={() => onSelectMonth(i)}>
+            <g key={i} style={{ cursor: "pointer" }} onClick={() => onSelectMonth(i, null)}>
               {isSelected && (
                 <rect
                   x={gx + 1}
@@ -331,9 +334,10 @@ function MonthlyBarChart({
                 height={incomeH}
                 rx={3}
                 fill="var(--success)"
-                opacity={hover && hover.month === i && hover.type !== "income" ? 0.4 : 1}
+                opacity={hover && hover.month === i && hover.type !== "income" ? 0.4 : (isSelected && selectedType && selectedType !== "income" ? 0.4 : 1)}
                 onMouseEnter={() => setHover({ month: i, type: "income" })}
                 onMouseLeave={() => setHover(null)}
+                onClick={(e) => { e.stopPropagation(); onSelectMonth(i, isSelected && selectedType === "income" ? null : "income"); }}
               />
               <rect
                 x={gx + groupW / 2 + 2}
@@ -342,9 +346,10 @@ function MonthlyBarChart({
                 height={expenseH}
                 rx={3}
                 fill="var(--danger)"
-                opacity={hover && hover.month === i && hover.type !== "expense" ? 0.4 : 1}
+                opacity={hover && hover.month === i && hover.type !== "expense" ? 0.4 : (isSelected && selectedType && selectedType !== "expense" ? 0.4 : 1)}
                 onMouseEnter={() => setHover({ month: i, type: "expense" })}
                 onMouseLeave={() => setHover(null)}
+                onClick={(e) => { e.stopPropagation(); onSelectMonth(i, isSelected && selectedType === "expense" ? null : "expense"); }}
               />
               <text
                 x={gx + groupW / 2}
@@ -384,7 +389,7 @@ function MonthlyBarChart({
 }
 
 /* ── Linha: fluxo de caixa acumulado ─────────────────────────────────── */
-function CashFlowLine({ monthly }: { monthly: { income: number; expense: number }[] }) {
+function CashFlowLine({ monthly, selectedType }: { monthly: { income: number; expense: number }[], selectedType: "income" | "expense" | null }) {
   const [hover, setHover] = useState<number | null>(null);
   const width = 640;
   const height = 180;
@@ -393,7 +398,12 @@ function CashFlowLine({ monthly }: { monthly: { income: number; expense: number 
   const chartH = height - padding.top - padding.bottom;
 
   let running = 0;
-  const cumulative = monthly.map((m) => (running += m.income - m.expense));
+  const cumulative = monthly.map((m) => {
+    if (selectedType === "income") running += m.income;
+    else if (selectedType === "expense") running += m.expense;
+    else running += m.income - m.expense;
+    return running;
+  });
   const minV = Math.min(0, ...cumulative);
   const maxV = niceMax(Math.max(1, ...cumulative));
   const range = maxV - minV || 1;
@@ -622,6 +632,7 @@ function CategoryManager({
 
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
+  const [selectedType, setSelectedType] = useState<"income" | "expense" | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
@@ -694,15 +705,19 @@ export default function FinancePage() {
   }, [month, year]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSelectedCategory(null); setSelectedCategoryMatch([]); }, [month]);
+  useEffect(() => { setSelectedCategory(null); setSelectedCategoryMatch([]); setSelectedType(null); }, [month]);
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
   const balance = income - expense;
 
-  const visibleEntries = selectedCategory
-    ? entries.filter((e) => selectedCategoryMatch.includes(e.category || "Outros"))
-    : entries;
+  let visibleEntries = entries;
+  if (selectedType) {
+    visibleEntries = visibleEntries.filter((e) => e.type === selectedType);
+  }
+  if (selectedCategory) {
+    visibleEntries = visibleEntries.filter((e) => selectedCategoryMatch.includes(e.category || "Outros"));
+  }
 
   function selectCategory(category: string | null, matchNames: string[]) {
     setSelectedCategory(category);
@@ -734,6 +749,7 @@ export default function FinancePage() {
         subcategory: form.subcategory,
         description,
         date: form.date ? new Date(form.date).toISOString() : undefined,
+        purchaseDate: form.purchaseDate ? new Date(form.purchaseDate).toISOString() : undefined,
       }),
     });
     setForm(EMPTY_FORM);
@@ -770,6 +786,7 @@ export default function FinancePage() {
       subcategory: entry.subcategory,
       description: entry.description,
       date: entry.date.slice(0, 10),
+      purchaseDate: entry.purchaseDate ? entry.purchaseDate.slice(0, 10) : "",
     });
   }
 
@@ -785,6 +802,7 @@ export default function FinancePage() {
         subcategory: editForm.subcategory,
         description: editForm.description,
         date: new Date(editForm.date).toISOString(),
+        purchaseDate: editForm.purchaseDate ? new Date(editForm.purchaseDate).toISOString() : null,
       }),
     });
     setEditingId(null);
@@ -842,14 +860,20 @@ export default function FinancePage() {
             <MonthlyBarChart
               monthly={monthly}
               selectedMonth={Number(month.split("-")[1]) - 1}
-              onSelectMonth={(i) => setMonth(`${year}-${String(i + 1).padStart(2, "0")}`)}
+              selectedType={selectedType}
+              onSelectMonth={(i, type) => {
+                setMonth(`${year}-${String(i + 1).padStart(2, "0")}`);
+                setSelectedType(type);
+              }}
             />
           </div>
         </div>
 
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Fluxo de caixa acumulado — {year}</h2>
-          <CashFlowLine monthly={monthly} />
+          <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
+            {selectedType === "income" ? "Receitas acumuladas" : selectedType === "expense" ? "Despesas acumuladas" : "Fluxo de caixa acumulado"} — {year}
+          </h2>
+          <CashFlowLine monthly={monthly} selectedType={selectedType} />
         </div>
 
         {/* Add form */}
@@ -886,7 +910,7 @@ export default function FinancePage() {
               borderRadius: 12,
               padding: 16,
               display: "grid",
-              gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px 110px auto",
+              gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px 130px 110px auto",
               gap: 8,
               alignItems: "end",
             }}
@@ -947,8 +971,12 @@ export default function FinancePage() {
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data</label>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Venc.)</label>
               <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Compra)</label>
+              <input type="date" value={form.purchaseDate} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} title="Opcional: Data real da compra" />
             </div>
             <div>
               <label
@@ -970,10 +998,13 @@ export default function FinancePage() {
           </form>
         </div>
 
-        {selectedCategory && (
+        {(selectedCategory || selectedType) && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12, color: "var(--text-muted)" }}>
-            Filtrando por: <strong style={{ color: "var(--text)" }}>{selectedCategory}</strong>
-            <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => selectCategory(null, [])}>
+            Filtrando por: 
+            {selectedType && <strong style={{ color: selectedType === "income" ? "var(--success)" : "var(--danger)" }}>{selectedType === "income" ? "Receitas" : "Despesas"}</strong>}
+            {selectedType && selectedCategory && <span> e </span>}
+            {selectedCategory && <strong style={{ color: "var(--text)" }}>{selectedCategory}</strong>}
+            <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => { selectCategory(null, []); setSelectedType(null); }}>
               Limpar
             </button>
           </div>
@@ -1016,8 +1047,9 @@ export default function FinancePage() {
                     if (editingId === e.id) {
                       return (
                         <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
-                          <td style={{ padding: "6px 8px" }}>
-                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} />
+                          <td style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Vencimento" />
+                            <input type="date" value={editForm.purchaseDate} onChange={(ev) => setEditForm((f) => ({ ...f, purchaseDate: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Data da Compra" />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
                             <input
@@ -1074,7 +1106,10 @@ export default function FinancePage() {
 
                     return (
                       <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                        <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>{new Date(e.date).toLocaleDateString("pt-BR")}</td>
+                        <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+                          <div>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
+                          {e.purchaseDate && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Compra: {new Date(e.purchaseDate).toLocaleDateString("pt-BR")}</div>}
+                        </td>
                         <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>

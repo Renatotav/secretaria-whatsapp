@@ -451,6 +451,7 @@ export async function projectAndInsertFinanceEntries(
         subcategory: e.subcategory,
         description: e.description,
         date: parseLocalDate(e.date),
+        purchaseDate: e.purchaseDate ? parseLocalDate(e.purchaseDate) : null,
         source,
       })),
     });
