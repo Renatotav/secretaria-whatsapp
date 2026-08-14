@@ -822,7 +822,7 @@ export default function FinancePage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "24px 24px 60px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }} className="p-4 md:p-6">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -842,7 +842,7 @@ export default function FinancePage() {
         </div>
 
         {/* Summary cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "grid", gap: 12, marginBottom: 20 }} className="grid-cols-1 sm:grid-cols-3">
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Receitas</p>
             <p style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatMoney(income)}</p>
@@ -860,7 +860,7 @@ export default function FinancePage() {
         </div>
 
         {/* Charts */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 12, marginBottom: 12 }}>
+        <div style={{ display: "grid", gap: 12, marginBottom: 12 }} className="grid-cols-1 lg:grid-cols-[1fr_1.4fr]">
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Gastos por categoria — {MONTH_LABELS[Number(month.split("-")[1]) - 1]}</h2>
             <CategoryDonut entries={entries} selectedCategory={selectedCategory} onSelectCategory={selectCategory} />
@@ -925,10 +925,10 @@ export default function FinancePage() {
               borderRadius: 12,
               padding: 16,
               display: "grid",
-              gridTemplateColumns: "100px 110px 1fr 1fr 1fr 130px 130px 110px auto",
               gap: 8,
               alignItems: "end",
             }}
+            className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-[100px_110px_1fr_1fr_1fr_130px_130px_110px_auto]"
           >
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Tipo</label>
