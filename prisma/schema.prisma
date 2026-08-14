@@ -161,6 +161,7 @@ model FinanceEntry {
   description String   @default("")
   date        DateTime @default(now())
   purchaseDate DateTime?
+  paymentMethod String  @default("pix")
   status      String   @default("paid")
   source      String   @default("dashboard")
   createdAt   DateTime @default(now())

@@ -15,6 +15,7 @@ interface FinanceEntry {
   description: string;
   date: string;
   purchaseDate?: string;
+  paymentMethod: string;
   status: "paid" | "pending";
   source: string;
 }
@@ -118,8 +119,8 @@ function currentDay() {
   return new Date().toISOString().split("T")[0];
 }
 
-const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: currentDay(), purchaseDate: "", status: "paid" as "paid" | "pending", recurring: false };
-type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string; purchaseDate: string; status: "paid" | "pending" };
+const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: currentDay(), purchaseDate: "", paymentMethod: "pix", status: "paid" as "paid" | "pending", recurring: false };
+type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string; purchaseDate: string; paymentMethod: string; status: "paid" | "pending" };
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
 function CategoryDonut({
@@ -848,6 +849,7 @@ export default function FinancePage() {
       description: entry.description,
       date: entry.date.slice(0, 10),
       purchaseDate: entry.purchaseDate ? entry.purchaseDate.slice(0, 10) : "",
+      paymentMethod: entry.paymentMethod || "pix",
       status: entry.status,
     });
   }
@@ -865,6 +867,7 @@ export default function FinancePage() {
         description: editForm.description,
         date: new Date(editForm.date).toISOString(),
         purchaseDate: editForm.purchaseDate ? new Date(editForm.purchaseDate).toISOString() : null,
+        paymentMethod: editForm.paymentMethod,
         status: editForm.status,
       }),
     });
@@ -1140,6 +1143,7 @@ export default function FinancePage() {
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Categoria</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Subcategoria</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Descrição</th>
+                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Forma</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Status</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Origem</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500, textAlign: "right" }}>Valor</th>
@@ -1177,6 +1181,14 @@ export default function FinancePage() {
                               onChange={(ev) => setEditForm((f) => ({ ...f, description: ev.target.value }))}
                               style={{ width: 160, padding: "8px 6px" }}
                             />
+                          </td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <select value={editForm.paymentMethod} onChange={(ev) => setEditForm((f) => ({ ...f, paymentMethod: ev.target.value }))} style={{ width: 90, padding: "8px 6px" }}>
+                              <option value="pix">Pix</option>
+                              <option value="cartão">Cartão</option>
+                              <option value="boleto">Boleto</option>
+                              <option value="dinheiro">Dinheiro</option>
+                            </select>
                           </td>
                           <td style={{ padding: "6px 8px" }}>
                             <select value={editForm.status} onChange={(ev) => setEditForm((f) => ({ ...f, status: ev.target.value as "paid" | "pending" }))} style={{ width: 90, padding: "8px 6px" }}>
@@ -1223,6 +1235,9 @@ export default function FinancePage() {
                         <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", textTransform: "capitalize" }}>
+                          {e.paymentMethod || "Pix"}
+                        </td>
                         <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: e.status === "paid" ? "var(--success-dim)" : "var(--warning-dim)", color: e.status === "paid" ? "var(--success)" : "var(--warning)", border: `1px solid ${e.status === "paid" ? "var(--success)" : "var(--warning)"}` }}>
                             {e.type === "income" 

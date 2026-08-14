@@ -52,7 +52,9 @@ export const POST = withErrorHandling(async (request: Request) => {
       description: body.description ?? "",
       date: parseLocalDate(body.date),
       purchaseDate: body.purchaseDate ? parseLocalDate(body.purchaseDate) : null,
+      paymentMethod: body.paymentMethod || "pix",
       source: "dashboard",
+      status: body.status || "paid",
     },
   });
 
@@ -69,6 +71,8 @@ export const POST = withErrorHandling(async (request: Request) => {
         type: entry.type as "income" | "expense",
         category: entry.category,
         subcategory: entry.subcategory,
+        paymentMethod: entry.paymentMethod,
+        status: entry.status as "paid" | "pending",
       }],
       "dashboard"
     );

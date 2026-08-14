@@ -12,10 +12,25 @@ export async function GET() {
       },
     });
 
+    const resultCard = await prisma.financeEntry.updateMany({
+      where: {
+        OR: [
+          { category: { contains: "Cartão", mode: "insensitive" } },
+          { subcategory: { contains: "Cartão", mode: "insensitive" } },
+          { description: { contains: "Cartão", mode: "insensitive" } },
+          { description: { contains: "Parcela", mode: "insensitive" } },
+        ]
+      },
+      data: {
+        paymentMethod: "cartão",
+      },
+    });
+
     return NextResponse.json({ 
       success: true, 
-      count: result.count, 
-      message: "Contas previstas marcadas como pendentes com sucesso!" 
+      countPending: result.count, 
+      countCard: resultCard.count,
+      message: "Migração de parcelas e cartões concluída com sucesso!" 
     });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });

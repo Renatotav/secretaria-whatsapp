@@ -11,12 +11,8 @@ export async function GET() {
       where: {
         type: "expense",
         status: "pending",
+        paymentMethod: "cartão",
         date: { gte: startOfMonth },
-        OR: [
-          { category: { contains: "Cartão", mode: "insensitive" } },
-          { subcategory: { contains: "Cartão", mode: "insensitive" } },
-          { description: { contains: "Cartão", mode: "insensitive" } },
-        ]
       },
       orderBy: { date: "asc" }
     });
