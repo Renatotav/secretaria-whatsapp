@@ -1065,10 +1065,10 @@ export default function FinancePage() {
               borderRadius: 12,
               padding: 16,
               display: "grid",
-              gap: 8,
+              gap: 12,
               alignItems: "end",
             }}
-            className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-[115px_110px_1fr_1fr_1fr_130px_130px_110px_auto]"
+            className="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
           >
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Tipo</label>
@@ -1076,6 +1076,20 @@ export default function FinancePage() {
                 <option value="expense">Despesa</option>
                 <option value="income">Receita</option>
               </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Conta (Carteira)</label>
+              <input
+                list="finance-accounts-add"
+                value={form.account}
+                onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))}
+                placeholder="Ex: Ticket, BB..."
+              />
+              <datalist id="finance-accounts-add">
+                {Array.from(new Set(entries.map((e) => e.account).filter(Boolean))).map((acc) => (
+                  <option key={acc} value={acc} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Valor</label>
@@ -1089,7 +1103,7 @@ export default function FinancePage() {
                 required
               />
             </div>
-            <div>
+            <div style={{ gridColumn: "span 1" }}>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Categoria</label>
               <input
                 list="finance-categories-add"
@@ -1108,7 +1122,7 @@ export default function FinancePage() {
                 ))}
               </datalist>
             </div>
-            <div>
+            <div style={{ gridColumn: "span 1" }}>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
               <input
                 list="finance-subcategories-add"
@@ -1117,13 +1131,23 @@ export default function FinancePage() {
                 placeholder="Mercado"
               />
             </div>
-            <div>
+            <div style={{ gridColumn: "span 1" }}>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Descrição</label>
               <input
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 placeholder="Opcional"
               />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Forma Pag.</label>
+              <select value={form.paymentMethod} onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}>
+                <option value="pix">Pix</option>
+                <option value="cartao">Cartão</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="boleto">Boleto</option>
+                <option value="ticket">Ticket / Vale</option>
+              </select>
             </div>
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Venc.)</label>
@@ -1140,7 +1164,7 @@ export default function FinancePage() {
                 <option value="pending">{form.type === "income" ? "A receber" : "Pendente"}</option>
               </select>
             </div>
-            <div>
+            <div style={{ display: "flex", alignItems: "center" }}>
               <label
                 title="Repete todo mês automaticamente (ex: salário, aluguel)"
                 style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", height: 38, cursor: "pointer" }}
@@ -1192,6 +1216,11 @@ export default function FinancePage() {
                   <option key={s} value={s} />
                 ))}
               </datalist>
+              <datalist id="finance-accounts-edit">
+                {Array.from(new Set(entries.map((e) => e.account).filter(Boolean))).map((acc) => (
+                  <option key={acc} value={acc} />
+                ))}
+              </datalist>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
@@ -1199,6 +1228,7 @@ export default function FinancePage() {
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Categoria</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Subcategoria</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Descrição</th>
+                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Conta</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Forma</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Status</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Origem</th>
@@ -1236,6 +1266,15 @@ export default function FinancePage() {
                               value={editForm.description}
                               onChange={(ev) => setEditForm((f) => ({ ...f, description: ev.target.value }))}
                               style={{ width: 160, padding: "8px 6px" }}
+                            />
+                          </td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <input
+                              list="finance-accounts-edit"
+                              value={editForm.account}
+                              onChange={(ev) => setEditForm((f) => ({ ...f, account: ev.target.value }))}
+                              style={{ width: 100, padding: "8px 6px" }}
+                              placeholder="Ticket, BB..."
                             />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
@@ -1291,6 +1330,7 @@ export default function FinancePage() {
                         <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)", textTransform: "capitalize" }}>
                           {e.paymentMethod || "Pix"}
                         </td>
