@@ -10,5 +10,5 @@ export function parseLocalDate(dateStr: string | null | undefined): Date {
   if (!dateStr) return new Date();
   const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return new Date(dateStr);
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0);
 }
