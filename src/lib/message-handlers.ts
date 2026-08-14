@@ -245,24 +245,89 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               type: route.financeType,
               category: route.category,
               subcategory: route.subcategory,
+              status: route.status,
             },
           ],
           "a mensagem"
         );
         response = "";
       } else {
-        await prisma.financeEntry.create({
-          data: {
-            type: route.financeType,
-            amount: route.amount,
-            category: route.category,
-            subcategory: route.subcategory,
-            description: route.description,
-            date: route.date ? parseLocalDate(route.date) : new Date(),
-            purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : null,
-            source: "whatsapp",
-          },
-        });
+        let existingPending = null;
+        if (route.status === "paid") {
+          existingPending = await prisma.financeEntry.findFirst({
+            where: {
+              type: route.financeType,
+              status: "pending",
+              OR: [
+                { amount: route.amount },
+                { category: route.category }
+              ]
+            },
+            orderBy: { date: "asc" }
+          });
+        }
+
+        if (existingPending && route.status === "paid") {
+          await prisma.financeEntry.update({
+            where: { id: existingPending.id },
+            data: { 
+              status: "paid",
+              date: route.date ? parseLocalDate(route.date) : existingPending.date,
+            }
+          });
+          response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (R$ ${existingPending.amount.toFixed(2)})`;
+        } else {
+          await prisma.financeEntry.create({
+            data: {
+              type: route.financeType,
+              amount: route.amount,
+              category: route.category,
+              subcategory: route.subcategory,
+              description: route.description,
+              date: route.date ? parseLocalDate(route.date) : new Date(),
+              purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : null,
+              status: route.status,
+              source: "whatsapp",
+            },
+          });
+        }
+
+        // 🎯 Verificar alerta de orçamento se for uma despesa
+        if (route.financeType === "expense") {
+          const mDate = route.date ? parseLocalDate(route.date) : new Date();
+          const monthStr = `${mDate.getFullYear()}-${String(mDate.getMonth() + 1).padStart(2, "0")}`;
+          
+          const budget = await prisma.budget.findFirst({
+            where: {
+              category: route.category,
+              OR: [{ month: monthStr }, { month: "default" }],
+            },
+          });
+
+          if (budget) {
+            // Somar despesas daquele mês para a categoria
+            const startOfMonth = new Date(mDate.getFullYear(), mDate.getMonth(), 1);
+            const endOfMonth = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0, 23, 59, 59);
+            
+            const monthExpenses = await prisma.financeEntry.aggregate({
+              _sum: { amount: true },
+              where: {
+                type: "expense",
+                category: route.category,
+                date: { gte: startOfMonth, lte: endOfMonth }
+              }
+            });
+
+            const totalSpent = monthExpenses._sum.amount || 0;
+            const percent = (totalSpent / budget.amount) * 100;
+
+            if (percent >= 100) {
+              response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com esse gasto, você estourou o limite de ${route.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+            } else if (percent >= 80) {
+              response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+            }
+          }
+        }
       }
       break;
     case "diary":

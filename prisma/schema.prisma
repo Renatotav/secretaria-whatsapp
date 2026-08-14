@@ -160,8 +160,29 @@ model FinanceEntry {
   description String   @default("")
   date        DateTime @default(now())
   purchaseDate DateTime?
+  status      String   @default("paid")
   source      String   @default("dashboard")
   createdAt   DateTime @default(now())
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  month     String   @default("default") // "default" para todo mês ou "2026-08"
+  category  String
+  amount    Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SavingsGoal {
+  id            String   @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float    @default(0)
+  deadline      DateTime?
+  color         String   @default("#7c6dff")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model DiaryEntry {

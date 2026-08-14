@@ -44,6 +44,7 @@ export type PersonalRouteResult =
       installments: number | null;
       date: string | null;
       purchaseDate: string | null;
+      status: "paid" | "pending";
       confirmation: string;
     }
   | {
@@ -127,11 +128,12 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "financeSubcategory": "<subcategoria curta>",
   "financeDescription": "<descrição curta>",
   "installments": "número total de parcelas ou null",
-  "financeDate": "Data do vencimento em ISO 8601 ou null se não informado",
-  "financePurchaseDate": "Data da compra em ISO 8601 ou null se não informado",
+  "date": "ISO8601 de quando a despesa acontece/vence (se o usuário disser 'amanhã', calcule a data) ou null. Se for recorrente ou futuro, infira a data. ATENÇÃO MÁXIMA AO MÊS! Se ele disser 'proximo mes', coloque o proximo mes de fato.",
+  "purchaseDate": "ISO8601 da data real em que a compra foi feita (se aplicável), senão null. Se o usuário disser 'ontem fiz uma compra parcelada', a purchaseDate é ontem e a date da primeira parcela pode ser hoje ou no futuro.",
+  "status": "Obrigatório: 'paid' ou 'pending'. Se o usuário fala 'vou pagar', 'vence dia X', 'boleto de luz', assuma 'pending' (pendente). Se fala 'comprei', 'paguei', 'gastei', assuma 'paid' (pago).",
   "diaryContent": "<texto real da anotação>",
   "mood": "pessimo|ruim|neutro|bom|otimo",
-  "confirmation": "<confirmação curta e específica sobre o que foi registrado>"
+  "confirmation": "Sua resposta curta, como '💸 Anotado! Gasto de R$ X pendente para o dia Y.' ou '💰 Receita de R$ Z anotada!'"
 }`;
 
   const { content } = await generateResponse(
@@ -156,8 +158,9 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         subcategory: (parsed.financeSubcategory as string) || "",
         description: (parsed.financeDescription as string) || message.slice(0, 120),
         installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
-        date: (parsed.financeDate as string) || null,
-        purchaseDate: (parsed.financePurchaseDate as string) || null,
+        date: (parsed.date as string) || (parsed.financeDate as string) || null,
+        purchaseDate: (parsed.purchaseDate as string) || (parsed.financePurchaseDate as string) || null,
+        status: parsed.status === "pending" ? "pending" : "paid",
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
     }
@@ -216,6 +219,7 @@ export interface StatementEntry {
   type: "income" | "expense";
   category: string;
   subcategory: string;
+  status?: "paid" | "pending";
 }
 
 function buildStatementInstructions(ownerName: string): string {

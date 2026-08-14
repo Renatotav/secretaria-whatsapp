@@ -2,10 +2,12 @@ import { prisma } from "./prisma";
 import { generateDailySummary } from "./summarizer";
 import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders } from "./reminder";
+import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
+let lastFinanceReminderDate = "";
 let lastReminderHour = -1;
 
 export function startScheduler(): void {
@@ -64,6 +66,35 @@ export function startScheduler(): void {
           providerOpts,
           evolutionConfig
         );
+      }
+
+      // Finance reminders (09:00)
+      if (hhmm === "09:00" && lastFinanceReminderDate !== todayDate) {
+        lastFinanceReminderDate = todayDate;
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        
+        const pendings = await prisma.financeEntry.findMany({
+          where: {
+            type: "expense",
+            status: "pending",
+            date: { lte: endOfToday } // Hoje ou atrasado
+          }
+        });
+
+        if (pendings.length > 0) {
+          const lines = pendings.map(p => `- ${p.description || p.category} (R$ ${p.amount.toFixed(2)})`).join("\n");
+          const msg = `🚨 *Lembrete Financeiro*\nVocê tem ${pendings.length} conta(s) pendente(s) para hoje ou atrasadas:\n\n${lines}\n\nResponda dizendo "paguei a conta X" para eu dar baixa!`;
+          await sendTextWithTyping(
+            evolutionConfig.evolutionUrl,
+            evolutionConfig.evolutionApiKey,
+            evolutionConfig.instanceId,
+            config.ownerPhone,
+            msg,
+            20,
+            5
+          );
+        }
       }
 
       // Hourly reminders

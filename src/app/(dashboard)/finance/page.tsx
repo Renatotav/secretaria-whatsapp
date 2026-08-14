@@ -1,5 +1,10 @@
 "use client";
+
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { GoalsSection } from "./GoalsSection";
+import { BudgetsManager } from "./BudgetsManager";
+import { CreditCardsSection } from "./CreditCardsSection";
+import { InsightsModal } from "./InsightsModal";
 
 interface FinanceEntry {
   id: string;
@@ -10,6 +15,7 @@ interface FinanceEntry {
   description: string;
   date: string;
   purchaseDate?: string;
+  status: "paid" | "pending";
   source: string;
 }
 
@@ -108,16 +114,22 @@ function niceMax(max: number): number {
   return niceNormalized * magnitude;
 }
 
-const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: "", purchaseDate: "", recurring: false };
-type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string; purchaseDate: string };
+function currentDay() {
+  return new Date().toISOString().split("T")[0];
+}
+
+const EMPTY_FORM = { type: "expense", amount: "", category: "", subcategory: "", description: "", date: currentDay(), purchaseDate: "", status: "paid" as "paid" | "pending", recurring: false };
+type EditForm = { type: string; amount: string; category: string; subcategory: string; description: string; date: string; purchaseDate: string; status: "paid" | "pending" };
 
 /* ── Gráfico de pizza: gastos por categoria ─────────────────────────── */
 function CategoryDonut({
   entries,
+  budgets,
   selectedCategory,
   onSelectCategory,
 }: {
   entries: FinanceEntry[];
+  budgets: {id: string, category: string, amount: number}[];
   selectedCategory: string | null;
   onSelectCategory: (category: string | null, matchNames: string[]) => void;
 }) {
@@ -222,6 +234,8 @@ function CategoryDonut({
       <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 180 }}>
         {segments.map((seg, i) => {
           const isSelected = selectedCategory === seg.name;
+          const budget = budgets.find((b) => b.category === seg.name);
+          const percent = budget ? Math.min((seg.value / budget.amount) * 100, 100) : 0;
           return (
             <div
               key={seg.name}
@@ -230,20 +244,29 @@ function CategoryDonut({
               onClick={() => onSelectCategory(isSelected ? null : seg.name, isSelected ? [] : seg.matchNames)}
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 12,
+                flexDirection: "column",
+                gap: 4,
                 cursor: "pointer",
                 borderRadius: 6,
-                padding: "2px 4px",
+                padding: "4px",
                 background: isSelected ? "var(--accent-dim)" : "transparent",
                 opacity: selectedCategory === null || isSelected ? 1 : 0.5,
               }}
             >
-              <span style={{ width: 10, height: 10, borderRadius: 3, background: seg.color, flexShrink: 0 }} />
-              <span style={{ color: "var(--text)", flex: 1 }}>{seg.name}</span>
-              <span style={{ color: "var(--text-muted)" }}>{((seg.value / total) * 100).toFixed(0)}%</span>
-              <span style={{ color: "var(--text-muted)", minWidth: 70, textAlign: "right" }}>{formatMoney(seg.value)}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: seg.color, flexShrink: 0 }} />
+                <span style={{ color: "var(--text)", flex: 1 }}>{seg.name}</span>
+                {!budget && <span style={{ color: "var(--text-muted)" }}>{((seg.value / total) * 100).toFixed(0)}%</span>}
+                <span style={{ minWidth: 70, textAlign: "right", fontWeight: budget && seg.value >= budget.amount ? 700 : 400, color: budget && seg.value >= budget.amount ? "var(--danger)" : "var(--text-muted)" }}>{formatMoney(seg.value)}</span>
+              </div>
+              {budget && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 4, background: "var(--bg-hover)", borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${percent}%`, background: percent >= 90 ? "var(--danger)" : percent >= 75 ? "var(--warning)" : "var(--success)" }} />
+                  </div>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)" }}>de {formatMoney(budget.amount)}</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -642,10 +665,13 @@ export default function FinancePage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ type: "expense", amount: "", category: "", subcategory: "", description: "", date: "", purchaseDate: "" });
+  const [editForm, setEditForm] = useState<EditForm>(EMPTY_FORM);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customSubcategories, setCustomSubcategories] = useState<Record<string, string[]>>({});
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [budgets, setBudgets] = useState<{id: string, category: string, amount: number, month: string}[]>([]);
+  const [showBudgetsManager, setShowBudgetsManager] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
 
   useEffect(() => {
     setCustomCategories(loadFromStorage(CATEGORIES_STORAGE_KEY));
@@ -691,24 +717,48 @@ export default function FinancePage() {
   const editCategoryOptions = [...new Set([...categoriesForType(editForm.type), ...customCategories])];
   const editSubcategoryOptions = [...new Set([...subcategoriesFor(editForm.type, editForm.category), ...(customSubcategories[editForm.category] ?? [])])];
   const allCategoryNames = [...new Set([...categoriesForType("income"), ...categoriesForType("expense"), ...customCategories])];
+  const allExpenseCategoryNames = [...new Set([...categoriesForType("expense"), ...customCategories])];
 
   const year = month.split("-")[0];
+
+  async function saveBudget(category: string, amount: number, applyToAll: boolean) {
+    await fetch("/api/finance/budgets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, amount, month: applyToAll ? "default" : month }),
+    });
+    load();
+  }
+
+  async function deleteBudget(id: string) {
+    if (!confirm("Remover este orçamento?")) return;
+    await fetch("/api/finance/budgets", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    load();
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [monthRes, yearRes] = await Promise.all([
+      const [monthRes, yearRes, budgetsRes] = await Promise.all([
         fetch(`/api/finance?month=${month}`),
         fetch(`/api/finance?year=${year}`),
+        fetch(`/api/finance/budgets?month=${month}`),
       ]);
       const mData = await monthRes.json();
       const yData = await yearRes.json();
+      const bData = await budgetsRes.json();
       setEntries(Array.isArray(mData) ? mData : []);
       setYearEntries(Array.isArray(yData) ? yData : []);
+      setBudgets(Array.isArray(bData) ? bData : []);
     } catch (err) {
       console.error(err);
       setEntries([]);
       setYearEntries([]);
+      setBudgets([]);
     } finally {
       setLoading(false);
     }
@@ -760,6 +810,7 @@ export default function FinancePage() {
         description,
         date: form.date ? new Date(form.date).toISOString() : undefined,
         purchaseDate: form.purchaseDate ? new Date(form.purchaseDate).toISOString() : undefined,
+        status: form.status,
       }),
     });
     setForm(EMPTY_FORM);
@@ -797,6 +848,7 @@ export default function FinancePage() {
       description: entry.description,
       date: entry.date.slice(0, 10),
       purchaseDate: entry.purchaseDate ? entry.purchaseDate.slice(0, 10) : "",
+      status: entry.status,
     });
   }
 
@@ -813,6 +865,7 @@ export default function FinancePage() {
         description: editForm.description,
         date: new Date(editForm.date).toISOString(),
         purchaseDate: editForm.purchaseDate ? new Date(editForm.purchaseDate).toISOString() : null,
+        status: editForm.status,
       }),
     });
     setEditingId(null);
@@ -826,6 +879,9 @@ export default function FinancePage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)" }} onClick={() => setShowInsights(true)}>
+              ✨ Insights IA
+            </button>
             <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteMonth}>
               Apagar mês
             </button>
@@ -840,6 +896,8 @@ export default function FinancePage() {
             />
           </div>
         </div>
+
+        {showInsights && <InsightsModal month={month} onClose={() => setShowInsights(false)} />}
 
         {/* Summary cards */}
         <div style={{ display: "grid", gap: 12, marginBottom: 20 }} className="grid-cols-1 sm:grid-cols-3">
@@ -859,11 +917,34 @@ export default function FinancePage() {
           </div>
         </div>
 
+        {/* Metas de Economia */}
+        <GoalsSection />
+
+        {/* Faturas de Cartão de Crédito */}
+        <CreditCardsSection />
+
         {/* Charts */}
         <div style={{ display: "grid", gap: 12, marginBottom: 12 }} className="grid-cols-1 lg:grid-cols-[1fr_1.4fr]">
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
-            <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Gastos por categoria — {MONTH_LABELS[Number(month.split("-")[1]) - 1]}</h2>
-            <CategoryDonut entries={entries} selectedCategory={selectedCategory} onSelectCategory={selectCategory} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h2 style={{ fontSize: 13, fontWeight: 600 }}>Gastos por categoria — {MONTH_LABELS[Number(month.split("-")[1]) - 1]}</h2>
+              <div style={{ position: "relative" }}>
+                <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setShowBudgetsManager(!showBudgetsManager)}>
+                  🎯 Orçamentos
+                </button>
+                {showBudgetsManager && (
+                  <BudgetsManager
+                    budgets={budgets}
+                    categories={allExpenseCategoryNames}
+                    currentMonth={month}
+                    onClose={() => setShowBudgetsManager(false)}
+                    onSave={saveBudget}
+                    onDelete={deleteBudget}
+                  />
+                )}
+              </div>
+            </div>
+            <CategoryDonut entries={entries} budgets={budgets} selectedCategory={selectedCategory} onSelectCategory={selectCategory} />
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Receitas x despesas — {year}</h2>
@@ -994,6 +1075,13 @@ export default function FinancePage() {
               <input type="date" value={form.purchaseDate} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} title="Opcional: Data real da compra" />
             </div>
             <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Status</label>
+              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" }))}>
+                <option value="paid">Pago</option>
+                <option value="pending">Pendente</option>
+              </select>
+            </div>
+            <div>
               <label
                 title="Repete todo mês automaticamente (ex: salário, aluguel)"
                 style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", height: 38, cursor: "pointer" }}
@@ -1052,6 +1140,7 @@ export default function FinancePage() {
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Categoria</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Subcategoria</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Descrição</th>
+                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Status</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Origem</th>
                     <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500, textAlign: "right" }}>Valor</th>
                     <th style={{ padding: "10px 16px" }} />
@@ -1088,6 +1177,12 @@ export default function FinancePage() {
                               onChange={(ev) => setEditForm((f) => ({ ...f, description: ev.target.value }))}
                               style={{ width: 160, padding: "8px 6px" }}
                             />
+                          </td>
+                          <td style={{ padding: "6px 8px" }}>
+                            <select value={editForm.status} onChange={(ev) => setEditForm((f) => ({ ...f, status: ev.target.value as "paid" | "pending" }))} style={{ width: 90, padding: "8px 6px" }}>
+                              <option value="paid">Pago</option>
+                              <option value="pending">Pendente</option>
+                            </select>
                           </td>
                           <td style={{ padding: "6px 8px", color: "var(--text-dim)", whiteSpace: "nowrap", textAlign: "center" }} title={e.source === "whatsapp" ? "WhatsApp" : "Painel"}>
                             {e.source === "whatsapp" ? "📱" : "🖥️"}
@@ -1128,6 +1223,11 @@ export default function FinancePage() {
                         <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
+                        <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: e.status === "paid" ? "var(--success-dim)" : "var(--warning-dim)", color: e.status === "paid" ? "var(--success)" : "var(--warning)", border: `1px solid ${e.status === "paid" ? "var(--success)" : "var(--warning)"}` }}>
+                            {e.status === "paid" ? "Pago" : "Pendente"}
+                          </span>
+                        </td>
                         <td style={{ padding: "10px 16px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
                           {e.source === "whatsapp" ? "📱 WhatsApp" : "🖥️ Painel"}
                         </td>
