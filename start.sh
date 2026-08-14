@@ -1,4 +1,4 @@
 #!/bin/sh
-npx prisma migrate deploy
+npx prisma db push --accept-data-loss
 node /app/scheduler.mjs &
 node server.js
