@@ -938,7 +938,7 @@ export default function FinancePage() {
             >
               <option value="all">💳 Todas as Contas</option>
               <option value="Principal">🏦 Conta Principal</option>
-              {Array.from(new Set(financeEntries.map((e) => e.account).filter(a => a && a !== "Principal"))).map(acc => (
+              {Array.from(new Set(entries.map((e) => e.account).filter(a => a && a !== "Principal"))).map(acc => (
                 <option key={acc} value={acc}>
                   {acc.toLowerCase().includes("ticket") ? "🍔 " : "🏦 "}{acc}
                 </option>
