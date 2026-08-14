@@ -389,7 +389,7 @@ function MonthlyBarChart({
 }
 
 /* ── Linha: fluxo de caixa acumulado ─────────────────────────────────── */
-function CashFlowLine({ monthly, selectedType }: { monthly: { income: number; expense: number }[], selectedType: "income" | "expense" | null }) {
+function CashFlowLine({ monthly, selectedType, selectedMonth, onSelectMonth }: { monthly: { income: number; expense: number }[], selectedType: "income" | "expense" | null, selectedMonth: number, onSelectMonth: (m: number) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const width = 640;
   const height = 180;
@@ -434,13 +434,14 @@ function CashFlowLine({ monthly, selectedType }: { monthly: { income: number; ex
           <circle
             cx={p.x}
             cy={p.y}
-            r={hover === i ? 5 : 4}
-            fill="var(--accent)"
-            stroke="var(--bg-card)"
+            r={hover === i || selectedMonth === i ? 5 : 4}
+            fill={selectedMonth === i ? "var(--bg-card)" : "var(--accent)"}
+            stroke="var(--accent)"
             strokeWidth={2}
             style={{ cursor: "pointer" }}
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(null)}
+            onClick={() => onSelectMonth(i)}
           />
           <text x={p.x} y={height - 6} textAnchor="middle" fontSize={10} fill="var(--text-dim)">
             {MONTH_LABELS[i]}
@@ -882,7 +883,12 @@ export default function FinancePage() {
           <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
             {selectedType === "income" ? "Receitas acumuladas" : selectedType === "expense" ? "Despesas acumuladas" : "Fluxo de caixa acumulado"} — {year}
           </h2>
-          <CashFlowLine monthly={monthly} selectedType={selectedType} />
+          <CashFlowLine 
+            monthly={monthly} 
+            selectedType={selectedType} 
+            selectedMonth={Number(month.split("-")[1]) - 1}
+            onSelectMonth={(i) => setMonth(`${year}-${String(i + 1).padStart(2, "0")}`)}
+          />
         </div>
 
         {/* Add form */}
