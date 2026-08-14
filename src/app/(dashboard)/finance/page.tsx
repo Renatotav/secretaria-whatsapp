@@ -1144,7 +1144,9 @@ export default function FinancePage() {
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Forma Pag.</label>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                {form.type === "income" ? "Forma Rec." : "Forma Pag."}
+              </label>
               <select value={form.paymentMethod} onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}>
                 <option value="pix">Pix</option>
                 <option value="cartao">Cartão</option>
@@ -1154,13 +1156,17 @@ export default function FinancePage() {
               </select>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Venc.)</label>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                {form.type === "income" ? "Data (Receb.)" : "Data (Venc.)"}
+              </label>
               <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Compra)</label>
-              <input type="date" value={form.purchaseDate} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} title="Opcional: Data real da compra" />
-            </div>
+            {form.type !== "income" && (
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Compra)</label>
+                <input type="date" value={form.purchaseDate} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} title="Opcional: Data real da compra" />
+              </div>
+            )}
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Status</label>
               <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" }))}>
