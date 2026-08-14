@@ -32,6 +32,7 @@ interface Config {
   debounceSeconds: number;
   typingMsPerChar: number;
   typingMaxSeconds: number;
+  creditCardDueDay: number;
 }
 
 const DEFAULT: Config = {
@@ -64,6 +65,7 @@ const DEFAULT: Config = {
   debounceSeconds: 8,
   typingMsPerChar: 35,
   typingMaxSeconds: 8,
+  creditCardDueDay: 10,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -175,6 +177,19 @@ export default function ConfigPage() {
               value={config.ownerRole}
               onChange={(e) => set("ownerRole", e.target.value)}
               placeholder="Supervisor de Atendimento"
+            />
+          </Field>
+        </Section>
+
+        {/* Financeiro */}
+        <Section title="💳 Financeiro">
+          <Field label="Dia do vencimento do cartão" hint="O vencimento das parcelas de cartão será alocado automaticamente para este dia">
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={config.creditCardDueDay}
+              onChange={(e) => set("creditCardDueDay", Number(e.target.value))}
             />
           </Field>
         </Section>

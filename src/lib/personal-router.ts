@@ -59,7 +59,8 @@ export async function routePersonalMessage(
   ownerName: string,
   providerOpts: ProviderOptions,
   recentContext?: string,
-  customPrompt?: string
+  customPrompt?: string,
+  creditCardDueDay: number = 10
 ): Promise<PersonalRouteResult> {
   const systemPrompt = `Você é a secretária pessoal de ${ownerName}. Ele mandou uma
 mensagem para o próprio número do WhatsApp — é assim que ele te alimenta com
@@ -100,6 +101,7 @@ Tipos:
    DATAS:
    Se a mensagem especificar a data do vencimento (ou quando o dinheiro de fato sai/entra na conta), extraia em "financeDate" no formato ISO (ex: "2026-09-10T00:00:00.000Z"). Se especificar também quando a compra foi feita, extraia em "financePurchaseDate" no formato ISO.
    Ex: "Mercantil 182, 58 e vencimento no cartão de crédito 10 de setembro" (hoje é 14/08/2026) -> financeDate: "2026-09-10T00:00:00.000Z", financePurchaseDate: "2026-08-14T00:00:00.000Z"
+   Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (o mês atual se comprou longe do vencimento, ou o próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}). A "financePurchaseDate" deve refletir o dia exato da compra.
 
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
    qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão

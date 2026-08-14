@@ -39,6 +39,7 @@ model AgentConfig {
   debounceSeconds Int      @default(8)
   typingMsPerChar Int      @default(35)
   typingMaxSeconds Int     @default(8)
+  creditCardDueDay Int     @default(10)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

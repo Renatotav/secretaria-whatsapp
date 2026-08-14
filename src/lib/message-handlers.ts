@@ -202,7 +202,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     .map((m) => `${m.role === "user" ? "Dono" : "Secretária"}: ${m.content}`)
     .join("\n");
 
-  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt);
+  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay);
 
   if (!conv) {
     conv = await prisma.conversation.create({
@@ -413,7 +413,8 @@ const SUBSCRIPTION_PROJECTION_MONTHS = 11;
  */
 export async function projectAndInsertFinanceEntries(
   entries: StatementEntry[],
-  source: "whatsapp" | "dashboard" = "whatsapp"
+  source: "whatsapp" | "dashboard" = "whatsapp",
+  creditCardDueDay?: number
 ): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number }> {
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
   // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
@@ -434,6 +435,9 @@ export async function projectAndInsertFinanceEntries(
       if (info.current < info.total) {
         for (let i = info.current + 1; i <= info.total; i++) {
           const futureDate = addMonths(baseDate, i - info.current);
+          if (creditCardDueDay && (e.category === "Cartão" || e.category === "Financeiro" || e.description.toLowerCase().includes("parcela"))) {
+            futureDate.setDate(creditCardDueDay);
+          }
           const futureDescription = `${info.baseDescription} - Parcela ${i}/${info.total} (compra em ${info.purchaseDate.split("-")[1]}/${info.purchaseDate.split("-")[0]}) (previsto)`;
           candidates.push({
             entry: { ...e, description: futureDescription, date: futureDate.toISOString(), status: "pending" },
@@ -535,7 +539,7 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
     return;
   }
 
-  const { toInsert, duplicates, projected } = await projectAndInsertFinanceEntries(entries, "whatsapp");
+  const { toInsert, duplicates, projected } = await projectAndInsertFinanceEntries(entries, "whatsapp", config.creditCardDueDay);
 
   if (toInsert.length === 0) {
     await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já tinham sido importadas antes.`);
