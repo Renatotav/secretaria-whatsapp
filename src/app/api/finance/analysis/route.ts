@@ -46,12 +46,16 @@ export async function GET(request: Request) {
     let income = 0;
     let expense = 0;
     const categories: Record<string, number> = {};
+    const moods: Record<string, number> = {};
 
     for (const e of entries) {
       if (e.type === "income") income += e.amount;
       if (e.type === "expense") {
         expense += e.amount;
         categories[e.category] = (categories[e.category] || 0) + e.amount;
+        if (e.mood && e.mood !== "neutro") {
+          moods[e.mood] = (moods[e.mood] || 0) + e.amount;
+        }
       }
     }
 
@@ -59,6 +63,13 @@ export async function GET(request: Request) {
       .sort((a, b) => b[1] - a[1])
       .map(([cat, val]) => `- ${cat}: R$ ${val.toFixed(2)}`)
       .join("\n");
+
+    const moodText = Object.keys(moods).length > 0 
+      ? Object.entries(moods)
+          .sort((a, b) => b[1] - a[1])
+          .map(([m, val]) => `- ${m.toUpperCase()}: R$ ${val.toFixed(2)}`)
+          .join("\n")
+      : "Nenhum gasto com variação de humor registrada (tudo neutro).";
 
     const prompt = `Você é um consultor financeiro inteligente. Analise os gastos deste mês e dê dicas práticas de economia e organização. Seja direto, amigável e use formatação Markdown. Não seja muito longo.
 
@@ -68,7 +79,11 @@ Despesas: R$ ${expense.toFixed(2)}
 Saldo: R$ ${(income - expense).toFixed(2)}
 
 Gastos por Categoria:
-${categoryText}`;
+${categoryText}
+
+Gastos por Humor (Gasto Emocional):
+${moodText}
+(Nota: Se houver gastos expressivos em humores como "ruim" ou "pessimo", ofereça um breve insight sobre "gasto emocional")`;
 
     const { content } = await generateResponse([{ role: "user", content: prompt }], "Você é um consultor financeiro.", 0.7, 1000, providerOpts);
 
