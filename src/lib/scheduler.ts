@@ -39,33 +39,42 @@ export function startScheduler(): void {
       };
 
       // Daily summary
-      if (hhmm === config.summaryTime && lastSummaryDate !== todayDate) {
+      // Usa lógica `>=` em vez de `===` para evitar pular o minuto se o servidor estiver lento
+      if (hhmm >= config.summaryTime && lastSummaryDate !== todayDate) {
         lastSummaryDate = todayDate;
         const groups = await prisma.groupConfig.findMany({ where: { active: true } });
         for (const group of groups) {
-          await generateDailySummary(
-            group.groupJid,
-            group.groupName,
-            group.focus,
+          try {
+            await generateDailySummary(
+              group.groupJid,
+              group.groupName,
+              group.focus,
+              config.ownerName,
+              config.ownerRole,
+              config.ownerPhone,
+              providerOpts,
+              evolutionConfig
+            );
+          } catch (err) {
+            console.error(`Erro ao gerar resumo para o grupo ${group.groupName}:`, err);
+          }
+        }
+      }
+
+      // Weekly report (Sundays)
+      if (isSunday && hhmm >= config.weeklyTime && lastWeeklyDate !== todayDate) {
+        lastWeeklyDate = todayDate;
+        try {
+          await generateWeeklyReport(
             config.ownerName,
             config.ownerRole,
             config.ownerPhone,
             providerOpts,
             evolutionConfig
           );
+        } catch (err) {
+          console.error(`Erro ao gerar relatório semanal:`, err);
         }
-      }
-
-      // Weekly report (Sundays)
-      if (isSunday && hhmm === config.weeklyTime && lastWeeklyDate !== todayDate) {
-        lastWeeklyDate = todayDate;
-        await generateWeeklyReport(
-          config.ownerName,
-          config.ownerRole,
-          config.ownerPhone,
-          providerOpts,
-          evolutionConfig
-        );
       }
 
       // Finance reminders (09:00)

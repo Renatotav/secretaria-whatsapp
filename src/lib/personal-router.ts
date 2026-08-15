@@ -18,7 +18,7 @@ Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
 Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
 outro nome se nenhuma delas fizer sentido pro caso.`;
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary";
 
 export type PersonalRouteResult =
   | {
@@ -54,6 +54,12 @@ export type PersonalRouteResult =
       content: string;
       mood: string;
       confirmation: string;
+    }
+  | {
+      type: "savings_add";
+      goalName: string;
+      amount: number;
+      confirmation: string;
     };
 
 export async function routePersonalMessage(
@@ -79,11 +85,12 @@ Tipos:
    Ex: "Ligar para Isabela sobre chamado 1812793" → task
    Ex: "Pagar cartão sexta" → reminder
 
-2. agenda_query — pergunta sobre pendências/chamados/financeiro/grupos
+2. agenda_query — pergunta sobre pendências/chamados/financeiro/grupos/metas
    Ex: "O que tenho pendente hoje?" → pending_today
    Ex: "Quais chamados estão abertos?" → open_tickets
    Ex: "Quanto gastei esse mês?" → finance_summary
    Ex: "Resumo do grupo PJe ontem" → group_summary
+   Ex: "Como estão minhas metas?" ou "Quanto falta pro macbook?" → savings_summary
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
    ${FINANCE_TAXONOMY}
@@ -114,18 +121,22 @@ Tipos:
    Ex: "Hoje foi puxado no trabalho mas terminei o relatório" → mood "neutro" ou "bom"
    Ex: "teste" → diary, content: "teste", mood "neutro", confirmation reconhecendo que é um teste
 
+5. savings_add — guardar ou aportar dinheiro para uma Meta de Economia (SavingsGoal)
+   Ex: "Guarda 100 reais pra viagem" → type "savings_add", amount: 100, goalName: "viagem"
+   Ex: "Adiciona 50 no macbook" → type "savings_add", amount: 50, goalName: "macbook"
+
 IMPORTANTE: os valores abaixo são só EXEMPLOS DE FORMATO — nunca copie o texto
 literal deles. "confirmation" e os outros campos de texto sempre precisam ser
 gerados a partir da mensagem real do usuário, nunca um placeholder genérico.
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary",
   "financeType": "income|expense",
   "amount": 0,
   "financeCategory": "<categoria curta>",
@@ -139,6 +150,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "status": "Obrigatório: 'paid' ou 'pending'. Se o usuário fala 'vou pagar', 'vence dia X', 'boleto de luz', assuma 'pending' (pendente). Se fala 'comprei', 'paguei', 'gastei', assuma 'paid' (pago).",
   "diaryContent": "<texto real da anotação>",
   "mood": "pessimo|ruim|neutro|bom|otimo",
+  "goalName": "<nome da meta extraído da mensagem (para savings_add)>",
   "confirmation": "Sua resposta curta, como '💸 Anotado! Gasto de R$ X pendente para o dia Y.' ou '💰 Receita de R$ Z anotada!'"
 }`;
 
@@ -173,6 +185,15 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       };
     }
 
+    if (parsed.type === "savings_add") {
+      return {
+        type: "savings_add",
+        goalName: (parsed.goalName as string) || message.slice(0, 30),
+        amount: Number(parsed.amount) || 0,
+        confirmation: (parsed.confirmation as string) || "✅ Aporte anotado!",
+      };
+    }
+
     if (parsed.type === "diary") {
       const validMoods = ["pessimo", "ruim", "neutro", "bom", "otimo"];
       const mood = validMoods.includes(parsed.mood as string) ? (parsed.mood as string) : "neutro";
@@ -190,6 +211,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "open_tickets",
         "finance_summary",
         "group_summary",
+        "savings_summary",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)

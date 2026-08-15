@@ -22,3 +22,34 @@ export const GET = withErrorHandling(async (request: Request) => {
   });
   return NextResponse.json(reports);
 });
+
+export const POST = withErrorHandling(async (request: Request) => {
+  // Chamado pelo scheduler.mjs ou webhook externo
+  const config = await prisma.agentConfig.findFirst();
+  if (!config) return NextResponse.json({ error: "Configuração ausente" }, { status: 500 });
+
+  const { generateWeeklyReport } = await import("@/lib/weekly-report");
+
+  const providerOpts = {
+    aiProvider: config.aiProvider,
+    openaiApiKey: config.openaiApiKey,
+    openaiModel: config.openaiModel,
+    groqApiKey: config.groqApiKey,
+    groqModel: config.groqModel,
+  };
+  const evolutionConfig = {
+    evolutionUrl: config.evolutionUrl,
+    evolutionApiKey: config.evolutionApiKey,
+    instanceId: config.instanceId,
+  };
+
+  await generateWeeklyReport(
+    config.ownerName,
+    config.ownerRole,
+    config.ownerPhone,
+    providerOpts,
+    evolutionConfig
+  );
+
+  return NextResponse.json({ ok: true });
+});

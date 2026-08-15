@@ -61,3 +61,25 @@ export const DELETE = withErrorHandling(async (request: Request) => {
   await prisma.agendaItem.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 });
+
+export const POST = withErrorHandling(async (request: Request) => {
+  // Chamado pelo scheduler.mjs ou webhook externo para forçar execução de rotinas (ex: reminders)
+  const body = await request.json();
+  
+  if (body.action === "reminders") {
+    const config = await prisma.agentConfig.findFirst();
+    if (!config) return NextResponse.json({ error: "Configuração ausente" }, { status: 500 });
+    
+    const { checkPendingReminders } = await import("@/lib/reminder");
+    const evolutionConfig = {
+      evolutionUrl: config.evolutionUrl,
+      evolutionApiKey: config.evolutionApiKey,
+      instanceId: config.instanceId,
+    };
+    
+    await checkPendingReminders(config.ownerPhone, config.reminderHours, evolutionConfig);
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: "Ação não suportada" }, { status: 400 });
+});

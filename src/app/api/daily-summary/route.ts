@@ -22,3 +22,45 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   return NextResponse.json(summaries);
 });
+
+export const POST = withErrorHandling(async (request: Request) => {
+  // Chamado pelo scheduler.mjs ou webhook externo
+  const body = await request.json();
+  const groupJid = body.groupJid;
+  
+  if (!groupJid) return NextResponse.json({ error: "groupJid obrigatório" }, { status: 400 });
+
+  const config = await prisma.agentConfig.findFirst();
+  if (!config) return NextResponse.json({ error: "Configuração ausente" }, { status: 500 });
+
+  const group = await prisma.groupConfig.findUnique({ where: { groupJid } });
+  if (!group || !group.active) return NextResponse.json({ error: "Grupo inativo ou não encontrado" }, { status: 404 });
+
+  const { generateDailySummary } = await import("@/lib/summarizer");
+
+  const providerOpts = {
+    aiProvider: config.aiProvider,
+    openaiApiKey: config.openaiApiKey,
+    openaiModel: config.openaiModel,
+    groqApiKey: config.groqApiKey,
+    groqModel: config.groqModel,
+  };
+  const evolutionConfig = {
+    evolutionUrl: config.evolutionUrl,
+    evolutionApiKey: config.evolutionApiKey,
+    instanceId: config.instanceId,
+  };
+
+  await generateDailySummary(
+    group.groupJid,
+    group.groupName,
+    group.focus,
+    config.ownerName,
+    config.ownerRole,
+    config.ownerPhone,
+    providerOpts,
+    evolutionConfig
+  );
+
+  return NextResponse.json({ ok: true });
+});

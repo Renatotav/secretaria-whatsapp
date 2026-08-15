@@ -177,6 +177,15 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
     return `💰 *Financeiro do mês:*\nReceitas: R$ ${income.toFixed(2)}\nDespesas: R$ ${expense.toFixed(2)}\nSaldo: R$ ${(income - expense).toFixed(2)}`;
   }
 
+  if (intent === "savings_summary") {
+    const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
+    if (goals.length === 0) return "Nenhuma meta de economia encontrada.";
+    return `🎯 *Metas de Economia:*\n${goals.map((g) => {
+      const pct = (g.currentAmount / g.targetAmount) * 100;
+      return `• ${g.name}: R$ ${g.currentAmount.toFixed(2)} de R$ ${g.targetAmount.toFixed(2)} (${pct.toFixed(0)}%)`;
+    }).join("\n")}`;
+  }
+
   const summary = await prisma.dailySummary.findFirst({ orderBy: { createdAt: "desc" } });
   return summary ? summary.summary : "Nenhum resumo de grupo disponível ainda.";
 }
@@ -329,6 +338,26 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
             }
           }
+        }
+      }
+      break;
+    case "savings_add":
+      const goals = await prisma.savingsGoal.findMany();
+      if (goals.length === 0) {
+        response = `❌ Nenhuma meta de economia cadastrada para adicionar R$ ${route.amount.toFixed(2)}. Cadastre primeiro pelo painel!`;
+      } else {
+        const term = route.goalName.toLowerCase();
+        let targetGoal = goals.find((g) => g.name.toLowerCase() === term) 
+                      || goals.find((g) => g.name.toLowerCase().includes(term));
+        
+        if (!targetGoal) {
+          response = `❌ Não encontrei a meta "${route.goalName}". As metas que você tem são: ${goals.map((g) => g.name).join(", ")}.`;
+        } else {
+          await prisma.savingsGoal.update({
+            where: { id: targetGoal.id },
+            data: { currentAmount: targetGoal.currentAmount + route.amount }
+          });
+          response = `✅ Guardado R$ ${route.amount.toFixed(2)} em "${targetGoal.name}"!\n💰 Saldo atual da meta: R$ ${(targetGoal.currentAmount + route.amount).toFixed(2)} de R$ ${targetGoal.targetAmount.toFixed(2)}`;
         }
       }
       break;

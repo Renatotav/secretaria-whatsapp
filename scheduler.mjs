@@ -65,29 +65,33 @@ async function tick() {
     if (!config) return;
 
     const now = new Date();
-    const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    const todayDate = now.toISOString().split("T")[0];
-    const isSunday = now.getDay() === 0;
-    const currentHour = now.getHours();
+    // Converte explicitamente para BRT (UTC-3)
+    const brtMillis = now.getTime() - (3 * 60 * 60 * 1000);
+    const brtDate = new Date(brtMillis);
+
+    const hhmm = `${String(brtDate.getUTCHours()).padStart(2, "0")}:${String(brtDate.getUTCMinutes()).padStart(2, "0")}`;
+    const todayDate = brtDate.toISOString().split("T")[0];
+    const isSunday = brtDate.getUTCDay() === 0;
+    const currentHour = brtDate.getUTCHours();
 
     const summaryTime = config.summaryTime ?? "18:00";
     const weeklyTime = config.weeklyTime ?? "20:00";
 
-    if (hhmm === summaryTime && lastSummaryDate !== todayDate) {
+    if (hhmm >= summaryTime && lastSummaryDate !== todayDate) {
       lastSummaryDate = todayDate;
-      console.log(`[scheduler] Triggering daily summaries at ${hhmm}`);
+      console.log(`[scheduler] Triggering daily summaries at ${hhmm} BRT`);
       await triggerDailySummaries();
     }
 
-    if (isSunday && hhmm === weeklyTime && lastWeeklyDate !== todayDate) {
+    if (isSunday && hhmm >= weeklyTime && lastWeeklyDate !== todayDate) {
       lastWeeklyDate = todayDate;
-      console.log(`[scheduler] Triggering weekly report at ${hhmm}`);
+      console.log(`[scheduler] Triggering weekly report at ${hhmm} BRT`);
       await triggerWeeklyReport();
     }
 
     if (currentHour !== lastReminderHour) {
       lastReminderHour = currentHour;
-      console.log(`[scheduler] Checking reminders at hour ${currentHour}`);
+      console.log(`[scheduler] Checking reminders at hour ${currentHour} BRT`);
       await triggerReminders();
     }
   } catch (err) {
