@@ -38,6 +38,11 @@ export const GET = withErrorHandling(async (request: Request) => {
   const entries = await prisma.financeEntry.findMany({
     where: whereClause,
     orderBy: { date: "asc" },
+    include: {
+      _count: {
+        select: { invoiceItems: true }
+      }
+    }
   });
 
   return NextResponse.json(entries);

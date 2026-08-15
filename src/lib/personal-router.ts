@@ -388,3 +388,71 @@ bancária. ${buildStatementInstructions(ownerName)}`;
   const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
   return parseStatementResponse(content, "imagem");
 }
+
+export interface InvoiceItemEntry {
+  name: string;
+  category: string;
+  amount: number;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface InvoiceEntry {
+  date: string;
+  total: number;
+  category: string;
+  subcategory: string;
+  items: InvoiceItemEntry[];
+}
+
+export async function parseInvoiceImage(
+  base64: string,
+  mimetype: string,
+  providerOpts: ProviderOptions,
+  ownerName = "",
+  caption = ""
+): Promise<InvoiceEntry | null> {
+  const systemPrompt = `Você recebeu a foto de uma nota fiscal, cupom fiscal ou fatura.
+A legenda/texto do usuário enviada junto foi: "${caption}"
+
+Sua tarefa é extrair os metadados principais e a lista DETALHADA de cada produto/serviço cobrado.
+
+Metadados:
+- date: data do cupom no formato ISO 8601 (YYYY-MM-DD)
+- total: o valor TOTAL PAGO na nota (número, sem cifrão)
+- category e subcategory: Classifique a despesa global usando a taxonomia padrão:
+${FINANCE_TAXONOMY}
+
+Itens (produtos/serviços):
+Para CADA linha de produto/serviço, extraia:
+- name: nome do item como aparece na nota (ex: "HEINEKEN LATA 350ML")
+- category: classifique este PRODUTO específico com uma macro-categoria. Por exemplo, num supermercado, pode ser "Bebidas Alcoólicas", "Limpeza", "Carnes", "Petiscos", "Essenciais", etc.
+- quantity: quantidade comprada (número)
+- unitPrice: valor unitário do item (número)
+- amount: valor total pago pelo item (número, geralmente quantity * unitPrice)
+
+IMPORTANTE:
+- Retorne APENAS um JSON válido. Não coloque texto antes ou depois.
+
+Formato esperado:
+{
+  "date": "2026-08-15",
+  "total": 150.50,
+  "category": "Alimentação",
+  "subcategory": "Supermercado",
+  "items": [
+    { "name": "Cerveja", "category": "Bebidas Alcoólicas", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
+  ]
+}`;
+
+  try {
+    const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
+    const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
+    const parsed = JSON.parse(json) as InvoiceEntry;
+    if (!parsed.items || !Array.isArray(parsed.items)) return null;
+    return parsed;
+  } catch (err) {
+    console.error("[invoice] falha ao parsear JSON:", err);
+    return null;
+  }
+}

@@ -14,10 +14,16 @@ export const GET = withErrorHandling(async (request: Request) => {
     distinct: ["account"],
   });
 
-  const accounts = accountsData
-    .map(a => a.account)
-    .filter(Boolean)
-    .sort();
+  const uniqueAccounts = new Set<string>();
+  for (const a of accountsData) {
+    if (a.account) {
+      const trimmed = a.account.trim();
+      const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+      uniqueAccounts.add(capitalized);
+    }
+  }
+
+  const accounts = Array.from(uniqueAccounts).sort();
 
   return NextResponse.json(accounts);
 });

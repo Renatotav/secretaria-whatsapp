@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { GoalsSection } from "./GoalsSection";
 import { BudgetsManager } from "./BudgetsManager";
 import { CreditCardsSection } from "./CreditCardsSection";
 import { InsightsModal } from "./InsightsModal";
+import { InvoiceDrawer } from "./InvoiceDrawer";
 
 interface FinanceEntry {
   id: string;
@@ -19,6 +21,7 @@ interface FinanceEntry {
   account: string;
   status: "paid" | "pending";
   source: string;
+  _count?: { invoiceItems: number };
 }
 
 type FormState = {
@@ -706,6 +709,7 @@ export default function FinancePage() {
   const [budgets, setBudgets] = useState<{id: string, category: string, amount: number, month: string}[]>([]);
   const [showBudgetsManager, setShowBudgetsManager] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
 
   useEffect(() => {
     setCustomCategories(loadFromStorage(CATEGORIES_STORAGE_KEY));
@@ -927,6 +931,9 @@ export default function FinancePage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Link href="/finance/xray" className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)", textDecoration: "none" }}>
+              🔍 Raio-X
+            </Link>
             <button className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)" }} onClick={() => setShowInsights(true)}>
               ✨ Insights IA
             </button>
@@ -959,6 +966,7 @@ export default function FinancePage() {
         </div>
 
         {showInsights && <InsightsModal month={month} onClose={() => setShowInsights(false)} />}
+        {selectedInvoiceId && <InvoiceDrawer entryId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
 
         {/* Summary cards */}
         <div style={{ display: "grid", gap: 12, marginBottom: 20 }} className="grid-cols-1 sm:grid-cols-3">
@@ -1091,7 +1099,14 @@ export default function FinancePage() {
               <input
                 list="finance-accounts-add"
                 value={form.account}
-                onChange={(e) => setForm((f) => ({ ...f, account: e.target.value }))}
+                onChange={(e) => {
+                  const account = e.target.value;
+                  setForm((f) => ({
+                    ...f,
+                    account,
+                    paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                  }));
+                }}
                 placeholder="Ex: Ticket, BB..."
               />
               <datalist id="finance-accounts-add">
@@ -1152,7 +1167,12 @@ export default function FinancePage() {
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
                 {form.type === "income" ? "Forma Rec." : "Forma Pag."}
               </label>
-              <select value={form.paymentMethod} onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}>
+              <select 
+                value={form.paymentMethod} 
+                onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}
+                disabled={form.account.toLowerCase().includes("ticket")}
+                title={form.account.toLowerCase().includes("ticket") ? "Tickets só aceitam formato de Cartão" : undefined}
+              >
                 <option value="pix">Pix</option>
                 <option value="cartao">Cartão</option>
                 <option value="dinheiro">Dinheiro</option>
@@ -1287,13 +1307,26 @@ export default function FinancePage() {
                             <input
                               list="finance-accounts-edit"
                               value={editForm.account}
-                              onChange={(ev) => setEditForm((f) => ({ ...f, account: ev.target.value }))}
+                              onChange={(ev) => {
+                                const account = ev.target.value;
+                                setEditForm((f) => ({
+                                  ...f,
+                                  account,
+                                  paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                                }));
+                              }}
                               style={{ width: 100, padding: "8px 6px" }}
                               placeholder="Ticket, BB..."
                             />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
-                            <select value={editForm.paymentMethod} onChange={(ev) => setEditForm((f) => ({ ...f, paymentMethod: ev.target.value }))} style={{ width: 90, padding: "8px 6px" }}>
+                            <select 
+                              value={editForm.paymentMethod} 
+                              onChange={(ev) => setEditForm((f) => ({ ...f, paymentMethod: ev.target.value }))} 
+                              style={{ width: 90, padding: "8px 6px" }}
+                              disabled={editForm.account.toLowerCase().includes("ticket")}
+                              title={editForm.account.toLowerCase().includes("ticket") ? "Tickets só aceitam formato de Cartão" : undefined}
+                            >
                               <option value="pix">Pix</option>
                               <option value="cartão">Cartão</option>
                               <option value="boleto">Boleto</option>
@@ -1371,6 +1404,11 @@ export default function FinancePage() {
                           {e.type === "income" ? "+" : "-"} {formatMoney(e.amount)}
                         </td>
                         <td style={{ padding: "10px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          {e._count && e._count.invoiceItems > 0 && (
+                            <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px", marginRight: 4 }} onClick={() => setSelectedInvoiceId(e.id)} title="Ver itens da nota fiscal">
+                              🛒 Itens
+                            </button>
+                          )}
                           <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => startEdit(e)}>
                             Editar
                           </button>{" "}

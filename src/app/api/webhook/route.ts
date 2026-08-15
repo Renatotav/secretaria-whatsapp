@@ -10,6 +10,7 @@ import {
   handleGroupMessage,
   handleStatementDocument,
   handleStatementImage,
+  handleInvoiceImage,
   notifyOwner,
 } from "@/lib/message-handlers";
 import { extractPdfText } from "@/lib/pdf";
@@ -76,14 +77,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // Foto/print de extrato: mesma ideia, mas lida por visão em vez de texto —
-    // cobre PDFs sem texto extraível e quem já manda print direto.
+    // Foto/print de extrato OU nota fiscal: lida por visão em vez de texto —
+    // cobre PDFs sem texto extraível e quem já manda print direto ou nota fiscal.
     if (isSelfChat && rawMessage.imageMessage) {
-      console.log("[webhook] imagem recebida no canal pessoal, processando extrato por visão");
+      const caption = ((rawMessage.imageMessage as Record<string, string>).caption || "").toLowerCase();
+      const isInvoice = caption.includes("nota") || caption.includes("mercado") || caption.includes("fatura") || caption.includes("recibo");
+      
+      console.log(`[webhook] imagem recebida no canal pessoal (isInvoice=${isInvoice})`);
       try {
         const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "imageMessage", "image/jpeg");
         if (base64) {
-          await handleStatementImage(base64, mimetype);
+          if (isInvoice) {
+            await handleInvoiceImage(base64, mimetype, caption);
+          } else {
+            await handleStatementImage(base64, mimetype);
+          }
         } else {
           console.log("[webhook] imagem sem base64 disponível, avisando");
           await notifyOwner(config, "⚠️ Não consegui baixar essa imagem pra ler. Tenta mandar de novo.");

@@ -7,6 +7,7 @@ import {
   routePersonalMessage,
   parseStatementEntries,
   parseStatementImage,
+  parseInvoiceImage,
   type PersonalQueryIntent,
   type StatementEntry,
 } from "./personal-router";
@@ -616,6 +617,80 @@ export async function handleStatementImage(base64: string, mimetype: string): Pr
   const providerOpts = getProviderOpts(config);
   const entries = await parseStatementImage(base64, mimetype, providerOpts, config.ownerName);
   await saveStatementEntries(config, entries, "a imagem");
+}
+
+export async function handleInvoiceImage(base64: string, mimetype: string, caption: string): Promise<void> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config || !config.ownerPhone) return;
+
+  const providerOpts = getProviderOpts(config);
+  const invoice = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption);
+
+  if (!invoice || invoice.items.length === 0) {
+    await notifyOwner(config, `⚠️ Não consegui ler os itens dessa nota fiscal. A imagem pode estar embaçada.`);
+    return;
+  }
+
+  const calculatedTotal = invoice.items.reduce((acc, i) => acc + (i.amount || (i.quantity * i.unitPrice)), 0);
+  
+  if (Math.abs(calculatedTotal - invoice.total) > 2.0) {
+    await notifyOwner(config, `⚠️ *Conta não fechou!* O total lido na nota foi R$ ${invoice.total.toFixed(2)}, mas a soma dos ${invoice.items.length} itens deu R$ ${calculatedTotal.toFixed(2)}. Por segurança contra alucinações da IA, não salvei a nota. Tente mandar uma foto mais nítida.`);
+    return;
+  }
+
+  const entry = await prisma.financeEntry.create({
+    data: {
+      type: "expense",
+      amount: invoice.total,
+      category: invoice.category || "Alimentação",
+      subcategory: invoice.subcategory || "Supermercado",
+      description: `Nota Fiscal (${invoice.items.length} itens) - ${caption}`,
+      date: invoice.date ? parseLocalDate(invoice.date) : new Date(),
+      paymentMethod: "pix",
+      account: "Principal",
+      status: "paid",
+      source: "whatsapp",
+      invoiceItems: {
+        create: invoice.items.map(i => ({
+          name: i.name,
+          category: i.category,
+          amount: i.amount,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice
+        }))
+      }
+    }
+  });
+
+  let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)`;
+
+  const budget = await prisma.budget.findFirst({
+    where: {
+      category: invoice.category,
+      OR: [{ month: "default" }],
+    },
+  });
+
+  if (budget) {
+    const startOfMonth = new Date(entry.date.getFullYear(), entry.date.getMonth(), 1);
+    const endOfMonth = new Date(entry.date.getFullYear(), entry.date.getMonth() + 1, 0, 23, 59, 59);
+    
+    const monthExpenses = await prisma.financeEntry.aggregate({
+      _sum: { amount: true },
+      where: { type: "expense", category: invoice.category, date: { gte: startOfMonth, lte: endOfMonth } }
+    });
+
+    const totalSpent = monthExpenses._sum.amount || 0;
+    const percent = (totalSpent / budget.amount) * 100;
+
+    if (percent >= 100) {
+      response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com essa nota, você estourou o limite de ${invoice.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+    } else if (percent >= 80) {
+      response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do limite de ${invoice.category}! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+    }
+  }
+
+  await notifyOwner(config, response);
 }
 
 export interface PrivateMessageMeta {
