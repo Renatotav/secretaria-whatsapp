@@ -183,7 +183,7 @@ function CategoryDonut({
     const result = top.map(([name, value], i) => ({ name, value, color: CATEGORY_COLORS[i], matchNames: [name] }));
     // "Outros" aqui pode juntar VÁRIAS categorias reais (tudo além do top 7) —
     // guarda os nomes reais que compõem a fatia pra filtrar a tabela certo.
-    if (restTotal > 0) result.push({ name: "Outros", value: restTotal, color: OTHER_COLOR, matchNames: rest.map(([name]) => name) });
+    if (restTotal > 0) result.push({ name: "Demais", value: restTotal, color: OTHER_COLOR, matchNames: rest.map(([name]) => name) });
     return result;
   }, [entries]);
 
