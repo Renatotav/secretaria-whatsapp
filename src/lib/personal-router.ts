@@ -402,7 +402,7 @@ export interface InvoiceEntry {
   total: number;
   category: string;
   subcategory: string;
-  paymentMethod: "cartão" | "pix" | "boleto" | "dinheiro";
+  paymentMethod: "cartão" | "pix" | "boleto" | "dinheiro" | "ticket";
   account: string;
   status: "paid" | "pending";
   items: InvoiceItemEntry[];
@@ -425,9 +425,9 @@ Metadados:
 - total: o valor TOTAL PAGO na nota (número, sem cifrão)
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
-- paymentMethod: descubra a forma de pagamento (cartão, pix, boleto ou dinheiro). Procure na foto (ex: "CARTAO CREDITO") ou na legenda enviada ("${caption}"). O padrão é "pix".
+- paymentMethod: descubra a forma de pagamento ("cartão", "pix", "boleto", "dinheiro", ou "ticket"). Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício, use "ticket". Procure na foto (ex: "CARTAO CREDITO") ou na legenda. O padrão é "pix".
 - account: a conta usada. Se a legenda disser "ticket", "nubank", "inter", coloque aqui. O padrão é "Principal" ou "Cartão de Crédito". Se for ticket/vale alimentação, use "Ticket Alimentação".
-- status: "paid" se já foi pago (pix, dinheiro, débito), ou "pending" se for no cartão de crédito ou boleto a vencer.
+- status: "paid" se já foi debitado na hora (pix, dinheiro, débito, ticket/vale alimentação), ou "pending" se for no cartão de crédito ou boleto a vencer.
 
 Itens (produtos/serviços):
 Para CADA linha de produto/serviço, extraia:
