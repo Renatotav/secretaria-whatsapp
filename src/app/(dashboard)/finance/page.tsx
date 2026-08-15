@@ -1095,24 +1095,49 @@ export default function FinancePage() {
             </div>
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Conta (Carteira)</label>
-              <input
-                list="finance-accounts-add"
-                value={form.account}
-                onChange={(e) => {
-                  const account = e.target.value;
-                  setForm((f) => ({
-                    ...f,
-                    account,
-                    paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
-                  }));
-                }}
-                placeholder="Ex: Ticket, BB..."
-              />
-              <datalist id="finance-accounts-add">
-                {allAccounts.map((acc) => (
-                  <option key={acc} value={acc} />
-                ))}
-              </datalist>
+              {allAccounts.includes(form.account) || form.account === "" ? (
+                <select
+                  value={form.account || "Principal"}
+                  onChange={(e) => {
+                    if (e.target.value === "NEW") {
+                      setForm((f) => ({ ...f, account: "Nova Conta" }));
+                    } else {
+                      const account = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        account,
+                        paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                      }));
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                >
+                  {allAccounts.map((acc) => (
+                    <option key={acc} value={acc}>{acc}</option>
+                  ))}
+                  <option value="NEW">➕ Digitar Nova Conta...</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={form.account}
+                    onChange={(e) => {
+                      const account = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        account,
+                        paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                      }));
+                    }}
+                    placeholder="Nome da conta..."
+                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
+                    autoFocus
+                  />
+                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, account: "Principal" }))} style={{ padding: "0 8px" }} title="Voltar">
+                    x
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Valor</label>
@@ -1128,31 +1153,73 @@ export default function FinancePage() {
             </div>
             <div style={{ gridColumn: "span 1" }}>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Categoria</label>
-              <input
-                list="finance-categories-add"
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                placeholder="Alimentação"
-              />
-              <datalist id="finance-categories-add">
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-              <datalist id="finance-subcategories-add">
-                {subcategoryOptions.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
+              {categoryOptions.includes(form.category) || form.category === "" ? (
+                <select
+                  value={form.category || ""}
+                  onChange={(e) => {
+                    if (e.target.value === "NEW") {
+                      setForm((f) => ({ ...f, category: "Nova Categoria" }));
+                    } else {
+                      setForm((f) => ({ ...f, category: e.target.value }));
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                >
+                  <option value="" disabled>Selecione...</option>
+                  {categoryOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                  <option value="NEW">➕ Digitar Nova...</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={form.category}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    placeholder="Alimentação"
+                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
+                    autoFocus
+                  />
+                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, category: categoryOptions[0] || "" }))} style={{ padding: "0 8px" }} title="Voltar">
+                    x
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: "span 1" }}>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
-              <input
-                list="finance-subcategories-add"
-                value={form.subcategory}
-                onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
-                placeholder="Mercado"
-              />
+              {subcategoryOptions.includes(form.subcategory) || form.subcategory === "" ? (
+                <select
+                  value={form.subcategory || ""}
+                  onChange={(e) => {
+                    if (e.target.value === "NEW") {
+                      setForm((f) => ({ ...f, subcategory: "Nova Subcategoria" }));
+                    } else {
+                      setForm((f) => ({ ...f, subcategory: e.target.value }));
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                >
+                  <option value="" disabled>Selecione...</option>
+                  {subcategoryOptions.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  <option value="NEW">➕ Digitar Nova...</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={form.subcategory}
+                    onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
+                    placeholder="Mercado"
+                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
+                    autoFocus
+                  />
+                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, subcategory: subcategoryOptions[0] || "" }))} style={{ padding: "0 8px" }} title="Voltar">
+                    x
+                  </button>
+                </div>
+              )}
             </div>
             <div style={{ gridColumn: "span 1" }}>
               <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Descrição</label>
@@ -1240,21 +1307,6 @@ export default function FinancePage() {
           )}
           {!loading && visibleEntries.length > 0 && (
             <div style={{ overflowX: "auto" }}>
-              <datalist id="finance-categories-edit">
-                {editCategoryOptions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-              <datalist id="finance-subcategories-edit">
-                {editSubcategoryOptions.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
-              <datalist id="finance-accounts-edit">
-                {allAccounts.map((acc) => (
-                  <option key={acc} value={acc} />
-                ))}
-              </datalist>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
@@ -1280,20 +1332,70 @@ export default function FinancePage() {
                             <input type="date" value={editForm.purchaseDate} onChange={(ev) => setEditForm((f) => ({ ...f, purchaseDate: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Data da Compra" />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
-                            <input
-                              list="finance-categories-edit"
-                              value={editForm.category}
-                              onChange={(ev) => setEditForm((f) => ({ ...f, category: ev.target.value }))}
-                              style={{ width: 90, padding: "8px 6px" }}
-                            />
+                            {editCategoryOptions.includes(editForm.category) || editForm.category === "" ? (
+                              <select
+                                value={editForm.category || ""}
+                                onChange={(ev) => {
+                                  if (ev.target.value === "NEW") {
+                                    setEditForm((f) => ({ ...f, category: "Nova Categoria" }));
+                                  } else {
+                                    setEditForm((f) => ({ ...f, category: ev.target.value }));
+                                  }
+                                }}
+                                style={{ width: 100, padding: "8px 6px" }}
+                              >
+                                <option value="" disabled>Selecione...</option>
+                                {editCategoryOptions.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                                <option value="NEW">➕ Digitar...</option>
+                              </select>
+                            ) : (
+                              <div style={{ display: "flex", gap: 2 }}>
+                                <input
+                                  value={editForm.category}
+                                  onChange={(ev) => setEditForm((f) => ({ ...f, category: ev.target.value }))}
+                                  style={{ width: 80, padding: "8px 6px" }}
+                                  autoFocus
+                                />
+                                <button type="button" className="btn-ghost" onClick={() => setEditForm(f => ({ ...f, category: editCategoryOptions[0] || "" }))} style={{ padding: "0 4px" }} title="Voltar">
+                                  x
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: "6px 8px" }}>
-                            <input
-                              list="finance-subcategories-edit"
-                              value={editForm.subcategory}
-                              onChange={(ev) => setEditForm((f) => ({ ...f, subcategory: ev.target.value }))}
-                              style={{ width: 90, padding: "8px 6px" }}
-                            />
+                            {editSubcategoryOptions.includes(editForm.subcategory) || editForm.subcategory === "" ? (
+                              <select
+                                value={editForm.subcategory || ""}
+                                onChange={(ev) => {
+                                  if (ev.target.value === "NEW") {
+                                    setEditForm((f) => ({ ...f, subcategory: "Nova Subcategoria" }));
+                                  } else {
+                                    setEditForm((f) => ({ ...f, subcategory: ev.target.value }));
+                                  }
+                                }}
+                                style={{ width: 100, padding: "8px 6px" }}
+                              >
+                                <option value="" disabled>Selecione...</option>
+                                {editSubcategoryOptions.map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                                <option value="NEW">➕ Digitar...</option>
+                              </select>
+                            ) : (
+                              <div style={{ display: "flex", gap: 2 }}>
+                                <input
+                                  value={editForm.subcategory}
+                                  onChange={(ev) => setEditForm((f) => ({ ...f, subcategory: ev.target.value }))}
+                                  style={{ width: 80, padding: "8px 6px" }}
+                                  autoFocus
+                                />
+                                <button type="button" className="btn-ghost" onClick={() => setEditForm(f => ({ ...f, subcategory: editSubcategoryOptions[0] || "" }))} style={{ padding: "0 4px" }} title="Voltar">
+                                  x
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: "6px 8px" }}>
                             <input
@@ -1303,20 +1405,49 @@ export default function FinancePage() {
                             />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
-                            <input
-                              list="finance-accounts-edit"
-                              value={editForm.account}
-                              onChange={(ev) => {
-                                const account = ev.target.value;
-                                setEditForm((f) => ({
-                                  ...f,
-                                  account,
-                                  paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
-                                }));
-                              }}
-                              style={{ width: 100, padding: "8px 6px" }}
-                              placeholder="Ticket, BB..."
-                            />
+                            {allAccounts.includes(editForm.account) || editForm.account === "" ? (
+                              <select
+                                value={editForm.account || "Principal"}
+                                onChange={(ev) => {
+                                  if (ev.target.value === "NEW") {
+                                    setEditForm((f) => ({ ...f, account: "Nova Conta" }));
+                                  } else {
+                                    const account = ev.target.value;
+                                    setEditForm((f) => ({
+                                      ...f,
+                                      account,
+                                      paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                                    }));
+                                  }
+                                }}
+                                style={{ width: 110, padding: "8px 6px" }}
+                              >
+                                {allAccounts.map((acc) => (
+                                  <option key={acc} value={acc}>{acc}</option>
+                                ))}
+                                <option value="NEW">➕ Digitar...</option>
+                              </select>
+                            ) : (
+                              <div style={{ display: "flex", gap: 2 }}>
+                                <input
+                                  value={editForm.account}
+                                  onChange={(ev) => {
+                                    const account = ev.target.value;
+                                    setEditForm((f) => ({
+                                      ...f,
+                                      account,
+                                      paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                                    }));
+                                  }}
+                                  style={{ width: 80, padding: "8px 6px" }}
+                                  placeholder="Ticket..."
+                                  autoFocus
+                                />
+                                <button type="button" className="btn-ghost" onClick={() => setEditForm(f => ({ ...f, account: "Principal" }))} style={{ padding: "0 4px" }} title="Voltar">
+                                  x
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: "6px 8px" }}>
                             <select 
