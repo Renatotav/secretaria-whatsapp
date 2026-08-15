@@ -29,7 +29,7 @@ export async function generateWeeklyReport(
   const existing = await prisma.weeklyReport.findFirst({ where: { weekStart } });
   if (existing) return;
 
-  const [summaries, agendaItems, tickets, briefings] = await Promise.all([
+  const [summaries, agendaItems, tickets, briefings, finances] = await Promise.all([
     prisma.dailySummary.findMany({
       where: { date: { gte: weekStart, lte: weekEnd } },
       orderBy: { date: "asc" },
@@ -43,6 +43,10 @@ export async function generateWeeklyReport(
     prisma.briefing.findMany({
       where: { receivedAt: { gte: new Date(weekStart) } },
     }),
+    prisma.financeEntry.findMany({
+      where: { date: { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") } },
+      orderBy: { date: "asc" },
+    }),
   ]);
 
   const dataText = [
@@ -54,6 +58,8 @@ export async function generateWeeklyReport(
     tickets.map((t) => `${t.ticketId} [${t.status}] ${t.groupName}`).join("\n"),
     "=== CONTATOS PRIVADOS ===",
     briefings.map((b) => `${b.contactName} [${b.urgency}]: ${b.subject}`).join("\n"),
+    "=== FINANÇAS DA SEMANA ===",
+    finances.map((f) => `[${f.type === "income" ? "RECEITA" : "DESPESA"}] ${f.category}${f.subcategory ? ` (${f.subcategory})` : ""} - R$ ${f.amount.toFixed(2)} (${f.status})`).join("\n"),
   ].join("\n\n");
 
   const startFormatted = new Date(weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -66,9 +72,10 @@ Inclua:
 1. Visão geral da semana
 2. Chamados: abertos, resolvidos, escalados, recorrentes
 3. Tarefas: concluídas vs pendentes
-4. Equipe: padrões (ausências, quem mais aciona você)
-5. Alertas para a próxima semana
-6. Uma sugestão de prioridade para segunda-feira
+4. Finanças: Análise rápida de entradas vs saídas e os maiores gastos da semana
+5. Equipe: padrões (ausências, quem mais aciona você)
+6. Alertas para a próxima semana
+7. Uma sugestão de prioridade para segunda-feira
 
 Formato para WhatsApp:
 📊 *Relatório Semanal*
@@ -77,6 +84,7 @@ _semana de ${startFormatted} a ${endFormatted}_
 *📈 Visão Geral:* [resumo executivo]
 *🎫 Chamados:* Abertos: X | Resolvidos: X | Escalados: X
 *✅ Tarefas:* Concluídas: X | Pendentes: X
+*💰 Finanças:* Entrou: R$ X | Saiu: R$ X | Destaque: [maior despesa/comentário]
 *👥 Equipe:* [padrões observados]
 *⚠️ Atenção:* [alertas]
 *💡 Prioridade segunda:* [sugestão]`;
