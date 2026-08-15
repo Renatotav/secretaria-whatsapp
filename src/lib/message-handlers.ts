@@ -288,6 +288,23 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           });
           response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (R$ ${existingPending.amount.toFixed(2)})`;
         } else {
+          let finalMood = route.mood || "neutro";
+          
+          if (finalMood === "neutro") {
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date();
+            todayEnd.setHours(23, 59, 59, 999);
+            
+            const todayDiary = await prisma.diaryEntry.findFirst({
+              where: { date: { gte: todayStart, lte: todayEnd }, mood: { not: "" } },
+              orderBy: { date: "desc" }
+            });
+            if (todayDiary && todayDiary.mood && todayDiary.mood !== "neutro") {
+              finalMood = todayDiary.mood;
+            }
+          }
+
           await prisma.financeEntry.create({
             data: {
               type: route.financeType,
@@ -300,10 +317,14 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               paymentMethod: route.paymentMethod,
               account: route.account,
               status: route.status,
-              mood: route.mood || "neutro",
+              mood: finalMood,
               source: "whatsapp",
             },
           });
+
+          if (finalMood === "neutro" && route.financeType === "expense" && route.amount >= 100) {
+            response += `\n\n🤔 Percebi esse gasto mais elevado. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
+          }
         }
 
         // 🎯 Verificar alerta de orçamento se for uma despesa
@@ -372,6 +393,20 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           source: "whatsapp",
         },
       });
+      if (route.mood && route.mood !== "neutro") {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        await prisma.financeEntry.updateMany({
+          where: {
+            date: { gte: todayStart, lte: todayEnd },
+            mood: "neutro",
+            source: "whatsapp" // só atualiza as criadas pelo whatsapp (bot/img)
+          },
+          data: { mood: route.mood }
+        });
+      }
       break;
     case "agenda_query":
       response = await buildQueryResponse(route.queryIntent);
@@ -649,6 +684,20 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     invoiceDate = new Date(invoiceDate.getFullYear(), dueMonth, config.creditCardDueDay);
   }
 
+  let finalMood = "neutro";
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+  
+  const todayDiary = await prisma.diaryEntry.findFirst({
+    where: { date: { gte: todayStart, lte: todayEnd }, mood: { not: "" } },
+    orderBy: { date: "desc" }
+  });
+  if (todayDiary && todayDiary.mood && todayDiary.mood !== "neutro") {
+    finalMood = todayDiary.mood;
+  }
+
   const entry = await prisma.financeEntry.create({
     data: {
       type: "expense",
@@ -661,7 +710,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
       paymentMethod: invoice.paymentMethod || "pix",
       account: invoice.account || "Principal",
       status: invoice.status || "paid",
-      mood: "neutro",
+      mood: finalMood,
       source: "whatsapp",
       invoiceItems: {
         create: invoice.items.map(i => ({
@@ -676,6 +725,10 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   });
 
   let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)`;
+
+  if (finalMood === "neutro") {
+    response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
+  }
 
   const budget = await prisma.budget.findFirst({
     where: {
