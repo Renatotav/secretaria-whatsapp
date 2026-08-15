@@ -187,6 +187,7 @@ export default function DiaryPage() {
   const [content, setContent] = useState("");
   const [mood, setMood] = useState<string>("neutro");
   const [saving, setSaving] = useState(false);
+  const [editEntryId, setEditEntryId] = useState<string | null>(null);
 
   const year = Number(selected.slice(0, 4));
   const month = selected.slice(0, 7);
@@ -238,13 +239,22 @@ export default function DiaryPage() {
     e.preventDefault();
     if (!content.trim()) return;
     setSaving(true);
-    await fetch("/api/diary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, mood, date: new Date(selected + "T12:00:00").toISOString() }),
-    });
+    if (editEntryId) {
+      await fetch(`/api/diary?id=${editEntryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, mood }),
+      });
+    } else {
+      await fetch("/api/diary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, mood, date: new Date(selected + "T12:00:00").toISOString() }),
+      });
+    }
     setContent("");
     setMood("neutro");
+    setEditEntryId(null);
     setSaving(false);
     load();
   }
@@ -319,9 +329,23 @@ export default function DiaryPage() {
                   <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
                     {m ? `${m.emoji} ${m.label}` : ""} {e.source === "whatsapp" && "· 📱"}
                   </span>
-                  <button className="btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => deleteEntry(e.id)}>
-                    Excluir
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button 
+                      className="btn-ghost" 
+                      style={{ fontSize: 11, padding: "3px 8px" }} 
+                      onClick={() => {
+                        setEditEntryId(e.id);
+                        setContent(e.content);
+                        setMood(e.mood || "neutro");
+                        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button className="btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => deleteEntry(e.id)}>
+                      Excluir
+                    </button>
+                  </div>
                 </div>
                 <p style={{ lineHeight: 1.6, whiteSpace: "pre-wrap", fontSize: 13 }}>{e.content}</p>
               </div>
@@ -359,9 +383,24 @@ export default function DiaryPage() {
                   </button>
                 ))}
               </div>
-              <button className="btn-primary" type="submit" disabled={saving} style={{ marginLeft: "auto" }}>
-                {saving ? "Salvando..." : "Salvar"}
-              </button>
+              <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+                {editEntryId && (
+                  <button 
+                    className="btn-ghost" 
+                    type="button" 
+                    onClick={() => {
+                      setEditEntryId(null);
+                      setContent("");
+                      setMood("neutro");
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                )}
+                <button className="btn-primary" type="submit" disabled={saving}>
+                  {saving ? "Salvando..." : (editEntryId ? "Atualizar" : "Salvar")}
+                </button>
+              </div>
             </div>
           </form>
         </div>

@@ -73,6 +73,7 @@ export const POST = withErrorHandling(async (request: Request) => {
       account: body.account?.trim() || "Principal",
       source: "dashboard",
       status: body.status || "paid",
+      mood: body.mood || "neutro",
     },
   });
 

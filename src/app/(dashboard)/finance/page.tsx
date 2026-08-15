@@ -20,6 +20,7 @@ interface FinanceEntry {
   paymentMethod: string;
   account: string;
   status: "paid" | "pending";
+  mood?: string;
   source: string;
   _count?: { invoiceItems: number };
 }
@@ -35,6 +36,7 @@ type FormState = {
   paymentMethod: string;
   account: string;
   status: "paid" | "pending";
+  mood: string;
   recurring: boolean;
 };
 
@@ -49,6 +51,7 @@ const EMPTY_FORM: FormState = {
   paymentMethod: "pix",
   account: "Principal",
   status: "paid",
+  mood: "neutro",
   recurring: false,
 };
 
@@ -69,6 +72,15 @@ const CATEGORY_COLORS = [
 const OTHER_COLOR = "#5a5a7a"; // var(--text-dim), pro grupo "Outros"
 
 const MONTH_LABELS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+const MOODS = [
+  { key: "pessimo", emoji: "😞", label: "Péssimo" },
+  { key: "ruim", emoji: "🙁", label: "Ruim" },
+  { key: "neutro", emoji: "😐", label: "Neutro" },
+  { key: "bom", emoji: "🙂", label: "Bom" },
+  { key: "otimo", emoji: "🤩", label: "Ótimo" },
+];
+const MOOD_MAP = new Map(MOODS.map(m => [m.key, m]));
 
 // Categoria/subcategoria padrão por tipo, baseado na planilha antiga do usuário.
 const DEFAULT_TAXONOMY: Record<"income" | "expense", Record<string, string[]>> = {
@@ -859,6 +871,7 @@ export default function FinancePage() {
         paymentMethod: form.paymentMethod,
         account: form.account,
         status: form.status,
+        mood: form.mood,
       }),
     });
     setForm(EMPTY_FORM);
@@ -899,6 +912,7 @@ export default function FinancePage() {
       paymentMethod: entry.paymentMethod || "pix",
       account: entry.account || "Principal",
       status: entry.status,
+      mood: entry.mood || "neutro",
     });
   }
 
@@ -918,6 +932,7 @@ export default function FinancePage() {
         paymentMethod: editForm.paymentMethod,
         account: editForm.account,
         status: editForm.status,
+        mood: editForm.mood,
       }),
     });
     setEditingId(null);
@@ -1259,10 +1274,17 @@ export default function FinancePage() {
               </div>
             )}
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Status</label>
               <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" }))}>
                 <option value="paid">{form.type === "income" ? "Recebido" : "Pago"}</option>
                 <option value="pending">{form.type === "income" ? "A receber" : "Pendente"}</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Humor</label>
+              <select value={form.mood} onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))} title="Como você estava se sentindo?">
+                {MOODS.map(m => (
+                  <option key={m.key} value={m.key}>{m.emoji} {m.label}</option>
+                ))}
               </select>
             </div>
             <div style={{ display: "flex", alignItems: "center" }}>
@@ -1468,6 +1490,11 @@ export default function FinancePage() {
                               <option value="paid">{editForm.type === "income" ? "Recebido" : "Pago"}</option>
                               <option value="pending">{editForm.type === "income" ? "A receber" : "Pendente"}</option>
                             </select>
+                            <select value={editForm.mood} onChange={(ev) => setEditForm((f) => ({ ...f, mood: ev.target.value }))} style={{ width: 90, padding: "8px 6px", marginTop: 4 }}>
+                              {MOODS.map(m => (
+                                <option key={m.key} value={m.key}>{m.emoji} {m.label}</option>
+                              ))}
+                            </select>
                           </td>
                           <td style={{ padding: "6px 8px", color: "var(--text-dim)", whiteSpace: "nowrap", textAlign: "center" }} title={e.source === "whatsapp" ? "WhatsApp" : "Painel"}>
                             {e.source === "whatsapp" ? "📱" : "🖥️"}
@@ -1505,7 +1532,16 @@ export default function FinancePage() {
                           <div>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
                           {e.purchaseDate && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Compra: {new Date(e.purchaseDate).toLocaleDateString("pt-BR")}</div>}
                         </td>
-                        <td style={{ padding: "10px 16px" }}>{e.category || "—"}</td>
+                        <td style={{ padding: "10px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {e.category || "—"}
+                            {e.mood && e.mood !== "neutro" && MOOD_MAP.get(e.mood) && (
+                              <span title={MOOD_MAP.get(e.mood)?.label} style={{ fontSize: 14 }}>
+                                {MOOD_MAP.get(e.mood)?.emoji}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>

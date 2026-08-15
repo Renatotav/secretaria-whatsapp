@@ -298,7 +298,9 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               date: route.date ? parseLocalDate(route.date) : new Date(),
               purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : null,
               paymentMethod: route.paymentMethod,
+              account: route.account,
               status: route.status,
+              mood: route.mood || "neutro",
               source: "whatsapp",
             },
           });
@@ -659,6 +661,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
       paymentMethod: invoice.paymentMethod || "pix",
       account: invoice.account || "Principal",
       status: invoice.status || "paid",
+      mood: "neutro",
       source: "whatsapp",
       invoiceItems: {
         create: invoice.items.map(i => ({

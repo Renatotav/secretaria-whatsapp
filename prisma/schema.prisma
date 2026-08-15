@@ -164,6 +164,7 @@ model FinanceEntry {
   paymentMethod String  @default("pix")
   account     String   @default("Principal")
   status      String   @default("paid")
+  mood        String   @default("neutro")
   source      String   @default("dashboard")
   createdAt   DateTime @default(now())
   invoiceItems InvoiceItem[]
