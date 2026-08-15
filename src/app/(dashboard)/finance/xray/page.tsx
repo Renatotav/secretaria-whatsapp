@@ -112,7 +112,7 @@ export default function XRayPage() {
                       <span style={{ fontWeight: 600 }}>R$ {val.toFixed(2)}</span>
                     </div>
                     <div style={{ width: "100%", height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{ width: \`\${(val / total) * 100}%\`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
+                      <div style={{ width: `${(val / total) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
                     </div>
                   </div>
                 ))}
