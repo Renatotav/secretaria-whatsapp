@@ -32,7 +32,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   const whereClause: any = dateFilter ? { date: dateFilter } : {};
   if (account && account !== "all") {
-    whereClause.account = account;
+    whereClause.account = { equals: account, mode: "insensitive" };
   }
 
   const entries = await prisma.financeEntry.findMany({

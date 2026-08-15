@@ -22,7 +22,7 @@ export const GET = withErrorHandling(async (request: Request) => {
     date: { lt: new Date(y, m - 1, 1) }
   };
   if (account && account !== "all") {
-    whereClause.account = account;
+    whereClause.account = { equals: account, mode: "insensitive" };
   }
 
   // Calcula o saldo anterior (tudo que for estritamente menor que o primeiro dia do mês requisitado)
