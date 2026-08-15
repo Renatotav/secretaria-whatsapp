@@ -30,7 +30,13 @@ export const GET = withErrorHandling(async (request: Request) => {
     };
   }
 
-  const whereClause: any = dateFilter ? { date: dateFilter } : {};
+  const dateOrPurchase = searchParams.get("dateOrPurchase") === "true";
+
+  const whereClause: any = dateFilter 
+    ? dateOrPurchase
+      ? { OR: [{ date: dateFilter }, { purchaseDate: dateFilter }] }
+      : { date: dateFilter }
+    : {};
   if (account && account !== "all") {
     whereClause.account = { equals: account, mode: "insensitive" };
   }

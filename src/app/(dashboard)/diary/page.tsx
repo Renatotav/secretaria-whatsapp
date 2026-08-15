@@ -22,6 +22,7 @@ interface FinanceEntry {
   type: string;
   amount: number;
   date: string;
+  purchaseDate?: string | null;
 }
 
 const MOODS = [
@@ -204,7 +205,7 @@ export default function DiaryPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    fetch(`/api/finance?month=${month}`)
+    fetch(`/api/finance?month=${month}&dateOrPurchase=true`)
       .then((r) => r.json())
       .then(setFinanceEntries);
   }, [month]);
@@ -220,7 +221,11 @@ export default function DiaryPage() {
   const entriesForSelected = entries.filter((e) => dateKey(new Date(e.date)) === selected);
   const agendaForSelected = agendaItems.filter((a) => a.dueDate && dateKey(new Date(a.dueDate)) === selected);
   const spentToday = financeEntries
-    .filter((f) => f.type === "expense" && dateKey(new Date(f.date)) === selected)
+    .filter((f) => {
+      if (f.type !== "expense") return false;
+      const expenseDate = f.purchaseDate ? dateKey(new Date(f.purchaseDate)) : dateKey(new Date(f.date));
+      return expenseDate === selected;
+    })
     .reduce((s, f) => s + f.amount, 0);
 
   const filteredEntries = search
