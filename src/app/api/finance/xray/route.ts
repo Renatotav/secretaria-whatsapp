@@ -23,10 +23,10 @@ export const GET = withErrorHandling(async (request: Request) => {
   const items = await prisma.invoiceItem.findMany({
     where: {
       financeEntry: {
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth
-        }
+        OR: [
+          { date: { gte: startOfMonth, lte: endOfMonth } },
+          { purchaseDate: { gte: startOfMonth, lte: endOfMonth } }
+        ]
       }
     },
     include: {
