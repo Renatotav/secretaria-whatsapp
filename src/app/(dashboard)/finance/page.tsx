@@ -948,7 +948,6 @@ export default function FinancePage() {
               onChange={(e) => setSelectedAccount(e.target.value)}
               style={{ width: "auto", minWidth: 160, maxWidth: 220 }}
             >
-              <option value="all">💳 Todas as Contas</option>
               <option value="Principal">🏦 Conta Principal</option>
               {allAccounts.filter(a => a !== "Principal").map(acc => (
                 <option key={acc} value={acc}>
