@@ -421,10 +421,26 @@ Não seja robótico. Chame-o de Renato.`;
           where: {
             date: { gte: todayStart, lte: todayEnd },
             mood: "neutro",
-            source: "whatsapp" // só atualiza as criadas pelo whatsapp (bot/img)
+            source: "whatsapp"
           },
           data: { mood: route.mood }
         });
+      }
+
+      // Passo 3: Remanejamento Automático por Contexto
+      const contextPrompt = `Analise este relato de diário: "${route.content}".
+Verifique se o usuário relatou algum gasto imprevisto, emergência médica, conserto de carro, roubo, ou quebra de algo que custará dinheiro extra.
+Responda APENAS com um JSON válido estritamente neste formato, sem markdown ou texto extra: {"hasUnexpectedExpense": boolean, "suggestedCategoryToReduce": string | null, "reason": string | null}
+Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria do orçamento não essencial para reduzir (ex: "Lazer" ou "Alimentação") e preencha reason com um mini resumo de 4 palavras (ex: "conserto do carro").`;
+      try {
+        const { content } = await generateResponse([{ role: "user", content: contextPrompt }], "Você é um classificador JSON.", 0.1, 150, providerOpts);
+        const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed.hasUnexpectedExpense && parsed.suggestedCategoryToReduce) {
+          response += `\n\n💡 *Alerta de Imprevisto:* Poxa, vi que teve esse problema com ${parsed.reason.toLowerCase()}. Quer que eu proponha um remanejamento do seu limite de ${parsed.suggestedCategoryToReduce} para cobrir esse buraco e você não estourar o mês?`;
+        }
+      } catch (e) {
+        console.error("Falha ao classificar imprevisto no diário", e);
       }
       break;
     case "agenda_query":
