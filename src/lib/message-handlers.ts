@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { sendTextWithTyping, getBase64FromMediaMessage, fetchGroupInfo, findContact } from "./evolution";
-import { transcribeAudio, type ProviderOptions } from "./openai";
+import { transcribeAudio, generateResponse, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
 import {
@@ -356,10 +356,29 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             const totalSpent = monthExpenses._sum.amount || 0;
             const percent = (totalSpent / budget.amount) * 100;
 
-            if (percent >= 100) {
-              response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com esse gasto, você estourou o limite de ${route.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
-            } else if (percent >= 80) {
-              response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+            const isSensitiveCategory = ["delivery", "ifood", "mercado", "supermercado", "bebida", "cerveja", "lanche", "besteira"]
+              .some(kw => route.category.toLowerCase().includes(kw) || route.subcategory.toLowerCase().includes(kw));
+
+            if ((percent >= 80 || isSensitiveCategory) && route.amount >= 30) {
+              const promptContext = `O usuário Renato registrou um gasto de R$ ${route.amount.toFixed(2)} na categoria "${route.category}" (Subcategoria: "${route.subcategory}").
+Neste mês, ele já gastou R$ ${totalSpent.toFixed(2)} de um orçamento de R$ ${budget.amount.toFixed(2)} nesta categoria (${percent.toFixed(0)}%).
+Dê um "toque" inteligente, amigável e MUITO CURTO (máximo 2 linhas). 
+Se for delivery, besteira ou álcool e estiver alto, alerte sobre gastar muito com besteira e faça ele refletir se era necessário.
+Se for mercado e a compra for alta, lembre-o para focar no necessário para não estourar o mês.
+Não seja robótico. Chame-o de Renato.`;
+              try {
+                const { content } = await generateResponse([{ role: "user", content: promptContext }], "Você é uma assistente financeira.", 0.7, 150, providerOpts);
+                response += `\n\n💬 *Dica da IA:* ${content}`;
+              } catch (e) {
+                if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${route.category}! (R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+                else if (percent >= 80) response += `\n\n⚠️ *Aviso:* ${percent.toFixed(0)}% do limite de ${route.category} atingido!`;
+              }
+            } else {
+              if (percent >= 100) {
+                response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com esse gasto, você estourou o limite de ${route.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+              } else if (percent >= 80) {
+                response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+              }
             }
           }
         }
@@ -749,10 +768,29 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     const totalSpent = monthExpenses._sum.amount || 0;
     const percent = (totalSpent / budget.amount) * 100;
 
-    if (percent >= 100) {
-      response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com essa nota, você estourou o limite de ${invoice.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
-    } else if (percent >= 80) {
-      response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do limite de ${invoice.category}! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+    const isSensitiveCategory = ["delivery", "ifood", "mercado", "supermercado", "bebida", "cerveja", "lanche", "besteira"]
+      .some(kw => invoice.category?.toLowerCase().includes(kw) || invoice.subcategory?.toLowerCase().includes(kw));
+
+    if ((percent >= 80 || isSensitiveCategory) && invoice.total >= 50) {
+      const promptContext = `O usuário Renato registrou uma Nota Fiscal de R$ ${invoice.total.toFixed(2)} na categoria "${invoice.category}" (Subcategoria: "${invoice.subcategory}").
+Neste mês, ele já gastou R$ ${totalSpent.toFixed(2)} de um orçamento de R$ ${budget.amount.toFixed(2)} nesta categoria (${percent.toFixed(0)}%).
+Dê um "toque" inteligente, amigável e MUITO CURTO (máximo 2 linhas). 
+Se for mercado e a compra for alta, lembre-o para focar no necessário e cuidado com bebidas/besteiras para não estourar o limite.
+Se for delivery ou lanche, alerte sobre o excesso.
+Não seja robótico. Chame-o de Renato.`;
+      try {
+        const { content } = await generateResponse([{ role: "user", content: promptContext }], "Você é uma assistente financeira.", 0.7, 150, providerOpts);
+        response += `\n\n💬 *Dica da IA:* ${content}`;
+      } catch (e) {
+        if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${invoice.category}! (R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+        else if (percent >= 80) response += `\n\n⚠️ *Aviso:* ${percent.toFixed(0)}% do limite de ${invoice.category} atingido!`;
+      }
+    } else {
+      if (percent >= 100) {
+        response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com essa nota, você estourou o limite de ${invoice.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+      } else if (percent >= 80) {
+        response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do limite de ${invoice.category}! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+      }
     }
   }
 
