@@ -638,6 +638,15 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     return;
   }
 
+  let invoiceDate = invoice.date ? parseLocalDate(invoice.date) : new Date();
+  const purchaseDate = new Date(invoiceDate);
+  
+  if (invoice.status === "pending" && invoice.paymentMethod === "cartão" && config.creditCardDueDay) {
+    const isAfterClose = invoiceDate.getDate() >= (config.creditCardDueDay - 7); // Assume close is 7 days before due date
+    const dueMonth = isAfterClose ? invoiceDate.getMonth() + 1 : invoiceDate.getMonth();
+    invoiceDate = new Date(invoiceDate.getFullYear(), dueMonth, config.creditCardDueDay);
+  }
+
   const entry = await prisma.financeEntry.create({
     data: {
       type: "expense",
@@ -645,10 +654,11 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
       category: invoice.category || "Alimentação",
       subcategory: invoice.subcategory || "Supermercado",
       description: `Nota Fiscal (${invoice.items.length} itens) - ${caption}`,
-      date: invoice.date ? parseLocalDate(invoice.date) : new Date(),
-      paymentMethod: "pix",
-      account: "Principal",
-      status: "paid",
+      date: invoiceDate,
+      purchaseDate: purchaseDate,
+      paymentMethod: invoice.paymentMethod || "pix",
+      account: invoice.account || "Principal",
+      status: invoice.status || "paid",
       source: "whatsapp",
       invoiceItems: {
         create: invoice.items.map(i => ({
