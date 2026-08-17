@@ -1333,16 +1333,16 @@ export default function FinancePage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Data</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Categoria</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Subcategoria</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Descrição</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Conta</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Forma</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Status</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>Origem</th>
-                    <th style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500, textAlign: "right" }}>Valor</th>
-                    <th style={{ padding: "10px 16px" }} />
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Data</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Categoria</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Subcategoria</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Descrição</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Conta</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Forma</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Status</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Origem</th>
+                    <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500, textAlign: "right" }}>Valor</th>
+                    <th style={{ padding: "8px 8px" }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -1529,11 +1529,11 @@ export default function FinancePage() {
 
                     return (
                       <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                        <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
                           <div>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
                           {e.purchaseDate && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Compra: {new Date(e.purchaseDate).toLocaleDateString("pt-BR")}</div>}
                         </td>
-                        <td style={{ padding: "10px 16px" }}>
+                        <td style={{ padding: "8px 8px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {e.category || "—"}
                             {e.mood && e.mood !== "neutro" && MOOD_MAP.get(e.mood) && (
@@ -1543,25 +1543,25 @@ export default function FinancePage() {
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", maxWidth: 120, wordWrap: "break-word", whiteSpace: "normal" }}>{e.subcategory || "—"}</td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", maxWidth: 220, wordWrap: "break-word", whiteSpace: "normal" }}>{e.description || "—"}</td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", textTransform: "capitalize" }}>
+                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 100, wordWrap: "break-word", whiteSpace: "normal" }}>{e.subcategory || "—"}</td>
+                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 150, wordWrap: "break-word", whiteSpace: "normal" }}>{e.description || "—"}</td>
+                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
+                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", textTransform: "capitalize" }}>
                           {e.paymentMethod || "Pix"}
                         </td>
-                        <td style={{ padding: "10px 16px", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: e.status === "paid" ? "var(--success-dim)" : "var(--warning-dim)", color: e.status === "paid" ? "var(--success)" : "var(--warning)", border: `1px solid ${e.status === "paid" ? "var(--success)" : "var(--warning)"}` }}>
                             {e.type === "income" 
                               ? (e.status === "paid" ? "Recebido" : "A receber") 
                               : (e.status === "paid" ? "Pago" : "Pendente")}
                           </span>
                         </td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 8px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
                           {e.source === "whatsapp" ? "📱 WhatsApp" : "🖥️ Painel"}
                         </td>
                         <td
                           style={{
-                            padding: "10px 16px",
+                            padding: "8px 8px",
                             textAlign: "right",
                             fontWeight: 600,
                             whiteSpace: "nowrap",
@@ -1570,7 +1570,7 @@ export default function FinancePage() {
                         >
                           {e.type === "income" ? "+" : "-"} {formatMoney(e.amount)}
                         </td>
-                        <td style={{ padding: "10px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <td style={{ padding: "8px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
                           {e._count && e._count.invoiceItems > 0 && (
                             <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px", marginRight: 4 }} onClick={() => setSelectedInvoiceId(e.id)} title="Ver itens da nota fiscal">
                               🛒 Itens
