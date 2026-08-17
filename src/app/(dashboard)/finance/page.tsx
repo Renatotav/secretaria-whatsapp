@@ -943,10 +943,12 @@ export default function FinancePage() {
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }} className="p-4 md:p-6">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Link href="/finance/xray" className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)", textDecoration: "none" }}>
+            <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
+            <Link href="/finance/xray" className="btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }}>
               🔍 Raio-X
             </Link>
             <button className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)" }} onClick={() => setShowInsights(true)}>
@@ -961,7 +963,7 @@ export default function FinancePage() {
             <select
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
-              style={{ width: "auto", minWidth: 160, maxWidth: 220 }}
+              style={{ width: "auto", minWidth: 160, maxWidth: 220, padding: "6px 12px" }}
             >
               <option value="Principal">🏦 Conta Principal</option>
               {allAccounts.filter(a => a !== "Principal" && a !== "all").map(acc => (
@@ -970,12 +972,21 @@ export default function FinancePage() {
                 </option>
               ))}
             </select>
-            <input
-              type="month"
+            <select
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              style={{ minWidth: 200, padding: "8px 12px" }}
-            />
+              style={{ padding: "6px 12px", width: "auto", minWidth: 120 }}
+            >
+              {[
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+              ].map((mName, i) => {
+                const year = month ? month.split("-")[0] : new Date().getFullYear().toString();
+                const mm = String(i + 1).padStart(2, "0");
+                const val = `${year}-${mm}`;
+                return <option key={val} value={val}>{mName}</option>;
+              })}
+            </select>
           </div>
         </div>
 
