@@ -824,8 +824,8 @@ export default function FinancePage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setSelectedCategory(null); setSelectedCategoryMatch([]); setSelectedType(null); }, [month]);
 
-  const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
-  const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+  const income = entries.filter((e) => e.type === "income" && e.status === "paid").reduce((s, e) => s + e.amount, 0);
+  const expense = entries.filter((e) => e.type === "expense" && e.status === "paid").reduce((s, e) => s + e.amount, 0);
   const monthBalance = income - expense;
   const accumulatedBalance = previousBalance + monthBalance;
 
