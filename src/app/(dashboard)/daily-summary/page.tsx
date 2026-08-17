@@ -56,11 +56,16 @@ export default function DailySummaryPage() {
               if (!selectedGroup) return alert("Selecione um resumo específico (Pessoal ou de Grupo) para gerar agora.");
               setLoading(true);
               try {
-                await fetch("/api/daily-summary", {
+                const resPost = await fetch("/api/daily-summary", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ groupJid: selectedGroup })
                 });
+                if (!resPost.ok) {
+                  const errorData = await resPost.json().catch(() => ({}));
+                  alert(`Erro ao gerar resumo: ${errorData.error || "Erro interno"}`);
+                  return;
+                }
                 const params = new URLSearchParams();
                 params.set("groupJid", selectedGroup);
                 if (selectedDate) params.set("date", selectedDate);

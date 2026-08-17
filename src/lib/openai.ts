@@ -82,7 +82,7 @@ export async function generateResponse(
 
   const apiKey = providerOpts?.openaiApiKey ?? process.env.OPENAI_API_KEY ?? "";
   const openai = new OpenAI({ apiKey });
-  const model = providerOpts?.openaiModel ?? "gpt-4.1-mini";
+  const model = providerOpts?.openaiModel ?? "gpt-4o-mini";
   const response = await openai.chat.completions.create({
     model,
     temperature,
