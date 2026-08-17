@@ -973,19 +973,24 @@ export default function FinancePage() {
               ))}
             </select>
             <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              style={{ padding: "6px 12px", width: "auto", minWidth: 120 }}
+              value={month.split("-")[1]}
+              onChange={(e) => setMonth(`${month.split("-")[0]}-${e.target.value}`)}
+              style={{ padding: "6px 12px", width: "auto", minWidth: 110 }}
             >
-              {[
-                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
-              ].map((mName, i) => {
-                const year = month ? month.split("-")[0] : new Date().getFullYear().toString();
-                const mm = String(i + 1).padStart(2, "0");
-                const val = `${year}-${mm}`;
-                return <option key={val} value={val}>{mName}</option>;
-              })}
+              {["01","02","03","04","05","06","07","08","09","10","11","12"].map((mm, i) => (
+                <option key={mm} value={mm}>
+                  {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][i]}
+                </option>
+              ))}
+            </select>
+            <select
+              value={month.split("-")[0]}
+              onChange={(e) => setMonth(`${e.target.value}-${month.split("-")[1]}`)}
+              style={{ padding: "6px 12px", width: "auto", minWidth: 80 }}
+            >
+              {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                <option key={y} value={String(y)}>{y}</option>
+              ))}
             </select>
           </div>
         </div>
