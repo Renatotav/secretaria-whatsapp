@@ -972,22 +972,24 @@ export default function FinancePage() {
                 </option>
               ))}
             </select>
-            <div
-              style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer" }}
-              onClick={() => { const inp = document.getElementById("month-picker") as HTMLInputElement; inp?.showPicker?.(); }}
+            <select
+              value={month.split("-")[1]}
+              onChange={(e) => setMonth(`${month.split("-")[0]}-${e.target.value}`)}
+              style={{ padding: "6px 12px", minWidth: 120 }}
             >
-              <span style={{ fontSize: 14, color: "var(--text)", whiteSpace: "nowrap" }}>
-                {new Date(month + "-02").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
-              </span>
-              <span style={{ fontSize: 16 }}>📅</span>
-              <input
-                id="month-picker"
-                type="month"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", top: 0, left: 0, cursor: "pointer" }}
-              />
-            </div>
+              {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((nome, i) => (
+                <option key={i} value={String(i + 1).padStart(2, "0")}>{nome}</option>
+              ))}
+            </select>
+            <select
+              value={month.split("-")[0]}
+              onChange={(e) => setMonth(`${e.target.value}-${month.split("-")[1]}`)}
+              style={{ padding: "6px 12px", minWidth: 80 }}
+            >
+              {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                <option key={y} value={String(y)}>{y}</option>
+              ))}
+            </select>
           </div>
         </div>
 
