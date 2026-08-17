@@ -31,6 +31,8 @@ export function startScheduler(): void {
         openaiModel: config.openaiModel,
         groqApiKey: config.groqApiKey,
         groqModel: config.groqModel,
+        openrouterApiKey: config.openrouterApiKey,
+        openrouterModel: config.openrouterModel,
       };
       const evolutionConfig = {
         evolutionUrl: config.evolutionUrl,
