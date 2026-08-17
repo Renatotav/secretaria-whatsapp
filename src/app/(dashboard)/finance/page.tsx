@@ -974,7 +974,7 @@ export default function FinancePage() {
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              style={{ width: 170 }}
+              style={{ minWidth: 200, padding: "8px 12px" }}
             />
           </div>
         </div>
