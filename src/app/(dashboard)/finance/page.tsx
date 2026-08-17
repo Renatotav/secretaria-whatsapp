@@ -827,7 +827,7 @@ export default function FinancePage() {
   const income = entries.filter((e) => e.type === "income" && e.status === "paid").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.type === "expense" && e.status === "paid").reduce((s, e) => s + e.amount, 0);
   const monthBalance = income - expense;
-  const accumulatedBalance = previousBalance + monthBalance;
+  const accumulatedBalance = monthBalance;
 
   let visibleEntries = entries;
   if (selectedType) {
