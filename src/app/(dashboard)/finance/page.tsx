@@ -972,26 +972,22 @@ export default function FinancePage() {
                 </option>
               ))}
             </select>
-            <select
-              value={month.split("-")[1]}
-              onChange={(e) => setMonth(`${month.split("-")[0]}-${e.target.value}`)}
-              style={{ padding: "6px 12px", width: "auto", minWidth: 110 }}
+            <div
+              style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer" }}
+              onClick={() => { const inp = document.getElementById("month-picker") as HTMLInputElement; inp?.showPicker?.(); }}
             >
-              {["01","02","03","04","05","06","07","08","09","10","11","12"].map((mm, i) => (
-                <option key={mm} value={mm}>
-                  {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][i]}
-                </option>
-              ))}
-            </select>
-            <select
-              value={month.split("-")[0]}
-              onChange={(e) => setMonth(`${e.target.value}-${month.split("-")[1]}`)}
-              style={{ padding: "6px 12px", width: "auto", minWidth: 80 }}
-            >
-              {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                <option key={y} value={String(y)}>{y}</option>
-              ))}
-            </select>
+              <span style={{ fontSize: 14, color: "var(--text)", whiteSpace: "nowrap" }}>
+                {new Date(month + "-02").toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
+              </span>
+              <span style={{ fontSize: 16 }}>📅</span>
+              <input
+                id="month-picker"
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", top: 0, left: 0, cursor: "pointer" }}
+              />
+            </div>
           </div>
         </div>
 
