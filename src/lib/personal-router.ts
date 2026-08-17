@@ -147,7 +147,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "date": "ISO8601 de quando a despesa acontece/vence (se o usuário disser 'amanhã', calcule a data) ou null. Se for recorrente ou futuro, infira a data. ATENÇÃO MÁXIMA AO MÊS! Se ele disser 'proximo mes', coloque o proximo mes de fato.",
   "purchaseDate": "ISO8601 da data real em que a compra foi feita (se aplicável), senão null. Se o usuário disser 'ontem fiz uma compra parcelada', a purchaseDate é ontem e a date da primeira parcela pode ser hoje ou no futuro.",
   "paymentMethod": "Obrigatório: 'cartão', 'pix', 'boleto' ou 'dinheiro'. Se for compra parcelada ou mencionar cartão, retorne 'cartão'. Caso contrário, retorne 'pix' ou outro meio.",
-  "account": "Obrigatório. De qual conta/carteira isso saiu ou entrou? Se mencionar 'Ticket', 'Vale', 'Alimentação' (o cartão benefício), retorne 'Ticket Alimentação'. Caso não mencione ou seja banco/dinheiro comum, retorne 'Principal'.",
+  "account": "Obrigatório. Se a mensagem mencionar 'Ticket', 'Vale', 'Alimentação', 'tickty', retorne 'Ticket Alimentação'. Em QUALQUER outro caso (cartão, pix, dinheiro, banco, etc), retorne OBRIGATORIAMENTE 'Principal'.",
   "status": "Obrigatório: 'paid' ou 'pending'. Se o usuário fala 'vou pagar', 'vence dia X', 'boleto de luz', assuma 'pending' (pendente). Se fala 'comprei', 'paguei', 'gastei', assuma 'paid' (pago).",
   "mood": "Opcional para finanças, obrigatório para diary. Tente inferir o sentimento da mensagem: 'pessimo', 'ruim', 'neutro', 'bom', 'otimo'. Se a despesa relatar tristeza/ansiedade, coloque 'ruim' ou 'pessimo'. Se não souber, coloque 'neutro'.",
   "diaryContent": "<texto real da anotação>",
