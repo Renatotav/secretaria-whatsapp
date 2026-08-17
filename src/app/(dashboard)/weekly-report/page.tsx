@@ -103,22 +103,47 @@ export default function WeeklyReportPage() {
             borderBottom: "1px solid var(--border)",
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            justifyContent: "space-between",
             flexShrink: 0,
           }}
         >
-          <button className="btn-ghost" onClick={() => setWeekOffset((w) => w - 1)}>← Anterior</button>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>
-            Semana de {new Date(weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-            {" a "}
-            {weekEnd.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-          </span>
-          <button
-            className="btn-ghost"
-            onClick={() => setWeekOffset((w) => w + 1)}
-            disabled={weekOffset >= 0}
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <button className="btn-ghost" onClick={() => setWeekOffset((w) => w - 1)}>← Anterior</button>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              Semana de {new Date(weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+              {" a "}
+              {weekEnd.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+            </span>
+            <button
+              className="btn-ghost"
+              onClick={() => setWeekOffset((w) => w + 1)}
+              disabled={weekOffset >= 0}
+            >
+              Próxima →
+            </button>
+          </div>
+          
+          <button 
+            className="btn-primary" 
+            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "6px 12px" }}
+            onClick={async () => {
+              setLoading(true);
+              try {
+                await fetch("/api/weekly-report", { method: "POST" });
+                const res = await fetch(`/api/weekly-report?weekStart=${weekStart}`);
+                const data = await res.json();
+                setSelectedReport(data || null);
+                
+                // Refresh sidebar list
+                const listRes = await fetch("/api/weekly-report");
+                setReports(await listRes.json());
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
           >
-            Próxima →
+            ⚡ Gerar Relatório Agora
           </button>
         </div>
 

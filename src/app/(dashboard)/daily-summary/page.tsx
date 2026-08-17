@@ -47,17 +47,49 @@ export default function DailySummaryPage() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
       <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>📋 Resumos Diários</h1>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h1 style={{ fontSize: 16, fontWeight: 600 }}>📋 Resumos Diários</h1>
+          <button 
+            className="btn-primary" 
+            style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "6px 12px" }}
+            onClick={async () => {
+              if (!selectedGroup) return alert("Selecione um resumo específico (Pessoal ou de Grupo) para gerar agora.");
+              setLoading(true);
+              try {
+                await fetch("/api/daily-summary", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ groupJid: selectedGroup })
+                });
+                const params = new URLSearchParams();
+                params.set("groupJid", selectedGroup);
+                if (selectedDate) params.set("date", selectedDate);
+                const res = await fetch(`/api/daily-summary?${params}`);
+                setSummaries(await res.json());
+              } finally {
+                setLoading(false);
+              }
+            }}
+            disabled={loading}
+          >
+            ⚡ Gerar Resumo Agora
+          </button>
+        </div>
         <div style={{ display: "flex", gap: 12 }}>
           <select
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
-            style={{ width: 200 }}
+            style={{ width: 220 }}
           >
-            <option value="">Todos os grupos</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.groupJid}>{g.groupName || g.groupJid}</option>
-            ))}
+            <option value="">Selecione um Resumo...</option>
+            <optgroup label="📌 Meus Resumos">
+              <option value="personal">Fechamento Pessoal</option>
+            </optgroup>
+            <optgroup label="💬 Grupos do WhatsApp">
+              {groups.map((g) => (
+                <option key={g.id} value={g.groupJid}>{g.groupName || g.groupJid}</option>
+              ))}
+            </optgroup>
           </select>
           <input
             type="date"
@@ -65,7 +97,7 @@ export default function DailySummaryPage() {
             onChange={(e) => setSelectedDate(e.target.value)}
             style={{ width: 160 }}
           />
-          <button className="btn-ghost" onClick={() => setSelectedDate("")}>
+          <button className="btn-ghost" onClick={() => { setSelectedGroup(""); setSelectedDate(""); }}>
             Ver todos
           </button>
         </div>

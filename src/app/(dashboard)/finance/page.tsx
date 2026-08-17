@@ -702,7 +702,7 @@ function CategoryManager({
 
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
-  const [selectedAccount, setSelectedAccount] = useState<string>("Principal");
+  const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<"income" | "expense" | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
@@ -963,8 +963,9 @@ export default function FinancePage() {
               onChange={(e) => setSelectedAccount(e.target.value)}
               style={{ width: "auto", minWidth: 160, maxWidth: 220 }}
             >
+              <option value="all">🌎 Todas as Contas</option>
               <option value="Principal">🏦 Conta Principal</option>
-              {allAccounts.filter(a => a !== "Principal").map(acc => (
+              {allAccounts.filter(a => a !== "Principal" && a !== "all").map(acc => (
                 <option key={acc} value={acc}>
                   {acc.toLowerCase().includes("ticket") ? "🍔 " : "🏦 "}{acc}
                 </option>

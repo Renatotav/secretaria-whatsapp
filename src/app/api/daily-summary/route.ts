@@ -33,10 +33,7 @@ export const POST = withErrorHandling(async (request: Request) => {
   const config = await prisma.agentConfig.findFirst();
   if (!config) return NextResponse.json({ error: "Configuração ausente" }, { status: 500 });
 
-  const group = await prisma.groupConfig.findUnique({ where: { groupJid } });
-  if (!group || !group.active) return NextResponse.json({ error: "Grupo inativo ou não encontrado" }, { status: 404 });
-
-  const { generateDailySummary } = await import("@/lib/summarizer");
+  const { generateDailySummary, generatePersonalDailySummary } = await import("@/lib/summarizer");
 
   const providerOpts = {
     aiProvider: config.aiProvider,
@@ -51,13 +48,26 @@ export const POST = withErrorHandling(async (request: Request) => {
     instanceId: config.instanceId,
   };
 
+  if (groupJid === "personal") {
+    await generatePersonalDailySummary(
+      config.ownerName,
+      config.ownerPhone || "",
+      providerOpts,
+      evolutionConfig
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  const group = await prisma.groupConfig.findUnique({ where: { groupJid } });
+  if (!group || !group.active) return NextResponse.json({ error: "Grupo inativo ou não encontrado" }, { status: 404 });
+
   await generateDailySummary(
     group.groupJid,
     group.groupName,
     group.focus,
     config.ownerName,
     config.ownerRole,
-    config.ownerPhone,
+    config.ownerPhone || "",
     providerOpts,
     evolutionConfig
   );

@@ -101,3 +101,103 @@ _${dateFormatted}_
     data: { summarized: true },
   });
 }
+
+export async function generatePersonalDailySummary(
+  ownerName: string,
+  ownerPhone: string,
+  providerOpts: ProviderOptions,
+  evolutionConfig: { evolutionUrl: string; evolutionApiKey: string; instanceId: string }
+): Promise<void> {
+  const now = new Date();
+  const brtDate = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const today = brtDate.toISOString().split("T")[0];
+
+  const existing = await prisma.dailySummary.findFirst({
+    where: { groupJid: "personal", date: today },
+  });
+  if (existing) return;
+
+  const [finances, diaries, agenda] = await Promise.all([
+    prisma.financeEntry.findMany({
+      where: {
+        OR: [
+          { date: { gte: new Date(today + "T00:00:00Z"), lte: new Date(today + "T23:59:59Z") } },
+          { purchaseDate: { gte: new Date(today + "T00:00:00Z"), lte: new Date(today + "T23:59:59Z") } }
+        ]
+      },
+      orderBy: { date: "asc" },
+    }),
+    prisma.diaryEntry.findMany({
+      where: { date: { gte: new Date(today + "T00:00:00Z"), lte: new Date(today + "T23:59:59Z") } },
+      orderBy: { date: "asc" },
+    }),
+    prisma.agendaItem.findMany({
+      where: { createdAt: { gte: new Date(today + "T00:00:00Z"), lte: new Date(today + "T23:59:59Z") } },
+    })
+  ]);
+
+  if (finances.length === 0 && diaries.length === 0 && agenda.length === 0) return;
+
+  const dataText = [
+    "=== FINANÇAS DE HOJE ===",
+    finances.map(f => `[${f.type === "income" ? "RECEITA" : "DESPESA"}] ${f.category} - R$ ${f.amount.toFixed(2)}`).join("\n"),
+    "=== DIÁRIO DE HOJE ===",
+    diaries.map(d => `Humor: ${d.mood}\nResumo: ${d.content}`).join("\n\n"),
+    "=== TAREFAS DE HOJE ===",
+    agenda.map(a => `[${a.category}] ${a.title} — ${a.done ? "CONCLUÍDO" : "PENDENTE"}`).join("\n")
+  ].join("\n\n");
+
+  const dateFormatted = brtDate.toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const systemPrompt = `Você é assistente de ${ownerName}.
+Cruze os dados financeiros, de diário e tarefas de hoje.
+Gere um resumo amigável de até 4 parágrafos.
+Destaque a relação do humor com os gastos do dia, se houver.
+Formato:
+📊 *Fechamento Diário Pessoal*
+_Hoje, ${dateFormatted}_
+
+*💰 Finanças & Humor:* [análise]
+*✅ Tarefas:* [resumo]
+*💡 Dica para amanhã:* [dica baseada nos dados]`;
+
+  const { content } = await generateResponse(
+    [{ role: "user", content: dataText }],
+    systemPrompt,
+    0.3,
+    500,
+    providerOpts
+  );
+
+  const summary = await prisma.dailySummary.create({
+    data: {
+      date: today,
+      groupJid: "personal",
+      groupName: "📝 Meu Resumo Diário",
+      summary: content,
+    },
+  });
+
+  if (ownerPhone && evolutionConfig.evolutionUrl && evolutionConfig.evolutionApiKey && evolutionConfig.instanceId) {
+    try {
+      await sendWhatsAppMessage(
+        evolutionConfig.evolutionUrl,
+        evolutionConfig.evolutionApiKey,
+        evolutionConfig.instanceId,
+        ownerPhone,
+        content
+      );
+      await prisma.dailySummary.update({
+        where: { id: summary.id },
+        data: { sentAt: new Date() },
+      });
+    } catch (e) {
+      console.error("Falha ao enviar fechamento pessoal via WhatsApp", e);
+    }
+  }
+}
