@@ -972,24 +972,34 @@ export default function FinancePage() {
                 </option>
               ))}
             </select>
-            <select
-              value={month.split("-")[1]}
-              onChange={(e) => setMonth(`${month.split("-")[0]}-${e.target.value}`)}
-              style={{ padding: "6px 12px", minWidth: 120 }}
-            >
-              {["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((nome, i) => (
-                <option key={i} value={String(i + 1).padStart(2, "0")}>{nome}</option>
-              ))}
-            </select>
-            <select
-              value={month.split("-")[0]}
-              onChange={(e) => setMonth(`${e.target.value}-${month.split("-")[1]}`)}
-              style={{ padding: "6px 12px", minWidth: 80 }}
-            >
-              {[2024, 2025, 2026, 2027, 2028].map((y) => (
-                <option key={y} value={String(y)}>{y}</option>
-              ))}
-            </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "6px 12px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer" }}>
+              <span
+                style={{ fontSize: 14, color: "var(--text)", whiteSpace: "nowrap", cursor: "pointer" }}
+                onClick={() => { const inp = document.getElementById("month-picker-hidden") as HTMLInputElement; inp?.showPicker?.(); }}
+              >
+                {new Date(month + "-02").toLocaleDateString("pt-BR", { month: "long" })} de
+              </span>
+              <select
+                value={month.split("-")[0]}
+                onChange={(e) => setMonth(`${e.target.value}-${month.split("-")[1]}`)}
+                style={{ border: "none", background: "transparent", color: "var(--text)", fontSize: 14, cursor: "pointer", padding: 0, outline: "none", fontWeight: 500 }}
+              >
+                {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                  <option key={y} value={String(y)}>{y}</option>
+                ))}
+              </select>
+              <span
+                style={{ fontSize: 16, cursor: "pointer" }}
+                onClick={() => { const inp = document.getElementById("month-picker-hidden") as HTMLInputElement; inp?.showPicker?.(); }}
+              >📅</span>
+              <input
+                id="month-picker-hidden"
+                type="month"
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                style={{ position: "absolute", opacity: 0, width: 0, height: 0, pointerEvents: "none" }}
+              />
+            </div>
           </div>
         </div>
 
