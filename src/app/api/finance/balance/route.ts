@@ -31,7 +31,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   // Calcula o saldo anterior (tudo que for estritamente menor que o primeiro dia do mês requisitado)
   const previousEntries = await prisma.financeEntry.findMany({
-    where: { ...whereClause, status: "paid" },
+    where: whereClause,
     select: {
       type: true,
       amount: true,
