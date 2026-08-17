@@ -702,7 +702,7 @@ function CategoryManager({
 
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
-  const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [selectedAccount, setSelectedAccount] = useState<string>("Principal");
   const [selectedType, setSelectedType] = useState<"income" | "expense" | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
@@ -1543,8 +1543,8 @@ export default function FinancePage() {
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.subcategory || "—"}</td>
-                        <td style={{ padding: "10px 16px", color: "var(--text-muted)" }}>{e.description || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", maxWidth: 120, wordWrap: "break-word", whiteSpace: "normal" }}>{e.subcategory || "—"}</td>
+                        <td style={{ padding: "10px 16px", color: "var(--text-muted)", maxWidth: 220, wordWrap: "break-word", whiteSpace: "normal" }}>{e.description || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
                         <td style={{ padding: "10px 16px", color: "var(--text-muted)", textTransform: "capitalize" }}>
                           {e.paymentMethod || "Pix"}
