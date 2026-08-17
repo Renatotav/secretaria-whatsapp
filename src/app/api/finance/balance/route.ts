@@ -25,20 +25,28 @@ export const GET = withErrorHandling(async (request: Request) => {
     whereClause.account = { equals: account, mode: "insensitive" };
   }
 
-  // Calcula o saldo anterior (tudo que for estritamente menor que o primeiro dia do mês requisitado)
+  // Calcula o saldo anterior
   const previousEntries = await prisma.financeEntry.findMany({
     where: whereClause,
     select: {
       type: true,
       amount: true,
+      status: true,
     }
   });
 
-  let previousBalance = 0;
+  let previousBalance = 0; // Somente pagos
+  let previousProjectedBalance = 0; // Pagos + Pendentes
+  
   for (const entry of previousEntries) {
-    if (entry.type === "income") previousBalance += entry.amount;
-    else previousBalance -= entry.amount;
+    if (entry.type === "income") {
+      previousProjectedBalance += entry.amount;
+      if (entry.status === "paid") previousBalance += entry.amount;
+    } else {
+      previousProjectedBalance -= entry.amount;
+      if (entry.status === "paid") previousBalance -= entry.amount;
+    }
   }
 
-  return NextResponse.json({ previousBalance });
+  return NextResponse.json({ previousBalance, previousProjectedBalance });
 });
