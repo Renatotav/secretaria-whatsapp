@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { autoMarkPaid } from "@/lib/auto-pay";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
@@ -24,6 +25,9 @@ export const GET = withErrorHandling(async (request: Request) => {
 });
 
 export const POST = withErrorHandling(async (request: Request) => {
+  // Executa o auto-pagamento sempre que um resumo for gerado, garantindo dados atualizados
+  await autoMarkPaid();
+
   // Chamado pelo scheduler.mjs ou webhook externo
   const body = await request.json();
   const groupJid = body.groupJid;

@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { autoMarkPaid } from "@/lib/auto-pay";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+
+  // Verifica e atualiza lançamentos pendentes que já venceram
+  await autoMarkPaid();
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // formato YYYY-MM

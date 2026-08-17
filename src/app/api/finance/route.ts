@@ -4,11 +4,15 @@ import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
 import { parseLocalDate } from "@/lib/dates";
 import { projectAndInsertFinanceEntries } from "@/lib/message-handlers";
+import { autoMarkPaid } from "@/lib/auto-pay";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+
+  // Verifica e atualiza lançamentos pendentes que já venceram
+  await autoMarkPaid();
 
   const { searchParams } = new URL(request.url);
   const month = searchParams.get("month"); // formato YYYY-MM
