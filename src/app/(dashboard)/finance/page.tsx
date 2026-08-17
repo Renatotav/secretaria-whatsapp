@@ -710,7 +710,6 @@ export default function FinancePage() {
   const [yearEntries, setYearEntries] = useState<FinanceEntry[]>([]);
   const [allAccounts, setAllAccounts] = useState<string[]>([]);
   const [previousBalance, setPreviousBalance] = useState(0);
-  const [previousProjectedBalance, setPreviousProjectedBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -810,7 +809,6 @@ export default function FinancePage() {
       setYearEntries(Array.isArray(yData) ? yData : []);
       setBudgets(Array.isArray(bData) ? bData : []);
       setPreviousBalance(balData.previousBalance || 0);
-      setPreviousProjectedBalance(balData.previousProjectedBalance || 0);
       setAllAccounts(Array.isArray(accData) ? accData : []);
     } catch (err) {
       console.error(err);
@@ -826,16 +824,10 @@ export default function FinancePage() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setSelectedCategory(null); setSelectedCategoryMatch([]); setSelectedType(null); }, [month]);
 
-  const paidIncome = entries.filter((e) => e.type === "income" && e.status === "paid").reduce((s, e) => s + e.amount, 0);
-  const pendingIncome = entries.filter((e) => e.type === "income" && e.status === "pending").reduce((s, e) => s + e.amount, 0);
-  const totalIncome = paidIncome + pendingIncome;
-
-  const paidExpense = entries.filter((e) => e.type === "expense" && e.status === "paid").reduce((s, e) => s + e.amount, 0);
-  const pendingExpense = entries.filter((e) => e.type === "expense" && e.status === "pending").reduce((s, e) => s + e.amount, 0);
-  const totalExpense = paidExpense + pendingExpense;
-
-  const currentBalance = previousBalance + paidIncome - paidExpense;
-  const projectedBalance = previousProjectedBalance + totalIncome - totalExpense;
+  const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+  const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
+  const monthBalance = income - expense;
+  const accumulatedBalance = previousBalance + monthBalance;
 
   let visibleEntries = entries;
   if (selectedType) {
@@ -992,31 +984,26 @@ export default function FinancePage() {
         {selectedInvoiceId && <InvoiceDrawer entryId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
 
         {/* Summary cards */}
-        <div style={{ display: "grid", gap: 12, marginBottom: 20 }} className="grid-cols-1 sm:grid-cols-4">
+        <div style={{ display: "grid", gap: 12, marginBottom: 20 }} className="grid-cols-1 sm:grid-cols-3">
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Receitas</p>
-            <p style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatMoney(paidIncome)}</p>
-            {pendingIncome > 0 && <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>+ {formatMoney(pendingIncome)} pendente</p>}
+            <p style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatMoney(income)}</p>
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
             <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Despesas</p>
-            <p style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatMoney(paidExpense)}</p>
-            {pendingExpense > 0 && <p style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>+ {formatMoney(pendingExpense)} pendente</p>}
+            <p style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatMoney(expense)}</p>
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo Atual</p>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo Acumulado</p>
+              {previousBalance !== 0 && (
+                <p style={{ fontSize: 10, color: "var(--text-dim)", textAlign: "right" }}>
+                  Mês: {monthBalance >= 0 ? "+" : ""}{formatMoney(monthBalance)}
+                </p>
+              )}
             </div>
-            <p style={{ fontSize: 20, fontWeight: 700, color: currentBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>
-              {formatMoney(currentBalance)}
-            </p>
-          </div>
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", opacity: 0.8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo Previsto</p>
-            </div>
-            <p style={{ fontSize: 20, fontWeight: 700, color: projectedBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>
-              {formatMoney(projectedBalance)}
+            <p style={{ fontSize: 20, fontWeight: 700, color: accumulatedBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>
+              {formatMoney(accumulatedBalance)}
             </p>
           </div>
         </div>
