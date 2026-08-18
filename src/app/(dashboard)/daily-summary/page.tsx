@@ -149,12 +149,23 @@ export default function DailySummaryPage() {
                   {new Date(s.date).toLocaleDateString("pt-BR", { dateStyle: "full" })}
                 </p>
               </div>
-              <div style={{ textAlign: "right" }}>
+              <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                 {s.sentAt ? (
                   <span style={{ fontSize: 12, color: "var(--success)" }}>✅ Enviado via WhatsApp</span>
                 ) : (
                   <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Não enviado</span>
                 )}
+                <button
+                  className="btn-danger"
+                  style={{ fontSize: 11, padding: "3px 10px" }}
+                  onClick={async () => {
+                    if (!confirm("Excluir este resumo?")) return;
+                    await fetch(`/api/daily-summary?id=${s.id}`, { method: "DELETE" });
+                    setSummaries((prev) => prev.filter((x) => x.id !== s.id));
+                  }}
+                >
+                  🗑 Excluir
+                </button>
               </div>
             </div>
             <pre

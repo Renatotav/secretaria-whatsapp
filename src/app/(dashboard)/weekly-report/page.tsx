@@ -177,9 +177,23 @@ export default function WeeklyReportPage() {
                     {new Date(selectedReport.weekStart).toLocaleDateString("pt-BR", { dateStyle: "long" })}
                   </p>
                 </div>
-                {selectedReport.sentAt && (
-                  <span style={{ fontSize: 12, color: "var(--success)" }}>✅ Enviado via WhatsApp</span>
-                )}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                  {selectedReport.sentAt && (
+                    <span style={{ fontSize: 12, color: "var(--success)" }}>✅ Enviado via WhatsApp</span>
+                  )}
+                  <button
+                    className="btn-danger"
+                    style={{ fontSize: 12, padding: "4px 12px" }}
+                    onClick={async () => {
+                      if (!confirm("Excluir este relatório?")) return;
+                      await fetch(`/api/weekly-report?id=${selectedReport.id}`, { method: "DELETE" });
+                      setSelectedReport(null);
+                      setReports((prev) => prev.filter((r) => r.id !== selectedReport.id));
+                    }}
+                  >
+                    🗑 Excluir
+                  </button>
+                </div>
               </div>
               <div
                 style={{

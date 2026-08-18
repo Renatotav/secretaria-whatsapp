@@ -80,3 +80,14 @@ export const POST = withErrorHandling(async (request: Request) => {
 
   return NextResponse.json({ ok: true });
 });
+
+export const DELETE = withErrorHandling(async (request: Request) => {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+  await prisma.dailySummary.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+});
