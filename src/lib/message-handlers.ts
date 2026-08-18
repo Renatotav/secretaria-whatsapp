@@ -313,7 +313,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               subcategory: route.subcategory,
               description: route.description,
               date: route.date ? parseLocalDate(route.date) : new Date(),
-              purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : null,
+              purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : new Date(),
               paymentMethod: route.paymentMethod,
               account: route.account,
               status: route.status,

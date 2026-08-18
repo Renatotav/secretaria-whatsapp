@@ -71,11 +71,17 @@ export async function routePersonalMessage(
   customPrompt?: string,
   creditCardDueDay: number = 10
 ): Promise<PersonalRouteResult> {
+  const now = new Date();
+  const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const todayBRT = `${brtTime.getFullYear()}-${String(brtTime.getMonth() + 1).padStart(2, "0")}-${String(brtTime.getDate()).padStart(2, "0")}`;
+
   const systemPrompt = `Você é a secretária pessoal de ${ownerName}. Ele mandou uma
 mensagem para o próprio número do WhatsApp — é assim que ele te alimenta com
 tarefas, gastos/receitas e anotações pessoais. Classifique a intenção em um
 dos 4 tipos e extraia os dados. Você nunca redige respostas para terceiros,
 só confirma o que foi registrado.
+
+DATA DE HOJE: ${todayBRT}
 
 ${customPrompt ? `Instruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : ""}
 ${recentContext ? `Contexto recente da conversa:\n${recentContext}\n` : ""}
@@ -110,8 +116,8 @@ Tipos:
 
    DATAS:
    Se a mensagem especificar a data do vencimento (ou quando o dinheiro de fato sai/entra na conta), extraia em "financeDate" no formato ISO (ex: "2026-09-10T00:00:00.000Z"). Se especificar também quando a compra foi feita, extraia em "financePurchaseDate" no formato ISO.
-   Ex: "Mercantil 182, 58 e vencimento no cartão de crédito 10 de setembro" (hoje é 14/08/2026) -> financeDate: "2026-09-10T00:00:00.000Z", financePurchaseDate: "2026-08-14T00:00:00.000Z"
-   Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (o mês atual se comprou longe do vencimento, ou o próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}). A "financePurchaseDate" deve refletir o dia exato da compra.
+   Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (o mês atual se comprou longe do vencimento, ou o próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}).
+   REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar a data da compra na mensagem, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}). Jamais use datas antigas como 14/08/2026 ou qualquer outro exemplo.
 
 4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
    qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
