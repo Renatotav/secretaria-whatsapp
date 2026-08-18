@@ -384,6 +384,24 @@ Não seja robótico. Chame-o de Renato.`;
         }
       }
       break;
+    case "finance_update_date": {
+      const lastEntry = await prisma.financeEntry.findFirst({
+        where: { source: "whatsapp" },
+        orderBy: { createdAt: "desc" },
+      });
+      if (lastEntry) {
+        const newPDate = parseLocalDate(route.newPurchaseDate);
+        await prisma.financeEntry.update({
+          where: { id: lastEntry.id },
+          data: { purchaseDate: newPDate },
+        });
+        const formattedDate = newPDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+        response = `📅 Perfeito! Atualizei a data de compra de "${lastEntry.description || lastEntry.category}" (R$ ${lastEntry.amount.toFixed(2)}) para **${formattedDate}**.`;
+      } else {
+        response = "❌ Não encontrei nenhum lançamento financeiro recente para atualizar a data.";
+      }
+      break;
+    }
     case "savings_add":
       const goals = await prisma.savingsGoal.findMany();
       if (goals.length === 0) {

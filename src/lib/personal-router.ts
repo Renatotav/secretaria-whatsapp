@@ -61,6 +61,11 @@ export type PersonalRouteResult =
       goalName: string;
       amount: number;
       confirmation: string;
+    }
+  | {
+      type: "finance_update_date";
+      newPurchaseDate: string;
+      confirmation: string;
     };
 
 export async function routePersonalMessage(
@@ -119,26 +124,25 @@ Tipos:
    Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (o mês atual se comprou longe do vencimento, ou o próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}).
    REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar a data da compra na mensagem, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}). Jamais use datas antigas como 14/08/2026 ou qualquer outro exemplo.
 
-4. diary — reflexão, nota pessoal, mensagem de teste, cumprimento, ou
-   qualquer coisa que não seja claramente tarefa/gasto/pergunta (é o padrão
-   quando nada mais se encaixa, inclusive mensagens curtas tipo "teste" ou "oi").
-   Infira também "mood" — EXATAMENTE um destes valores, nunca outro texto:
-   "pessimo", "ruim", "neutro", "bom", "otimo". Se não der pra inferir com
-   confiança, use "neutro".
-   Ex: "Hoje foi puxado no trabalho mas terminei o relatório" → mood "neutro" ou "bom"
-   Ex: "teste" → diary, content: "teste", mood "neutro", confirmation reconhecendo que é um teste
+   Se a mensagem especificar a data do vencimento, extraia em "financeDate".
+   Se a despesa for no Cartão de Crédito e o vencimento não for dito, OBRIGATORIAMENTE defina "financeDate" para o dia ${creditCardDueDay} do mês correto.
+   REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}).
+
+4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
+   Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
 
 5. savings_add — guardar ou aportar dinheiro para uma Meta de Economia (SavingsGoal)
    Ex: "Guarda 100 reais pra viagem" → type "savings_add", amount: 100, goalName: "viagem"
-   Ex: "Adiciona 50 no macbook" → type "savings_add", amount: 50, goalName: "macbook"
 
-IMPORTANTE: os valores abaixo são só EXEMPLOS DE FORMATO — nunca copie o texto
-literal deles. "confirmation" e os outros campos de texto sempre precisam ser
-gerados a partir da mensagem real do usuário, nunca um placeholder genérico.
+6. finance_update_date — o usuário está corrigindo ou fornecendo a data de compra de um gasto recém-lançado.
+   Ex: "15/08" ou "foi dia 15" → type "finance_update_date", newPurchaseDate: "YYYY-MM-DD"
+
+IMPORTANTE:
+- Ao registrar um novo gasto (type: "finance"), na "confirmation" inclua SEMPRE uma menção amigável informando que a compra foi registrada para a data de hoje (ou a data identificada) e explicando que ele pode responder com outra data se quiser alterar. Exemplo: "💸 Anotado! Gasto de R$ 33,98 pendente para o dia 10/09 (compra em DD/MM). Se foi em outra data, basta me responder com o dia (ex: 15/08)."
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary|savings_add",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
@@ -150,15 +154,16 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "financeSubcategory": "<subcategoria curta>",
   "financeDescription": "<descrição curta>",
   "installments": "número total de parcelas ou null",
-  "date": "ISO8601 de quando a despesa acontece/vence (se o usuário disser 'amanhã', calcule a data) ou null. Se for recorrente ou futuro, infira a data. ATENÇÃO MÁXIMA AO MÊS! Se ele disser 'proximo mes', coloque o proximo mes de fato.",
-  "purchaseDate": "ISO8601 da data real em que a compra foi feita (se aplicável), senão null. Se o usuário disser 'ontem fiz uma compra parcelada', a purchaseDate é ontem e a date da primeira parcela pode ser hoje ou no futuro.",
-  "paymentMethod": "Obrigatório: 'cartão', 'pix', 'boleto' ou 'dinheiro'. Se for compra parcelada ou mencionar cartão, retorne 'cartão'. Caso contrário, retorne 'pix' ou outro meio.",
-  "account": "Obrigatório. Se a mensagem mencionar 'Ticket', 'Vale', 'Alimentação', 'tickty', retorne 'Ticket Alimentação'. Em QUALQUER outro caso (cartão, pix, dinheiro, banco, etc), retorne OBRIGATORIAMENTE 'Principal'.",
-  "status": "Obrigatório: 'paid' ou 'pending'. Se o usuário fala 'vou pagar', 'vence dia X', 'boleto de luz', assuma 'pending' (pendente). Se fala 'comprei', 'paguei', 'gastei', assuma 'paid' (pago).",
-  "mood": "Opcional para finanças, obrigatório para diary. Tente inferir o sentimento da mensagem: 'pessimo', 'ruim', 'neutro', 'bom', 'otimo'. Se a despesa relatar tristeza/ansiedade, coloque 'ruim' ou 'pessimo'. Se não souber, coloque 'neutro'.",
-  "diaryContent": "<texto real da anotação>",
-  "goalName": "<nome da meta extraído da mensagem (para savings_add)>",
-  "confirmation": "Sua resposta curta, como '💸 Anotado! Gasto de R$ X pendente para o dia Y.' ou '💰 Receita de R$ Z anotada!'"
+  "date": "ISO8601 da data de vencimento ou null",
+  "purchaseDate": "ISO8601 da data real em que a compra foi feita, ou null",
+  "newPurchaseDate": "ISO8601 (YYYY-MM-DD) para finance_update_date",
+  "paymentMethod": "cartão|pix|boleto|dinheiro",
+  "account": "Principal|Ticket Alimentação",
+  "status": "paid|pending",
+  "mood": "pessimo|ruim|neutro|bom|otimo",
+  "diaryContent": "<texto>",
+  "goalName": "<nome da meta>",
+  "confirmation": "Sua resposta curta"
 }`;
 
   const { content } = await generateResponse(
@@ -209,6 +214,14 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         content: (parsed.diaryContent as string) || message,
         mood,
         confirmation: (parsed.confirmation as string) || "✅ Anotado no diário!",
+      };
+    }
+
+    if (parsed.type === "finance_update_date") {
+      return {
+        type: "finance_update_date",
+        newPurchaseDate: (parsed.newPurchaseDate as string) || (parsed.purchaseDate as string) || todayBRT,
+        confirmation: (parsed.confirmation as string) || "📅 Data da compra atualizada com sucesso!",
       };
     }
 
