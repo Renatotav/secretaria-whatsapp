@@ -27,6 +27,17 @@ export async function autoMarkPaid() {
       }
     });
     
+    // Lançamentos pendentes não podem ser Pix (Pix é imediato, a pagar/vencimento é Cartão)
+    await prisma.financeEntry.updateMany({
+      where: {
+        status: "pending",
+        paymentMethod: "pix"
+      },
+      data: {
+        paymentMethod: "cartão"
+      }
+    });
+
     if (result.count > 0) {
       console.log(`[Auto-Pay] ${result.count} lançamentos pendentes marcados como pagos (Data <= ${endOfToday.toISOString()})`);
     }

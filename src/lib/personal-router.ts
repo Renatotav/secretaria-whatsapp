@@ -119,14 +119,10 @@ Tipos:
    Ex: "Comprei um Samsung S25 de 291 no cartão do Bruno, em 17x" → expense,
    291, categoria "Financeiro", subcategoria "Parcelas no cartão", installments: 17
 
-   DATAS:
-   Se a mensagem especificar a data do vencimento (ou quando o dinheiro de fato sai/entra na conta), extraia em "financeDate" no formato ISO (ex: "2026-09-10T00:00:00.000Z"). Se especificar também quando a compra foi feita, extraia em "financePurchaseDate" no formato ISO.
-   Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (o mês atual se comprou longe do vencimento, ou o próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}).
-   REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar a data da compra na mensagem, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}). Jamais use datas antigas como 14/08/2026 ou qualquer outro exemplo.
-
-   Se a mensagem especificar a data do vencimento, extraia em "financeDate".
-   Se a despesa for no Cartão de Crédito e o vencimento não for dito, OBRIGATORIAMENTE defina "financeDate" para o dia ${creditCardDueDay} do mês correto.
-   REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}).
+   DATAS E MEIOS DE PAGAMENTO:
+   - Se a mensagem especificar a data do vencimento (ou se falar "vence dia X"), extraia em "financeDate". Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (mês atual se comprou longe do vencimento, ou próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}).
+   - REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar a data da compra na mensagem, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}). Jamais use datas antigas.
+   - REGRA CRÍTICA PARA MEIO DE PAGAMENTO (paymentMethod): Se o status for "pending" (vencimento futuro / a pagar), o meio de pagamento NUNCA PODE SER "pix", pois Pix é instantâneo. Para qualquer gasto pendente/futuro, defina o paymentMethod OBRIGATORIAMENTE como "cartão" (ou "boleto" se mencionar boleto).
 
 4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
@@ -180,6 +176,12 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 
     if (parsed.type === "finance") {
       const installmentsNum = Number(parsed.installments);
+      const status = parsed.status === "pending" ? "pending" : "paid";
+      let paymentMethod = ["cartão", "pix", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
+      if (status === "pending" && paymentMethod === "pix") {
+        paymentMethod = "cartão";
+      }
+
       return {
         type: "finance",
         financeType: parsed.financeType === "income" ? "income" : "expense",
@@ -190,9 +192,9 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
         date: (parsed.date as string) || (parsed.financeDate as string) || null,
         purchaseDate: (parsed.purchaseDate as string) || (parsed.financePurchaseDate as string) || null,
-        paymentMethod: ["cartão", "pix", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix",
+        paymentMethod,
         account: (parsed.account as string) || "Principal",
-        status: parsed.status === "pending" ? "pending" : "paid",
+        status,
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
     }
