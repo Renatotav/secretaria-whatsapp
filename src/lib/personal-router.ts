@@ -119,10 +119,11 @@ Tipos:
    Ex: "Comprei um Samsung S25 de 291 no cartão do Bruno, em 17x" → expense,
    291, categoria "Financeiro", subcategoria "Parcelas no cartão", installments: 17
 
-   DATAS E MEIOS DE PAGAMENTO:
-   - Se a mensagem especificar a data do vencimento (ou se falar "vence dia X"), extraia em "financeDate". Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (mês atual se comprou longe do vencimento, ou próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}).
-   - REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar a data da compra na mensagem, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}). Jamais use datas antigas.
-   - REGRA PARA MEIO DE PAGAMENTO (paymentMethod): Se o usuário especificar ou se for uma conta agendada/futura (ex: Aluguel no Pix, Boleto, etc.), MANTENHA a forma de pagamento escolhida (pix, boleto, dinheiro ou cartão), mesmo se o status for "pending".
+   - REGRA PARA MEIO DE PAGAMENTO (paymentMethod):
+     1) Receitas e Salário: use SEMPRE "pix".
+     2) Aluguel, Moradia, Luz, Água, Condomínio, Contas de Casa: use SEMPRE "pix" (ou "boleto" se mencionado).
+     3) Lançamentos futuros/pendentes no Pix (ex: Aluguel a pagar) MANTÊM "pix", JAMAIS convertem para cartão.
+     4) SOMENTE compras no Cartão de Crédito ou parceladas no cartão usam "cartão".
 
 4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
