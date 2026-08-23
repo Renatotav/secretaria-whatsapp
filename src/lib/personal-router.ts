@@ -122,7 +122,7 @@ Tipos:
    DATAS E MEIOS DE PAGAMENTO:
    - Se a mensagem especificar a data do vencimento (ou se falar "vence dia X"), extraia em "financeDate". Se a despesa for no Cartão de Crédito e o vencimento não for dito explicitamente, OBRIGATORIAMENTE defina o "financeDate" para o dia ${creditCardDueDay} do mês correto (mês atual se comprou longe do vencimento, ou próximo mês se comprou perto/depois do dia ${creditCardDueDay - 7}).
    - REGRA CRÍTICA PARA DATA DA COMPRA (financePurchaseDate): Se o usuário não explicitar a data da compra na mensagem, a "financePurchaseDate" DEVE SER OBRIGATORIAMENTE A DATA DE HOJE (${todayBRT}). Jamais use datas antigas.
-   - REGRA CRÍTICA PARA MEIO DE PAGAMENTO (paymentMethod): Se o status for "pending" (vencimento futuro / a pagar), o meio de pagamento NUNCA PODE SER "pix", pois Pix é instantâneo. Para qualquer gasto pendente/futuro, defina o paymentMethod OBRIGATORIAMENTE como "cartão" (ou "boleto" se mencionar boleto).
+   - REGRA PARA MEIO DE PAGAMENTO (paymentMethod): Se o usuário especificar ou se for uma conta agendada/futura (ex: Aluguel no Pix, Boleto, etc.), MANTENHA a forma de pagamento escolhida (pix, boleto, dinheiro ou cartão), mesmo se o status for "pending".
 
 4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
@@ -178,9 +178,6 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       const installmentsNum = Number(parsed.installments);
       const status = parsed.status === "pending" ? "pending" : "paid";
       let paymentMethod = ["cartão", "pix", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
-      if (status === "pending" && paymentMethod === "pix") {
-        paymentMethod = "cartão";
-      }
 
       return {
         type: "finance",

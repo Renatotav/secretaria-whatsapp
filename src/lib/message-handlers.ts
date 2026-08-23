@@ -752,7 +752,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   let account = invoice.account || "Principal";
   let status = invoice.status || "paid";
 
-  const isCreditCard = paymentMethod.includes("cart") || paymentMethod.includes("cred") || paymentMethod.includes("tef") || status === "pending";
+  const isCreditCard = paymentMethod.includes("cart") || paymentMethod.includes("cred") || paymentMethod.includes("tef");
 
   if (isCreditCard && paymentMethod !== "ticket") {
     paymentMethod = "cartão";
