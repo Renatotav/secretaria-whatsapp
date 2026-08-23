@@ -126,24 +126,21 @@ export const PATCH = withErrorHandling(async (request: Request) => {
 
   const updated = await prisma.financeEntry.update({ where: { id }, data });
 
-  // Mesma projeção de parcelas restantes, disparada quando a descrição
-  // editada passa a ter "Parcela X/Y" (ex: usuário completou o dado à mão).
-  if (/Parcela \d+\/\d+/.test(updated.description) || /\(recorrente\)/.test(updated.description)) {
-    await projectAndInsertFinanceEntries(
-      [{
-        date: updated.date.toISOString(),
-        purchaseDate: updated.purchaseDate?.toISOString(),
-        description: updated.description,
-        amount: updated.amount,
-        type: updated.type as "income" | "expense",
-        category: updated.category,
-        subcategory: updated.subcategory,
-        account: updated.account,
-        paymentMethod: updated.paymentMethod,
-        status: updated.status as "paid" | "pending",
-      }],
-      "dashboard"
-    );
+  // Sincroniza paymentMethod / account com lançamentos futuros do mesmo item (ex: Salário previsto, Aluguel previsto)
+  if (data.paymentMethod || data.account) {
+    const baseDesc = updated.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim();
+    if (baseDesc) {
+      await prisma.financeEntry.updateMany({
+        where: {
+          description: { contains: baseDesc, mode: "insensitive" },
+          id: { not: updated.id }
+        },
+        data: {
+          ...(data.paymentMethod ? { paymentMethod: data.paymentMethod as string } : {}),
+          ...(data.account ? { account: data.account as string } : {})
+        }
+      });
+    }
   }
 
   return NextResponse.json(updated);

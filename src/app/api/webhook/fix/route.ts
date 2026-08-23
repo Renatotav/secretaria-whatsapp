@@ -66,13 +66,35 @@ export async function GET() {
       }
     }
 
+    // Deduplicar entradas com mesma data, valor, tipo e descrição
+    const all = await prisma.financeEntry.findMany({ orderBy: { date: "asc" } });
+    const seen = new Set<string>();
+    const deletedIds: string[] = [];
+
+    for (const e of all) {
+      const dateStr = e.date.toISOString().slice(0, 10);
+      const key = `${dateStr}_${e.type}_${e.amount}_${e.description}`;
+      if (seen.has(key)) {
+        deletedIds.push(e.id);
+      } else {
+        seen.add(key);
+      }
+    }
+
+    if (deletedIds.length > 0) {
+      await prisma.financeEntry.deleteMany({
+        where: { id: { in: deletedIds } }
+      });
+    }
+
     return NextResponse.json({ 
       success: true, 
       countPending: result.count, 
       countIncome: resultIncome.count,
       countAluguel: resultAluguel.count,
+      deletedDuplicates: deletedIds.length,
       fixedDates: fixedDatesCount,
-      message: "Migração de receitas e aluguel para Pix concluída com sucesso! Datas corrigidas também." 
+      message: "Limpeza e migração concluídas com sucesso! Duplicatas removidas e forma Pix ajustada." 
     });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
