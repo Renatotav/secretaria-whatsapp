@@ -729,16 +729,36 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   }
 
   let invoiceDate = invoice.date ? parseLocalDate(invoice.date) : new Date();
-  // Valida o ano: se fora do intervalo razoável (2020-2029), usa hoje
-  if (invoiceDate.getFullYear() < 2020 || invoiceDate.getFullYear() > 2029) {
+  // Valida o ano: só aceita ano atual ±1 (ex: 2025-2027 em 2026)
+  const currentYear = new Date().getFullYear();
+  if (invoiceDate.getFullYear() < currentYear - 1 || invoiceDate.getFullYear() > currentYear + 1) {
     invoiceDate = new Date();
   }
   const purchaseDate = new Date(invoiceDate);
   
-  if (invoice.status === "pending" && invoice.paymentMethod === "cartão" && config.creditCardDueDay) {
-    const isAfterClose = invoiceDate.getDate() >= (config.creditCardDueDay - 7); // Assume close is 7 days before due date
+  let paymentMethod = (invoice.paymentMethod || "pix").toLowerCase();
+  let account = invoice.account || "Principal";
+  let status = invoice.status || "paid";
+
+  const isCreditCard = paymentMethod.includes("cart") || paymentMethod.includes("cred") || paymentMethod.includes("tef") || status === "pending";
+
+  if (isCreditCard && paymentMethod !== "ticket") {
+    paymentMethod = "cartão";
+    status = "pending";
+    account = "Principal";
+  } else if (paymentMethod === "ticket" || account.toLowerCase().includes("ticket")) {
+    paymentMethod = "ticket";
+    status = "paid";
+    account = "Ticket Alimentação";
+  } else {
+    account = "Principal";
+  }
+
+  const dueDay = config.creditCardDueDay || 10;
+  if (status === "pending" && paymentMethod === "cartão") {
+    const isAfterClose = invoiceDate.getDate() >= (dueDay - 7); // Assume close is 7 days before due date
     const dueMonth = isAfterClose ? invoiceDate.getMonth() + 1 : invoiceDate.getMonth();
-    invoiceDate = new Date(invoiceDate.getFullYear(), dueMonth, config.creditCardDueDay);
+    invoiceDate = new Date(invoiceDate.getFullYear(), dueMonth, dueDay);
   }
 
   let finalMood = "neutro";
@@ -764,9 +784,9 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
       description: `Nota Fiscal (${invoice.items.length} itens) - ${caption}`,
       date: invoiceDate,
       purchaseDate: purchaseDate,
-      paymentMethod: invoice.paymentMethod || "pix",
-      account: invoice.account || "Principal",
-      status: invoice.status || "paid",
+      paymentMethod: paymentMethod,
+      account: account,
+      status: status,
       mood: finalMood,
       source: "whatsapp",
       invoiceItems: {

@@ -443,7 +443,7 @@ A legenda/texto do usuário enviada junto foi: "${caption}"
 Sua tarefa é extrair os metadados principais e a lista DETALHADA de cada produto/serviço cobrado.
 
 Metadados:
-- date: data do cupom no formato ISO 8601 (YYYY-MM-DD)
+- date: data da COMPRA que aparece no topo/cabeçalho do cupom (formato ISO YYYY-MM-DD). NÃO use datas da seção "Forma de Pagamento" ou vencimento. Se não conseguir ler a data claramente, use a data de hoje.
 - total: o valor TOTAL PAGO na nota (número, sem cifrão)
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
