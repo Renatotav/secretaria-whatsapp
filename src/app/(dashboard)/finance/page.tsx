@@ -942,7 +942,7 @@ export default function FinancePage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }} className="p-4 md:p-6">
+      <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 160 }} className="p-4 md:p-6">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
