@@ -139,6 +139,8 @@ export const PATCH = withErrorHandling(async (request: Request) => {
         category: updated.category,
         subcategory: updated.subcategory,
         account: updated.account,
+        paymentMethod: updated.paymentMethod,
+        status: updated.status as "paid" | "pending",
       }],
       "dashboard"
     );

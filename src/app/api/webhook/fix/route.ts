@@ -12,18 +12,28 @@ export async function GET() {
       },
     });
 
-    const resultCard = await prisma.financeEntry.updateMany({
+    // Corrigir receitas (ex: Salário) para Pix
+    const resultIncome = await prisma.financeEntry.updateMany({
+      where: {
+        type: "income"
+      },
+      data: {
+        paymentMethod: "pix"
+      }
+    });
+
+    // Corrigir Aluguel / Moradia para Pix
+    const resultAluguel = await prisma.financeEntry.updateMany({
       where: {
         OR: [
-          { category: { contains: "Cartão", mode: "insensitive" } },
-          { subcategory: { contains: "Cartão", mode: "insensitive" } },
-          { description: { contains: "Cartão", mode: "insensitive" } },
-          { description: { contains: "Parcela", mode: "insensitive" } },
+          { category: { contains: "Moradia", mode: "insensitive" } },
+          { subcategory: { contains: "Aluguel", mode: "insensitive" } },
+          { description: { contains: "Aluguel", mode: "insensitive" } },
         ]
       },
       data: {
-        paymentMethod: "cartão",
-      },
+        paymentMethod: "pix"
+      }
     });
 
     const allEntries = await prisma.financeEntry.findMany();
@@ -59,9 +69,10 @@ export async function GET() {
     return NextResponse.json({ 
       success: true, 
       countPending: result.count, 
-      countCard: resultCard.count,
+      countIncome: resultIncome.count,
+      countAluguel: resultAluguel.count,
       fixedDates: fixedDatesCount,
-      message: "Migração de parcelas e cartões concluída com sucesso! Datas corrigidas também." 
+      message: "Migração de receitas e aluguel para Pix concluída com sucesso! Datas corrigidas também." 
     });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
