@@ -444,7 +444,7 @@ Sua tarefa é extrair os metadados principais e a lista DETALHADA de cada produt
 
 Metadados:
 - date: data da COMPRA que aparece no topo/cabeçalho do cupom (formato ISO YYYY-MM-DD). NÃO use datas da seção "Forma de Pagamento" ou vencimento. Se não conseguir ler a data claramente, use a data de hoje.
-- total: o valor TOTAL PAGO na nota (número, sem cifrão)
+- total: o VALOR A PAGAR final da nota (após descontos, número, sem cifrão). Ex: "VALOR A PAGAR R$ 65,39" -> total: 65.39.
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
 - paymentMethod: descubra a forma de pagamento ("cartão", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". O padrão é "pix".
@@ -457,7 +457,8 @@ Para CADA linha de produto/serviço, extraia:
 - category: classifique este PRODUTO específico com uma macro-categoria. Por exemplo, num supermercado, pode ser "Bebidas Alcoólicas", "Limpeza", "Carnes", "Petiscos", "Essenciais", etc.
 - quantity: quantidade comprada (número)
 - unitPrice: valor unitário do item (número)
-- amount: valor total pago pelo item (número, geralmente quantity * unitPrice)
+- amount: valor total pago pelo item (número, com desconto já deduzido do item se houver "desconto sobre item").
+ATENÇÃO PARA DESCONTOS: Se houver linha de "desconto sobre item" ou desconto global na nota, abata o valor do desconto no 'amount' do item ou inclua um item de desconto com valor negativo (ex: amount: -2.51) para que a SOMA de todos os 'amount' seja EXATAMENTE IGUAL ao 'total' (VALOR A PAGAR).
 
 IMPORTANTE:
 - Retorne APENAS um JSON válido. Não coloque texto antes ou depois.

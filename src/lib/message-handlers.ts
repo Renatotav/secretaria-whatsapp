@@ -721,9 +721,21 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     return;
   }
 
-  const calculatedTotal = invoice.items.reduce((acc, i) => acc + (i.amount || (i.quantity * i.unitPrice)), 0);
-  
-  if (Math.abs(calculatedTotal - invoice.total) > 2.0) {
+  let calculatedTotal = invoice.items.reduce((acc, i) => acc + (i.amount || (i.quantity * i.unitPrice)), 0);
+  const diff = Number((invoice.total - calculatedTotal).toFixed(2));
+
+  // Se a diferença for de até R$ 15.00 (ex: descontos de itens/nota ou pequenos arredondamentos),
+  // insere automaticamente um item de desconto/ajuste para fechar a conta perfeitamente.
+  if (Math.abs(diff) >= 0.01 && Math.abs(diff) <= 15.0) {
+    invoice.items.push({
+      name: diff < 0 ? "Desconto da Nota" : "Ajuste / Acréscimo Nota",
+      category: "Desconto / Ajuste",
+      quantity: 1,
+      unitPrice: diff,
+      amount: diff
+    });
+    calculatedTotal = invoice.total;
+  } else if (Math.abs(calculatedTotal - invoice.total) > 2.0) {
     await notifyOwner(config, `⚠️ *Conta não fechou!* O total lido na nota foi R$ ${invoice.total.toFixed(2)}, mas a soma dos ${invoice.items.length} itens deu R$ ${calculatedTotal.toFixed(2)}. Por segurança contra alucinações da IA, não salvei a nota. Tente mandar uma foto mais nítida.`);
     return;
   }
