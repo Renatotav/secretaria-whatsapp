@@ -448,7 +448,7 @@ Metadados:
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
 - paymentMethod: descubra a forma de pagamento ("cartão", "pix", "boleto", "dinheiro", ou "ticket"). Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício, use "ticket". Procure na foto (ex: "CARTAO CREDITO") ou na legenda. O padrão é "pix".
-- account: a conta usada. Se a legenda disser "ticket", "nubank", "inter", coloque aqui. O padrão é "Principal" ou "Cartão de Crédito". Se for ticket/vale alimentação, use "Ticket Alimentação".
+- account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "Ticket Alimentação" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
 - status: "paid" se já foi debitado na hora (pix, dinheiro, débito, ticket/vale alimentação), ou "pending" se for no cartão de crédito ou boleto a vencer.
 
 Itens (produtos/serviços):
