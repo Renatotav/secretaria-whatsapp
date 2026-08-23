@@ -729,6 +729,10 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   }
 
   let invoiceDate = invoice.date ? parseLocalDate(invoice.date) : new Date();
+  // Valida o ano: se fora do intervalo razoável (2020-2029), usa hoje
+  if (invoiceDate.getFullYear() < 2020 || invoiceDate.getFullYear() > 2029) {
+    invoiceDate = new Date();
+  }
   const purchaseDate = new Date(invoiceDate);
   
   if (invoice.status === "pending" && invoice.paymentMethod === "cartão" && config.creditCardDueDay) {
