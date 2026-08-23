@@ -447,9 +447,9 @@ Metadados:
 - total: o valor TOTAL PAGO na nota (número, sem cifrão)
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
-- paymentMethod: descubra a forma de pagamento ("cartão", "pix", "boleto", "dinheiro", ou "ticket"). Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício, use "ticket". Procure na foto (ex: "CARTAO CREDITO") ou na legenda. O padrão é "pix".
+- paymentMethod: descubra a forma de pagamento ("cartão", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". O padrão é "pix".
 - account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "Ticket Alimentação" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
-- status: "paid" se já foi debitado na hora (pix, dinheiro, débito, ticket/vale alimentação), ou "pending" se for no cartão de crédito ou boleto a vencer.
+- status: REGRA ABSOLUTA: cartão de crédito ("cartão", TEF Rotativo, Credito Rotativo) = SEMPRE "pending" (nunca paid). pix, dinheiro, débito, ticket = "paid".
 
 Itens (produtos/serviços):
 Para CADA linha de produto/serviço, extraia:
