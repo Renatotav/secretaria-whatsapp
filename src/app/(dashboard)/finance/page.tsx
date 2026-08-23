@@ -1279,7 +1279,7 @@ export default function FinancePage() {
                 title={form.account.toLowerCase().includes("ticket") ? "Tickets só aceitam formato de Cartão" : undefined}
               >
                 <option value="pix">Pix</option>
-                <option value="cartao">Cartão</option>
+                <option value="cartão">Cartão</option>
                 <option value="dinheiro">Dinheiro</option>
                 <option value="boleto">Boleto</option>
                 <option value="ticket">Ticket / Vale</option>

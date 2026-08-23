@@ -126,21 +126,26 @@ export const PATCH = withErrorHandling(async (request: Request) => {
 
   const updated = await prisma.financeEntry.update({ where: { id }, data });
 
-  // Sincroniza paymentMethod / account com lançamentos futuros do mesmo item (ex: Salário previsto, Aluguel previsto)
+  // Sincroniza paymentMethod / account com lançamentos do mesmo item/categoria (ex: Salário previsto, Aluguel previsto)
   if (data.paymentMethod || data.account) {
-    const baseDesc = updated.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim();
-    if (baseDesc) {
-      await prisma.financeEntry.updateMany({
-        where: {
-          description: { contains: baseDesc, mode: "insensitive" },
-          id: { not: updated.id }
-        },
-        data: {
-          ...(data.paymentMethod ? { paymentMethod: data.paymentMethod as string } : {}),
-          ...(data.account ? { account: data.account as string } : {})
-        }
-      });
-    }
+    const baseDesc = updated.description ? updated.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim() : "";
+    const updateData: any = {};
+    if (data.paymentMethod) updateData.paymentMethod = data.paymentMethod as string;
+    if (data.account) updateData.account = data.account as string;
+
+    await prisma.financeEntry.updateMany({
+      where: {
+        OR: [
+          ...(baseDesc ? [{ description: { contains: baseDesc, mode: "insensitive" as const } }] : []),
+          {
+            category: updated.category,
+            subcategory: updated.subcategory,
+          }
+        ],
+        id: { not: updated.id }
+      },
+      data: updateData
+    });
   }
 
   return NextResponse.json(updated);
