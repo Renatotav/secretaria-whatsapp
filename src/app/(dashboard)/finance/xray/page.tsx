@@ -62,21 +62,21 @@ function XRayContent() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-    <div style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto", paddingBottom: 60 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
-          <Link href="/finance" style={{ color: "var(--accent)", textDecoration: "none", fontSize: 13, marginBottom: 8, display: "inline-block" }}>
+    <div style={{ padding: "16px", maxWidth: 1200, margin: "0 auto", paddingBottom: 60 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Link href="/finance" style={{ color: "var(--accent)", textDecoration: "none", fontSize: 13, marginBottom: 6, display: "inline-block" }}>
             ← Voltar para Finanças
           </Link>
-          <h1 style={{ fontSize: 24, fontWeight: 700 }}>🔍 Raio-X Universal</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Análise detalhada de todos os itens de notas fiscais do mês.</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>🔍 Raio-X Universal</h1>
+          <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Itens detalhados das notas fiscais do mês.</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ flexShrink: 0 }}>
           <input
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text)" }}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text)", fontSize: 14 }}
           />
         </div>
       </div>
@@ -89,30 +89,30 @@ function XRayContent() {
         </div>
       ) : (
         <>
-          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", marginBottom: 24 }}>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Total Identificado (Raio-X)</p>
-              <p style={{ fontSize: 28, fontWeight: 700 }}>R$ {total.toFixed(2)}</p>
+          <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", marginBottom: 20 }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Total (Raio-X)</p>
+              <p style={{ fontSize: 22, fontWeight: 700 }}>R$ {total.toFixed(2)}</p>
             </div>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Itens Analisados</p>
-              <p style={{ fontSize: 28, fontWeight: 700 }}>{items.length}</p>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Itens</p>
+              <p style={{ fontSize: 22, fontWeight: 700 }}>{items.length}</p>
             </div>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Gargalo Principal</p>
-              <p style={{ fontSize: 28, fontWeight: 700, color: "var(--danger)" }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Gargalo</p>
+              <p style={{ fontSize: 18, fontWeight: 700, color: "var(--danger)" }}>
                 {byCategory.length > 0 ? byCategory[0][0] : "—"}
               </p>
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: 24, gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>💰 Gastos por Subcategoria</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 520, overflowY: "auto", paddingRight: 6 }}>
+          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>💰 Gastos por Subcategoria</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {byCategory.map(([cat, val]) => (
                   <div key={cat}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13 }}>
                       <span>{cat}</span>
                       <span style={{ fontWeight: 600 }}>R$ {val.toFixed(2)}</span>
                     </div>
@@ -124,16 +124,16 @@ function XRayContent() {
               </div>
             </div>
 
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>🏆 Ranking de Produtos (Top 50)</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 500, overflowY: "auto", paddingRight: 8 }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>🏆 Ranking de Produtos (Top 50)</h2>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {byProduct.map((prod, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: "1px solid var(--border-light)" }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{i + 1}. {prod.name}</div>
-                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{prod.quantity} unidades compradas</div>
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: "1px solid var(--border-light)" }}>
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i + 1}. {prod.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{prod.quantity} un.</div>
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>R$ {prod.amount.toFixed(2)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>R$ {prod.amount.toFixed(2)}</div>
                   </div>
                 ))}
               </div>
