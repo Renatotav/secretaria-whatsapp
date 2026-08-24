@@ -61,7 +61,8 @@ function XRayContent() {
   }, [items]);
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ height: "100%", overflowY: "auto" }}>
+    <div style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto", paddingBottom: 60 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <Link href="/finance" style={{ color: "var(--accent)", textDecoration: "none", fontSize: 13, marginBottom: 8, display: "inline-block" }}>
@@ -108,7 +109,7 @@ function XRayContent() {
           <div style={{ display: "grid", gap: 24, gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 }}>
               <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>💰 Gastos por Subcategoria</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 520, overflowY: "auto", paddingRight: 6 }}>
                 {byCategory.map(([cat, val]) => (
                   <div key={cat}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 14 }}>
@@ -140,6 +141,7 @@ function XRayContent() {
           </div>
         </>
       )}
+    </div>
     </div>
   );
 }
