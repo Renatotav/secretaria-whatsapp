@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 interface InvoiceItem {
   id: string;
@@ -17,8 +18,11 @@ interface InvoiceItem {
   }
 }
 
-export default function XRayPage() {
+function XRayContent() {
+  const searchParams = useSearchParams();
   const [month, setMonth] = useState(() => {
+    const param = searchParams.get("month");
+    if (param && /^\d{4}-\d{2}$/.test(param)) return param;
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
@@ -137,5 +141,13 @@ export default function XRayPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function XRayPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Carregando...</div>}>
+      <XRayContent />
+    </Suspense>
   );
 }

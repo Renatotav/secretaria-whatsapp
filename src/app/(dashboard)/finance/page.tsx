@@ -948,7 +948,7 @@ export default function FinancePage() {
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
-            <Link href="/finance/xray" className="btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }}>
+            <Link href={`/finance/xray?month=${month}`} className="btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }}>
               🔍 Raio-X
             </Link>
             <button className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)" }} onClick={() => setShowInsights(true)}>
