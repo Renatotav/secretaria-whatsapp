@@ -19,14 +19,12 @@ export const GET = withErrorHandling(async (request: Request) => {
   const startOfMonth = new Date(y, m - 1, 1);
   const endOfMonth = new Date(y, m, 0, 23, 59, 59);
 
-  // Busca todos os InvoiceItems cujas notas (FinanceEntry) pertencem ao mês especificado
+  // Filtra por `date`: para cartão pendente é o vencimento, para pix/débito é a data da compra.
+  // Não usar OR com purchaseDate pois causaria itens aparecerem em dois meses.
   const items = await prisma.invoiceItem.findMany({
     where: {
       financeEntry: {
-        OR: [
-          { date: { gte: startOfMonth, lte: endOfMonth } },
-          { purchaseDate: { gte: startOfMonth, lte: endOfMonth } }
-        ]
+        date: { gte: startOfMonth, lte: endOfMonth }
       }
     },
     include: {
