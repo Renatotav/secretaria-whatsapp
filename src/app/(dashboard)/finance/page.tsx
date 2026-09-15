@@ -38,6 +38,7 @@ type FormState = {
   status: "paid" | "pending";
   mood: string;
   recurring: boolean;
+  installments: string; // número de parcelas ("1" = sem parcelas)
 };
 
 const EMPTY_FORM: FormState = {
@@ -53,6 +54,7 @@ const EMPTY_FORM: FormState = {
   status: "paid",
   mood: "neutro",
   recurring: false,
+  installments: "1",
 };
 
 type EditForm = Omit<FormState, "recurring">;
@@ -856,7 +858,17 @@ export default function FinancePage() {
     e.preventDefault();
     if (!form.amount) return;
     setSaving(true);
-    const description = form.recurring ? `${form.description} (recorrente)`.trim() : form.description;
+
+    const totalParcelas = Math.max(1, parseInt(form.installments || "1", 10) || 1);
+    const baseDesc = form.recurring ? `${form.description} (recorrente)`.trim() : form.description.trim();
+
+    // Monta a descrição no formato que a API já sabe projetar automaticamente
+    const [purchaseYear, purchaseMonth] = (form.purchaseDate || form.date).split("-");
+    const compraTag = `(compra em ${purchaseMonth}/${purchaseYear})`;
+    const description = totalParcelas > 1
+      ? `${baseDesc} - Parcela 1/${totalParcelas} ${compraTag}`.trim()
+      : baseDesc;
+
     await fetch("/api/finance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1311,6 +1323,29 @@ export default function FinancePage() {
                 ))}
               </select>
             </div>
+            {/* Parcelas — só aparece quando forma de pagamento for Cartão */}
+            {form.paymentMethod === "cartão" && form.type === "expense" && (
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                  💳 Parcelas
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="96"
+                  step="1"
+                  value={form.installments}
+                  onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))}
+                  title="Número de parcelas. Ex: 12 para 12x"
+                  placeholder="1"
+                />
+                {parseInt(form.installments) > 1 && (
+                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
+                    Criará {form.installments}x de {formatMoney(Number(form.amount) || 0)}
+                  </p>
+                )}
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center" }}>
               <label
                 title="Repete todo mês automaticamente (ex: salário, aluguel)"
@@ -1326,7 +1361,7 @@ export default function FinancePage() {
               </label>
             </div>
             <button className="btn-primary" type="submit" disabled={saving}>
-              {saving ? "..." : "Adicionar"}
+              {saving ? "..." : `Adicionar${parseInt(form.installments) > 1 ? ` (${form.installments}x)` : ""}`}
             </button>
           </form>
         </div>
