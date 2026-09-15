@@ -1539,10 +1539,10 @@ export default function FinancePage() {
                             </div>
                           </td>
                           <td style={{ padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <button type="button" className="btn-primary" style={{ fontSize: 11, padding: "4px 6px" }} disabled={saving} onClick={() => saveEdit(e.id)}>
+                            <button className="btn-primary" style={{ fontSize: 11, padding: "4px 6px" }} disabled={saving} onClick={() => saveEdit(e.id)}>
                               Salvar
                             </button>{" "}
-                            <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "4px 6px" }} onClick={() => setEditingId(null)}>
+                            <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 6px" }} onClick={() => setEditingId(null)}>
                               Cancelar
                             </button>
                           </td>
@@ -1595,14 +1595,14 @@ export default function FinancePage() {
                         </td>
                         <td style={{ padding: "8px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
                           {e._count && e._count.invoiceItems > 0 && (
-                            <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px", marginRight: 4 }} onClick={() => setSelectedInvoiceId(e.id)} title="Ver itens da nota fiscal">
+                            <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px", marginRight: 4 }} onClick={() => setSelectedInvoiceId(e.id)} title="Ver itens da nota fiscal">
                               🛒 Itens
                             </button>
                           )}
-                          <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => startEdit(e)}>
+                          <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => startEdit(e)}>
                             Editar
                           </button>{" "}
-                          <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => deleteEntry(e.id)}>
+                          <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => deleteEntry(e.id)}>
                             Excluir
                           </button>
                         </td>
