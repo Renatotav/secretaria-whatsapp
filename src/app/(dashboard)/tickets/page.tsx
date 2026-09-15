@@ -58,6 +58,13 @@ export default function TicketsPage() {
     if (selected?.id === id) setSelected(null);
   }
 
+  async function deleteAllTickets() {
+    if (!confirm("Tem certeza que deseja apagar TODOS os chamados? Essa ação não pode ser desfeita.")) return;
+    await fetch("/api/tickets?all=true", { method: "DELETE" });
+    setTickets([]);
+    setSelected(null);
+  }
+
   const statusColor: Record<string, string> = {
     open: "var(--ticket-open)",
     resolved: "var(--ticket-resolved)",
@@ -117,7 +124,30 @@ export default function TicketsPage() {
           }}
         >
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-            <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>🎫 Chamados</h1>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>🎫 Chamados</h1>
+              {tickets.length > 0 && (
+                <button
+                  onClick={deleteAllTickets}
+                  style={{
+                    background: "rgba(230, 103, 103, 0.15)",
+                    color: "var(--danger, #e66767)",
+                    border: "1px solid rgba(230, 103, 103, 0.3)",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    fontSize: 11,
+                    fontWeight: 500,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                  }}
+                  title="Apagar todos os chamados"
+                >
+                  🗑️ Limpar tudo
+                </button>
+              )}
+            </div>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">Todos os status</option>
               {STATUS_OPTIONS.map((s) => (

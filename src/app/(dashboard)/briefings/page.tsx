@@ -58,6 +58,13 @@ export default function BriefingsPage() {
     if (selected?.id === id) setSelected(null);
   }
 
+  async function deleteAllBriefings() {
+    if (!confirm("Tem certeza que deseja apagar TODOS os registros? Essa ação não pode ser desfeita.")) return;
+    await fetch("/api/briefings?all=true", { method: "DELETE" });
+    setBriefings([]);
+    setSelected(null);
+  }
+
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       {/* List */}
@@ -72,7 +79,30 @@ export default function BriefingsPage() {
         }}
       >
         <div style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}>
-          <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>👤 Contatos</h1>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>👤 Contatos</h1>
+            {briefings.length > 0 && (
+              <button
+                onClick={deleteAllBriefings}
+                style={{
+                  background: "rgba(230, 103, 103, 0.15)",
+                  color: "var(--danger, #e66767)",
+                  border: "1px solid rgba(230, 103, 103, 0.3)",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+                title="Apagar todos os registros"
+              >
+                🗑️ Limpar tudo
+              </button>
+            )}
+          </div>
           <div style={{ display: "flex", gap: 8 }}>
             <select value={filterUrgency} onChange={(e) => setFilterUrgency(e.target.value)} style={{ flex: 1 }}>
               <option value="">Todas urgências</option>

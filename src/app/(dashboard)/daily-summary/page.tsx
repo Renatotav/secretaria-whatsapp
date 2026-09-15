@@ -43,6 +43,12 @@ export default function DailySummaryPage() {
     load();
   }, [selectedGroup, selectedDate]);
 
+  async function deleteAllSummaries() {
+    if (!confirm("Tem certeza que deseja apagar TODOS os resumos diários? Essa ação não pode ser desfeita.")) return;
+    await fetch("/api/daily-summary?all=true", { method: "DELETE" });
+    setSummaries([]);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
@@ -63,9 +69,10 @@ export default function DailySummaryPage() {
                 });
                 if (!resPost.ok) {
                   const errorData = await resPost.json().catch(() => ({}));
-                  alert(`Erro ao gerar resumo: ${errorData.error || "Erro interno"}`);
+                  alert(`Erro ao gerar resumo: ${errorData.error || resPost.statusText}`);
                   return;
                 }
+                setLoading(true);
                 const params = new URLSearchParams();
                 params.set("groupJid", selectedGroup);
                 if (selectedDate) params.set("date", selectedDate);
@@ -80,7 +87,7 @@ export default function DailySummaryPage() {
             ⚡ Gerar Resumo Agora
           </button>
         </div>
-        <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <select
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
@@ -105,6 +112,28 @@ export default function DailySummaryPage() {
           <button className="btn-ghost" onClick={() => { setSelectedGroup(""); setSelectedDate(""); }}>
             Ver todos
           </button>
+          {summaries.length > 0 && (
+            <button
+              onClick={deleteAllSummaries}
+              style={{
+                background: "rgba(230, 103, 103, 0.15)",
+                color: "var(--danger, #e66767)",
+                border: "1px solid rgba(230, 103, 103, 0.3)",
+                borderRadius: 8,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                marginLeft: "auto",
+              }}
+              title="Apagar todos os resumos"
+            >
+              🗑️ Limpar tudo
+            </button>
+          )}
         </div>
       </div>
 

@@ -86,6 +86,11 @@ export const DELETE = withErrorHandling(async (request: Request) => {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
   const { searchParams } = new URL(request.url);
+  const all = searchParams.get("all");
+  if (all === "true") {
+    await prisma.dailySummary.deleteMany({});
+    return NextResponse.json({ ok: true });
+  }
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
   await prisma.dailySummary.delete({ where: { id } });
