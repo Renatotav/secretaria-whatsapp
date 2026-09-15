@@ -37,3 +37,33 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   return NextResponse.json(enrichedConversations);
 });
+
+export const DELETE = withErrorHandling(async (request: Request) => {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const all = searchParams.get("all");
+  const source = searchParams.get("source");
+
+  if (all === "true") {
+    if (source) {
+      const convs = await prisma.conversation.findMany({ where: { source }, select: { id: true } });
+      const ids = convs.map((c) => c.id);
+      await prisma.message.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.conversation.deleteMany({ where: { source } });
+    } else {
+      await prisma.message.deleteMany({});
+      await prisma.conversation.deleteMany({});
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  await prisma.conversation.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+});
+

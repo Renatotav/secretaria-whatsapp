@@ -36,6 +36,21 @@ export default function ConversationsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  async function deleteConversation(id: string) {
+    if (!confirm("Excluir esta conversa e todas as suas mensagens?")) return;
+    await fetch(`/api/conversations?id=${id}`, { method: "DELETE" });
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (selected?.id === id) setSelected(null);
+  }
+
+  async function deleteAllConversations() {
+    const label = filterSource === "group" ? "todas as conversas de GRUPOS" : "todas as conversas PRIVADAS";
+    if (!confirm(`Tem certeza que deseja apagar ${label}? Essa ação não pode ser desfeita.`)) return;
+    await fetch(`/api/conversations?all=true&source=${filterSource}`, { method: "DELETE" });
+    setConversations([]);
+    setSelected(null);
+  }
+
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       {/* List */}
@@ -50,7 +65,30 @@ export default function ConversationsPage() {
         }}
       >
         <div style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
-          <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>💬 Conversas</h1>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>💬 Conversas</h1>
+            {conversations.length > 0 && (
+              <button
+                onClick={deleteAllConversations}
+                style={{
+                  background: "rgba(230, 103, 103, 0.15)",
+                  color: "var(--danger, #e66767)",
+                  border: "1px solid rgba(230, 103, 103, 0.3)",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+                title="Apagar todas as conversas desta lista"
+              >
+                🗑️ Limpar tudo
+              </button>
+            )}
+          </div>
           <select
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
@@ -147,16 +185,34 @@ export default function ConversationsPage() {
                 borderBottom: "1px solid var(--border)",
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
+                justifyContent: "space-between",
               }}
             >
-              <span>{selected.source === "group" ? "👥" : "👤"}</span>
-              <div>
-                <p style={{ fontWeight: 600 }}>{selected.displayName || selected.phone}</p>
-                <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {selected.messages.length} mensagens
-                </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>{selected.source === "group" ? "👥" : "👤"}</span>
+                <div>
+                  <p style={{ fontWeight: 600 }}>{selected.displayName || selected.phone}</p>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    {selected.messages.length} mensagens
+                  </p>
+                </div>
               </div>
+
+              <button
+                onClick={() => deleteConversation(selected.id)}
+                style={{
+                  background: "rgba(230, 103, 103, 0.15)",
+                  color: "var(--danger, #e66767)",
+                  border: "1px solid rgba(230, 103, 103, 0.3)",
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+                title="Excluir esta conversa"
+              >
+                🗑️ Excluir conversa
+              </button>
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
               {selected.messages.map((msg) => {
