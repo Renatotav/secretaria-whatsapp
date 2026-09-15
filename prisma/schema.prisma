@@ -211,3 +211,18 @@ model InvoiceItem {
   unitPrice      Float        @default(0)
   createdAt      DateTime     @default(now())
 }
+
+model Contact {
+  id           String    @id @default(cuid())
+  name         String
+  role         String    @default("") // Cargo / Função / Setor
+  organization String    @default("") // Órgão / Tribunal / Empresa
+  phone        String    @default("") // Telefone (opcional)
+  email        String    @default("") // E-mail (opcional)
+  labels       String    @default("") // Etiquetas separadas por vírgula (ex: "Magistrado, PJe")
+  notes        String    @default("") // Histórico de contato / anotações
+  lastContact  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+

@@ -9,7 +9,7 @@ const NAV = [
   { href: "/agenda", icon: "📅", label: "Agenda" },
   { href: "/finance", icon: "💰", label: "Financeiro" },
   { href: "/diary", icon: "📓", label: "Diário" },
-  { href: "/briefings", icon: "👤", label: "Contatos" },
+  { href: "/contacts", icon: "👤", label: "Contatos" },
   { href: "/groups", icon: "👥", label: "Grupos" },
   { href: "/tickets", icon: "🎫", label: "Chamados" },
   { href: "/daily-summary", icon: "📋", label: "Resumos Diários" },
