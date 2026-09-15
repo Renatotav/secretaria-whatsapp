@@ -57,7 +57,7 @@ const EMPTY_FORM: FormState = {
   installments: "1",
 };
 
-type EditForm = Omit<FormState, "recurring">;
+type EditForm = Omit<FormState, "recurring" | "installments">;
 
 // Paleta categórica validada (modo escuro) — ordem fixa, nunca reciclada.
 // Ver skill de dataviz: node scripts/validate_palette.js ... --mode dark --surface #13131f
@@ -1339,7 +1339,7 @@ export default function FinancePage() {
                   title="Número de parcelas. Ex: 12 para 12x"
                   placeholder="1"
                 />
-                {parseInt(form.installments) > 1 && (
+                {parseInt(form.installments || "1", 10) > 1 && (
                   <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
                     Criará {form.installments}x de {formatMoney(Number(form.amount) || 0)}
                   </p>
@@ -1361,7 +1361,7 @@ export default function FinancePage() {
               </label>
             </div>
             <button className="btn-primary" type="submit" disabled={saving}>
-              {saving ? "..." : `Adicionar${parseInt(form.installments) > 1 ? ` (${form.installments}x)` : ""}`}
+              {saving ? "..." : `Adicionar${parseInt(form.installments || "1", 10) > 1 ? ` (${form.installments}x)` : ""}`}
             </button>
           </form>
         </div>
