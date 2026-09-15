@@ -55,6 +55,12 @@ export const DELETE = withErrorHandling(async (request: Request) => {
   }
 
   const { searchParams } = new URL(request.url);
+  const all = searchParams.get("all");
+  if (all === "true") {
+    await prisma.agendaItem.deleteMany({});
+    return NextResponse.json({ ok: true });
+  }
+
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 

@@ -69,6 +69,20 @@ export default function AgendaPage() {
     if (selected?.id === id) setSelected((s) => s ? { ...s, followUpNote: note } : null);
   }
 
+  async function deleteAll() {
+    if (!confirm("Tem certeza que deseja apagar TODOS os itens da Agenda? Essa ação não pode ser desfeita.")) return;
+    await fetch("/api/agenda?all=true", { method: "DELETE" });
+    setItems([]);
+    setSelected(null);
+  }
+
+  async function deleteItem(id: string) {
+    if (!confirm("Deseja excluir este item da Agenda?")) return;
+    await fetch(`/api/agenda?id=${id}`, { method: "DELETE" });
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    if (selected?.id === id) setSelected(null);
+  }
+
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       {/* List */}
@@ -83,7 +97,31 @@ export default function AgendaPage() {
         }}
       >
         <div style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
-          <h1 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>📅 Agenda</h1>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>📅 Agenda</h1>
+            {items.length > 0 && (
+              <button
+                onClick={deleteAll}
+                style={{
+                  background: "rgba(230, 103, 103, 0.15)",
+                  color: "var(--danger, #e66767)",
+                  border: "1px solid rgba(230, 103, 103, 0.3)",
+                  borderRadius: 6,
+                  padding: "4px 8px",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  transition: "all 0.2s",
+                }}
+                title="Apagar todos os itens da Agenda"
+              >
+                🗑️ Limpar tudo
+              </button>
+            )}
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <select value={filterDone} onChange={(e) => setFilterDone(e.target.value)}>
               <option value="false">Pendentes</option>
@@ -257,7 +295,7 @@ export default function AgendaPage() {
               </button>
             </div>
 
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               {!selected.done ? (
                 <button className="btn-primary" onClick={() => markDone(selected.id, true)}>
                   ✅ Marcar como concluído
@@ -267,6 +305,25 @@ export default function AgendaPage() {
                   Reabrir
                 </button>
               )}
+              <button
+                onClick={() => deleteItem(selected.id)}
+                style={{
+                  background: "rgba(230, 103, 103, 0.15)",
+                  color: "var(--danger, #e66767)",
+                  border: "1px solid rgba(230, 103, 103, 0.3)",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  marginLeft: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                title="Excluir este item"
+              >
+                🗑️ Excluir item
+              </button>
             </div>
           </div>
         )}
