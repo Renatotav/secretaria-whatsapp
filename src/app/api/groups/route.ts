@@ -49,3 +49,80 @@ export const PATCH = withErrorHandling(async (request: Request) => {
   const updated = await prisma.groupConfig.update({ where: { id }, data: body });
   return NextResponse.json(updated);
 });
+
+export const DELETE = withErrorHandling(async (request: Request) => {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  await prisma.groupConfig.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+});
+
+export const POST = withErrorHandling(async (request: Request) => {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const action = body.action || "sync";
+
+  if (action === "sync") {
+    const config = await prisma.agentConfig.findFirst();
+    if (!config || !config.evolutionUrl || !config.evolutionApiKey || !config.instanceId) {
+      return NextResponse.json(
+        { error: "Configure a URL da Evolution API, API Key e a Instância em Configurações primeiro." },
+        { status: 400 }
+      );
+    }
+
+    const { fetchAllGroups } = await import("@/lib/evolution");
+    const evoGroups = await fetchAllGroups(
+      config.evolutionUrl,
+      config.evolutionApiKey,
+      config.instanceId
+    );
+
+    let added = 0;
+    let updated = 0;
+
+    for (const eg of evoGroups) {
+      if (!eg.id || !eg.id.endsWith("@g.us")) continue;
+
+      const existing = await prisma.groupConfig.findUnique({
+        where: { groupJid: eg.id },
+      });
+
+      if (!existing) {
+        await prisma.groupConfig.create({
+          data: {
+            groupJid: eg.id,
+            groupName: eg.subject || eg.id.split("@")[0],
+            active: true,
+          },
+        });
+        added++;
+      } else if (eg.subject && existing.groupName !== eg.subject) {
+        await prisma.groupConfig.update({
+          where: { groupJid: eg.id },
+          data: { groupName: eg.subject },
+        });
+        updated++;
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      totalEvolution: evoGroups.length,
+      added,
+      updated,
+    });
+  }
+
+  return NextResponse.json({ error: "Ação não suportada" }, { status: 400 });
+});
+

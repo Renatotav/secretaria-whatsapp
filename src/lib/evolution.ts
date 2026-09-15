@@ -214,3 +214,39 @@ export async function findContact(
     return null;
   }
 }
+
+export async function fetchAllGroups(
+  evolutionUrl: string,
+  evolutionApiKey: string,
+  instanceId: string
+): Promise<{ id: string; subject: string }[]> {
+  try {
+    let url = `${evolutionUrl}/group/fetchAllGroups/${instanceId}?getParticipants=false`;
+    let response: Response;
+    try {
+      response = await evolutionFetch(url, { headers: { apikey: evolutionApiKey } });
+    } catch {
+      url = `${evolutionUrl}/group/fetchAllGroups/${instanceId}`;
+      response = await evolutionFetch(url, { headers: { apikey: evolutionApiKey } });
+    }
+    const data = await response.json();
+    const list: any[] = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.response)
+      ? data.response
+      : Array.isArray(data?.data)
+      ? data.data
+      : [];
+
+    return list
+      .map((g) => ({
+        id: String(g.id || g.jid || ""),
+        subject: String(g.subject || g.name || g.id || ""),
+      }))
+      .filter((g) => g.id.endsWith("@g.us"));
+  } catch (err) {
+    console.error("[evolution] erro ao buscar todos os grupos", err);
+    throw err;
+  }
+}
+

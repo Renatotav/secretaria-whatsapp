@@ -18,8 +18,11 @@ export default function GroupsPage() {
   const [selected, setSelected] = useState<GroupConfig | null>(null);
   const [editName, setEditName] = useState("");
   const [editFocus, setEditFocus] = useState("");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -35,6 +38,36 @@ export default function GroupsPage() {
     setSelected(g);
     setEditName(g.groupName);
     setEditFocus(g.focus);
+  }
+
+  async function syncGroups() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Erro ao sincronizar grupos");
+      } else {
+        setSyncMsg(`${data.totalEvolution} grupos no WhatsApp (${data.added} novos, ${data.updated} atualizados)`);
+        await load();
+      }
+    } catch {
+      alert("Erro ao conectar com a API");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function deleteGroup(id: string, name: string) {
+    if (!confirm(`Deseja remover o grupo "${name}" do painel?\n\nEle sairá desta lista. (Se você ainda estiver no grupo e receber novas mensagens nele, ele poderá reaparecer automaticamente).`)) return;
+    await fetch(`/api/groups?id=${id}`, { method: "DELETE" });
+    setGroups((prev) => prev.filter((g) => g.id !== id));
+    if (selected?.id === id) setSelected(null);
   }
 
   async function toggleActive(id: string, active: boolean) {
@@ -62,12 +95,22 @@ export default function GroupsPage() {
     setSaving(false);
   }
 
+  const filteredGroups = groups.filter((g) => {
+    if (!search.trim()) return true;
+    const term = search.toLowerCase();
+    return (
+      (g.groupName && g.groupName.toLowerCase().includes(term)) ||
+      (g.groupJid && g.groupJid.toLowerCase().includes(term)) ||
+      (g.focus && g.focus.toLowerCase().includes(term))
+    );
+  });
+
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       {/* List */}
       <div
         style={{
-          width: 320,
+          width: 340,
           flexShrink: 0,
           borderRight: "1px solid var(--border)",
           display: "flex",
@@ -76,10 +119,66 @@ export default function GroupsPage() {
         }}
       >
         <div style={{ padding: "16px", borderBottom: "1px solid var(--border)" }}>
-          <h1 style={{ fontSize: 16, fontWeight: 600 }}>👥 Grupos</h1>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
-            Grupos detectados automaticamente via webhook
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>👥 Grupos</h1>
+            <button
+              onClick={syncGroups}
+              disabled={syncing}
+              style={{
+                background: "rgba(57, 135, 229, 0.15)",
+                color: "var(--accent, #3987e5)",
+                border: "1px solid rgba(57, 135, 229, 0.3)",
+                borderRadius: 6,
+                padding: "5px 10px",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: syncing ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                transition: "all 0.2s",
+              }}
+              title="Buscar grupos atuais diretamente da Evolution API (WhatsApp)"
+            >
+              {syncing ? "⏳ Sincronizando..." : "🔄 Sincronizar"}
+            </button>
+          </div>
+
+          <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+            {groups.length} grupos cadastrados
           </p>
+
+          {syncMsg && (
+            <div
+              style={{
+                background: "rgba(25, 158, 112, 0.15)",
+                border: "1px solid rgba(25, 158, 112, 0.3)",
+                borderRadius: 6,
+                padding: "6px 10px",
+                fontSize: 11,
+                color: "var(--success, #199e70)",
+                marginBottom: 10,
+              }}
+            >
+              {syncMsg}
+            </div>
+          )}
+
+          <input
+            type="text"
+            placeholder="🔍 Buscar grupo..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "6px 10px",
+              fontSize: 12,
+              borderRadius: 6,
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              color: "var(--text)",
+            }}
+          />
         </div>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -89,10 +188,17 @@ export default function GroupsPage() {
           {!loading && groups.length === 0 && (
             <div style={{ padding: 24, color: "var(--text-muted)", textAlign: "center" }}>
               <p>Nenhum grupo detectado ainda</p>
-              <p style={{ fontSize: 12, marginTop: 8 }}>Os grupos aparecerão aqui quando chegarem mensagens via webhook</p>
+              <p style={{ fontSize: 12, marginTop: 8 }}>
+                Clique em <strong>Sincronizar</strong> acima para puxar os grupos do seu WhatsApp.
+              </p>
             </div>
           )}
-          {groups.map((g) => (
+          {!loading && groups.length > 0 && filteredGroups.length === 0 && (
+            <div style={{ padding: 24, color: "var(--text-muted)", textAlign: "center", fontSize: 12 }}>
+              Nenhum grupo corresponde à busca.
+            </div>
+          )}
+          {filteredGroups.map((g) => (
             <button
               key={g.id}
               onClick={() => selectGroup(g)}
@@ -281,6 +387,29 @@ export default function GroupsPage() {
               </div>
               <button className="btn-primary" onClick={saveGroup} disabled={saving}>
                 {saving ? "Salvando..." : "Salvar configurações"}
+              </button>
+
+              <button
+                onClick={() => deleteGroup(selected.id, selected.groupName || selected.groupJid)}
+                style={{
+                  marginTop: 8,
+                  background: "rgba(230, 103, 103, 0.12)",
+                  color: "var(--danger, #e66767)",
+                  border: "1px solid rgba(230, 103, 103, 0.25)",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  width: "100%",
+                  transition: "all 0.2s",
+                }}
+                title="Remover este grupo do painel"
+              >
+                🗑️ Remover este grupo do painel
               </button>
             </div>
           </div>
