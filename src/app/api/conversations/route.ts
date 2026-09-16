@@ -67,3 +67,31 @@ export const DELETE = withErrorHandling(async (request: Request) => {
   return NextResponse.json({ ok: true });
 });
 
+export const PATCH = withErrorHandling(async (request: Request) => {
+  if (!isAuthenticated(request)) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  const body = await request.json();
+  const { contactName, status } = body;
+
+  const updateData: any = {};
+  if (contactName !== undefined) {
+    updateData.contactName = contactName;
+    updateData.nameSource = "manual";
+  }
+  if (status !== undefined) {
+    updateData.status = status;
+  }
+
+  const conv = await prisma.conversation.update({
+    where: { id },
+    data: updateData,
+  });
+
+  return NextResponse.json(conv);
+});
