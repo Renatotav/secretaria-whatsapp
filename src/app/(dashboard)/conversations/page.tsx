@@ -138,14 +138,7 @@ export default function ConversationsPage() {
               </button>
             )}
           </div>
-          <select
-            value={filterSource}
-            onChange={(e) => setFilterSource(e.target.value)}
-            style={{ marginBottom: 8, width: "100%" }}
-          >
-            <option value="whatsapp">Privadas (Leads)</option>
-            <option value="group">Grupos</option>
-          </select>
+
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
