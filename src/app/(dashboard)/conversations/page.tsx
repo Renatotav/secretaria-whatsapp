@@ -25,7 +25,6 @@ const STATUS_COLUMNS = [
   { id: "pje", label: "PJe" },
   { id: "em_atendimento", label: "Em atendimento" },
   { id: "resolvido", label: "Resolvido" },
-  { id: "pessoal", label: "Pessoal" },
 ];
 
 export default function ConversationsPage() {
