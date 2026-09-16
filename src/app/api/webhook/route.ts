@@ -8,6 +8,7 @@ import {
   handleSelfMessage,
   handlePrivateMessage,
   handleGroupMessage,
+  handleOwnerReply,
   handleStatementDocument,
   handleStatementImage,
   handleInvoiceImage,
@@ -141,10 +142,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    // Qualquer outra mensagem enviada pelo próprio dono (respondendo alguém
-    // manualmente) não deve virar análise.
+    // Mensagens enviadas pelo próprio dono (respondendo alguém manualmente)
     if (fromMe) {
-      console.log("[webhook] fromMe=true e não é self-chat, ignorando");
+      bufferMessage(`owner:${phone}`, text, { messageTimestamp, remoteJid, pushName, isGroup }, config.debounceSeconds, handleOwnerReply);
       return NextResponse.json({ ok: true });
     }
 

@@ -1035,3 +1035,33 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
     }
   }
 }
+
+export interface OwnerReplyMeta {
+  remoteJid: string;
+  messageTimestamp: number;
+  pushName?: string;
+  isGroup?: boolean;
+}
+
+export async function handleOwnerReply(joinedText: string, meta: OwnerReplyMeta): Promise<void> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config || !config.enabled) return;
+
+  const phone = meta.isGroup ? meta.remoteJid : meta.remoteJid.replace("@s.whatsapp.net", "");
+  const source = meta.isGroup ? "group" : "whatsapp";
+  const contactName = meta.pushName || phone;
+
+  let conv = await prisma.conversation.findFirst({ where: { phone, source } });
+  if (!conv) {
+    conv = await prisma.conversation.create({ data: { phone, source, contactName } });
+  }
+  
+  await prisma.message.create({
+    data: {
+      conversationId: conv.id,
+      role: "assistant",
+      content: joinedText,
+      createdAt: new Date(meta.messageTimestamp * 1000)
+    }
+  });
+}
