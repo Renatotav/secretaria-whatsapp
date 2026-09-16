@@ -22,7 +22,8 @@ interface Conversation {
 }
 
 const STATUS_COLUMNS = [
-  { id: "atendimento", label: "Atendimento" },
+  { id: "pje", label: "PJe" },
+  { id: "em_atendimento", label: "Em atendimento" },
   { id: "resolvido", label: "Resolvido" },
 ];
 
@@ -30,7 +31,7 @@ export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [filterSource, setFilterSource] = useState("whatsapp");
-  const [activeStatus, setActiveStatus] = useState("atendimento");
+  const [activeStatus, setActiveStatus] = useState("em_atendimento");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   
@@ -58,7 +59,7 @@ export default function ConversationsPage() {
   useEffect(() => {
     if (selected) {
       setEditName(selected.contactName || selected.displayName || selected.phone || "");
-      setEditStatus(selected.status === "lead" || !selected.status ? "atendimento" : selected.status);
+      setEditStatus(selected.status === "lead" || selected.status === "atendimento" || !selected.status ? "em_atendimento" : selected.status);
     }
   }, [selected]);
 
@@ -95,7 +96,7 @@ export default function ConversationsPage() {
     }
   }
 
-  const filteredConversations = conversations.filter(c => (c.status === "lead" ? "atendimento" : (c.status || "atendimento")) === activeStatus);
+  const filteredConversations = conversations.filter(c => (c.status === "lead" || c.status === "atendimento" ? "em_atendimento" : (c.status || "em_atendimento")) === activeStatus);
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -151,7 +152,7 @@ export default function ConversationsPage() {
         {/* Status Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
           {STATUS_COLUMNS.map(col => {
-            const count = conversations.filter(c => (c.status === "lead" ? "atendimento" : (c.status || "atendimento")) === col.id).length;
+            const count = conversations.filter(c => (c.status === "lead" || c.status === "atendimento" ? "em_atendimento" : (c.status || "em_atendimento")) === col.id).length;
             return (
               <button
                 key={col.id}
