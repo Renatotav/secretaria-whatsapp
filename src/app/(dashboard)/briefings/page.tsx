@@ -108,8 +108,6 @@ export default function BriefingsPage() {
               <option value="">Todas urgências</option>
               <option value="critical">Urgente</option>
               <option value="high">Importante</option>
-              <option value="normal">Normal</option>
-              <option value="low">Baixa</option>
             </select>
             <select value={filterRead} onChange={(e) => setFilterRead(e.target.value)} style={{ flex: 1 }}>
               <option value="">Todos</option>
