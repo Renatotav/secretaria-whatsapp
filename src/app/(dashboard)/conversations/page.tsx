@@ -22,17 +22,15 @@ interface Conversation {
 }
 
 const STATUS_COLUMNS = [
-  { id: "lead", label: "Lead" },
-  { id: "em_atendimento", label: "Atendimento" },
-  { id: "negociacao", label: "Negociação" },
-  { id: "fechado", label: "Fechado" },
+  { id: "atendimento", label: "Atendimento" },
+  { id: "resolvido", label: "Resolvido" },
 ];
 
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [filterSource, setFilterSource] = useState("whatsapp");
-  const [activeStatus, setActiveStatus] = useState("lead");
+  const [activeStatus, setActiveStatus] = useState("atendimento");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   
@@ -60,7 +58,7 @@ export default function ConversationsPage() {
   useEffect(() => {
     if (selected) {
       setEditName(selected.contactName || selected.displayName || selected.phone || "");
-      setEditStatus(selected.status || "lead");
+      setEditStatus(selected.status === "lead" || !selected.status ? "atendimento" : selected.status);
     }
   }, [selected]);
 
@@ -97,7 +95,7 @@ export default function ConversationsPage() {
     }
   }
 
-  const filteredConversations = conversations.filter(c => (c.status || "lead") === activeStatus);
+  const filteredConversations = conversations.filter(c => (c.status === "lead" ? "atendimento" : (c.status || "atendimento")) === activeStatus);
 
   return (
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
@@ -153,7 +151,7 @@ export default function ConversationsPage() {
         {/* Status Tabs */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto" }}>
           {STATUS_COLUMNS.map(col => {
-            const count = conversations.filter(c => (c.status || "lead") === col.id).length;
+            const count = conversations.filter(c => (c.status === "lead" ? "atendimento" : (c.status || "atendimento")) === col.id).length;
             return (
               <button
                 key={col.id}
