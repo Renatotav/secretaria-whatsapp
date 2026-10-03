@@ -14,7 +14,8 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
   expense: {
     "Moradia": ["Aluguel", "Condomínio", "Energia elétrica", "Água/Esgoto", "Internet", "Gás", "Plano de celular", "Manutenção da casa"],
     "Alimentação": ["Supermercado", "Restaurantes", "Delivery", "Padaria/Lanche"],
-    "Transporte": ["Uber/Taxi", "Combustível", "Veículo", "Manutenção veículo", "Seguro", "Transporte público"],
+    // Sem "Combustível": a moto dele é elétrica (a recarga entra na conta de luz).
+    "Transporte": ["Uber/Taxi", "Veículo", "Manutenção veículo", "Seguro", "Transporte público"],
     "Saúde": ["Farmácia", "Plano de saúde", "Consultas"],
     // "Assinaturas" = cobrança que se repete todo mês: o sistema projeta os
     // próximos meses só para esta categoria (ver isRecurring/projeção).
@@ -23,7 +24,6 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
     "Pessoal": ["Lazer", "Beleza/Cuidados", "Presentes"],
     "Educação": ["Cursos", "Livros", "Mensalidade"],
     "Impostos e taxas": ["IOF", "IR", "IPVA", "Tarifas bancárias", "Juros", "Empréstimos"],
-    "Família": ["Mesada", "Gastos com filhos"],
     "Outros": ["Imprevistos"],
   },
 };
