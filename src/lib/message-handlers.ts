@@ -552,6 +552,52 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
   }
 }
 
+// O que a secretária sabe fazer, com a frase que aciona cada coisa. Usado na
+// conversa ("o que você faz?", "como vejo X?") — ao criar função nova, inclua aqui.
+const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gastei 45 no mercado", "recebi 3000 de salário", "comprei um celular de 291 em 17x".
+  Depois do gasto ela pergunta o meio de pagamento: responder "2" pix, "3" débito, "4" dinheiro. Para mudar a data da compra, responder só o dia ("15/08").
+🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
+💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez.
+📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
+📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
+🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
+📅 "Fechamento do mês" — como fechou o mês passado, com gráfico.
+🔁 "Quanto gasto com assinaturas?" — contas fixas e assinaturas.
+❓ Pergunta livre sobre os números: "quanto gastei com Uber em setembro?", "qual minha maior compra no cartão?", "quanto falta pagar do Samsung?".
+🛒 Simulador: "posso comprar um tênis de 200 em 3x?", "e se meu salário for 3300?".
+🏆 Metas: "como estão minhas metas?" (com gráfico), "guarda 100 na reserva", "tirei 900 da reserva". Depois do salário ela sugere quanto guardar — responder "guarda".
+🗓️ Agenda e lembretes: "reunião amanhã às 14h", "lembrar de pagar o cartão sexta", "o que tenho pendente?".
+🎫 Chamados e grupos: "quais chamados estão abertos?", "resumo do grupo PJe".
+📔 Diário: contar como foi o dia ("hoje foi puxado, fiquei cansado...") — ela guarda com o humor.
+🖥️ Painel web: tudo isso também aparece no painel (financeiro, metas, agenda, diário).`;
+
+/**
+ * Conversa: cumprimento, dúvida de como usar ou mensagem ambígua. Responde
+ * com naturalidade e, quando ajudar, ensina a frase que aciona a função.
+ * Nada é registrado aqui.
+ */
+async function answerChat(message: string, recentContext: string | undefined, ownerName: string, providerOpts: ProviderOptions): Promise<string> {
+  const system = `Você é a secretária pessoal de ${ownerName} no WhatsApp. Ele fala com você mandando mensagem para o próprio número.
+Converse de forma natural e calorosa, em português simples, curto (até 6 linhas), com emoji moderado.
+
+O que você sabe fazer (e a frase que aciona cada coisa):
+${ASSISTANT_MANUAL}
+
+Regras:
+- Se ele perguntar o que você faz ou como fazer algo, explique com as suas palavras e mostre a frase exata entre *asteriscos* para ele mandar.
+- Se a mensagem for ambígua, diga o que entendeu, pergunte o que ele quis dizer e sugira 1 ou 2 frases do manual que resolvem.
+- Nunca diga que registrou, lançou ou anotou algo: nesta conversa nada foi salvo. Se ele quis registrar, mostre a frase certa.
+- Não invente funções que não estão na lista; se não souber fazer, diga com sinceridade.
+- Não dê sermão sobre horário, sono, bebida ou saúde.`;
+  const prompt = `${recentContext ? `Conversa recente:\n${recentContext}\n\n` : ""}Mensagem dele agora: "${message}"`;
+  try {
+    const { content } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
+    return content.trim() || "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
+  } catch {
+    return "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
+  }
+}
+
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
   if (intent === "subscriptions") return buildSubscriptionsResponse();
   if (intent === "month_diagnosis") return buildMonthDiagnosis();
@@ -1029,6 +1075,9 @@ Não seja robótico. Chame-o de Renato.`;
       break;
     case "finance_question":
       response = await answerFinanceQuestion(route.question, providerOpts);
+      break;
+    case "chat":
+      response = await answerChat(joinedText, recentContext, config.ownerName, providerOpts);
       break;
     case "diary":
       await prisma.diaryEntry.create({

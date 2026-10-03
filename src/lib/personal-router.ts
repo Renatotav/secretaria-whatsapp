@@ -76,6 +76,12 @@ export type PersonalRouteResult =
       confirmation: string;
     }
   | {
+      // Conversa: cumprimento, dúvida de como usar, papo ou mensagem ambígua.
+      // Nada é registrado; a resposta é escrita depois, com o manual de funções.
+      type: "chat";
+      confirmation: string;
+    }
+  | {
       // "E se meu salário for 3.300?" / "Posso comprar um capacete de 350 em 3x?"
       type: "finance_simulation";
       simIncome: number | null;
@@ -102,7 +108,7 @@ export async function routePersonalMessage(
   const systemPrompt = `Você é a secretária pessoal de ${ownerName}. Ele mandou uma
 mensagem para o próprio número do WhatsApp — é assim que ele te alimenta com
 tarefas, gastos/receitas e anotações pessoais. Classifique a intenção em um
-dos 4 tipos e extraia os dados. Você nunca redige respostas para terceiros,
+dos tipos abaixo e extraia os dados. Você nunca redige respostas para terceiros,
 só confirma o que foi registrado.
 
 DATA DE HOJE: ${todayBRT}
@@ -156,8 +162,9 @@ Tipos:
         mesmo mês; compra a partir do dia ${creditCardBestDay} cai na fatura do mês seguinte.
         Em "date" coloque esse vencimento e em "purchaseDate" o dia real da compra.
 
-4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
+4. diary — RELATO pessoal: como foi o dia, o que sentiu, uma reflexão ou desabafo.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
+   Cumprimentos, perguntas e papo NÃO são diário (use chat).
 
 5. savings_add — guardar OU tirar dinheiro de uma Meta de Economia (SavingsGoal)
    Ex: "Guarda 100 reais pra viagem" → type "savings_add", amount: 100, goalName: "viagem"
@@ -178,12 +185,17 @@ Tipos:
    Ex: "Quanto gastei com Uber em setembro?", "Qual foi minha maior compra no cartão?", "Quantas vezes pedi delivery esse mês?", "Quanto falta pagar do Samsung?"
    Coloque a pergunta inteira em "question". NÃO é um gasto novo (nunca use "finance" para perguntas).
 
+9. chat — conversa: cumprimento ("oi", "bom dia"), agradecimento, pergunta sobre o que você sabe fazer
+   ou como usar alguma função ("como vejo minha fatura?", "você faz gráfico?"), papo solto, ou mensagem
+   ambígua em que você não tem certeza do que ele quer. Na dúvida entre registrar algo errado e conversar,
+   prefira chat — ele pode reformular. Nada é registrado.
+
 IMPORTANTE:
 - Ao registrar um novo gasto (type: "finance"), na "confirmation" inclua SEMPRE uma menção amigável informando que a compra foi registrada para a data de hoje (ou a data identificada) e explicando que ele pode responder com outra data se quiser alterar. Exemplo: "💸 Anotado! Gasto de R$ 33,98 pendente para o dia 10/09 (compra em DD/MM). Se foi em outra data, basta me responder com o dia (ex: 15/08)."
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation|finance_question",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation|finance_question|chat",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
@@ -267,6 +279,10 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       };
     }
 
+    if (parsed.type === "chat") {
+      return { type: "chat", confirmation: "" };
+    }
+
     if (parsed.type === "finance_question") {
       return {
         type: "finance_question",
@@ -331,12 +347,9 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       confirmation: (parsed.confirmation as string) || `✅ Anotado!\n📋 ${message.slice(0, 60)}`,
     };
   } catch {
-    return {
-      type: "diary",
-      content: message,
-      mood: "neutro",
-      confirmation: `✅ Anotado!\n📋 ${message.slice(0, 60)}`,
-    };
+    // Não deu pra classificar: conversa (pergunta o que ele quis dizer)
+    // em vez de anotar no diário em silêncio.
+    return { type: "chat", confirmation: "" };
   }
 }
 
