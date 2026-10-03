@@ -131,7 +131,7 @@ _semana de ${startFormatted} a ${endFormatted}_
     if (badExpenses.length > 0 && badExpenses[0].amount >= 30) {
       const worst = badExpenses[0];
       const dStr = worst.date.toLocaleDateString("pt-BR", { weekday: 'long' });
-      const regretMsg = `\n🤔 *PS (Reflexão):* Na ${dStr}, você gastou R$ ${worst.amount.toFixed(2)} com ${worst.category} (${worst.subcategory || worst.description}).\nHoje, de cabeça fria, valeu a pena ou bateu arrependimento? Responda a essa mensagem para eu guardar no seu Diário!`;
+      const regretMsg = `\n🤔 *PS (Reflexão):* Na ${dStr}, você gastou R$ ${worst.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} com ${worst.category} (${worst.subcategory || worst.description}).\nHoje, de cabeça fria, valeu a pena ou bateu arrependimento? Responda a essa mensagem para eu guardar no seu Diário!`;
       
       await sendWhatsAppMessage(
         evolutionConfig.evolutionUrl,

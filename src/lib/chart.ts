@@ -10,6 +10,10 @@ export interface ChartBar {
   value: number;
   /** Valor de comparação (ex: mês anterior), desenhado como marca fina. */
   compare?: number;
+  /** Cor fixa da barra (senão, a paleta em sequência). */
+  color?: string;
+  /** Texto ao lado da barra (senão, o valor em R$). */
+  valueLabel?: string;
 }
 
 const COLORS = ["#7c6dff", "#2fb380", "#f2a541", "#e5606a", "#3fa7d6", "#a26bd8", "#8c9aa8"];
@@ -22,11 +26,12 @@ const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigi
 export function barChartSvg(title: string, subtitle: string, bars: ChartBar[], compareLabel?: string): string {
   const width = 800;
   const left = 230;
-  const right = 170;
   const barHeight = 34;
   const gap = 18;
   const top = 110;
   const items = bars.slice(0, 8);
+  // Espaço à direita para o texto do valor (~10px por caractere na fonte 17).
+  const right = Math.max(170, ...items.map((b) => (b.valueLabel ?? "").length * 10 + 30));
   const height = top + items.length * (barHeight + gap) + (compareLabel ? 60 : 30);
   const max = Math.max(1, ...items.map((b) => Math.max(b.value, b.compare ?? 0)));
   const scale = (v: number) => (v / max) * (width - left - right);
@@ -42,9 +47,9 @@ export function barChartSvg(title: string, subtitle: string, bars: ChartBar[], c
           : "";
       return `
     <text x="${left - 14}" y="${y + barHeight / 2 + 6}" text-anchor="end" font-size="18" fill="#1f2430">${escapeXml(label)}</text>
-    <rect x="${left}" y="${y}" width="${w}" height="${barHeight}" rx="6" fill="${COLORS[i % COLORS.length]}"/>
+    <rect x="${left}" y="${y}" width="${w}" height="${barHeight}" rx="6" fill="${b.color ?? COLORS[i % COLORS.length]}"/>
     ${compare}
-    <text x="${left + Math.max(w, b.compare ? scale(b.compare) : 0) + 12}" y="${y + barHeight / 2 + 6}" font-size="17" font-weight="bold" fill="#1f2430">${escapeXml(brl(b.value))}</text>`;
+    <text x="${left + Math.max(w, b.compare ? scale(b.compare) : 0) + 12}" y="${y + barHeight / 2 + 6}" font-size="17" font-weight="bold" fill="#1f2430">${escapeXml(b.valueLabel ?? brl(b.value))}</text>`;
     })
     .join("");
 

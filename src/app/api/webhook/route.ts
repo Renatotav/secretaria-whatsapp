@@ -17,6 +17,9 @@ import {
 } from "@/lib/message-handlers";
 import { extractPdfText, pdfPasswordError } from "@/lib/pdf";
 
+// Ids das últimas mensagens recebidas (só na memória; um reinício zera).
+const seenMessageIds = new Set<string>();
+
 export async function GET() {
   return NextResponse.json({ status: "webhook online" });
 }
@@ -41,6 +44,17 @@ export async function POST(request: Request) {
     console.log("[webhook] messages.upsert", { remoteJid, fromMe, pushName, hasAudio: !!rawMessage.audioMessage });
 
     if (!remoteJid) return NextResponse.json({ ok: true });
+
+    // Mesmo evento entregue duas vezes (reenvio da Evolution): ignora pelo id
+    // da mensagem, senão o gasto seria lançado em dobro.
+    if (key.id) {
+      if (seenMessageIds.has(key.id)) {
+        console.log("[webhook] mensagem repetida ignorada");
+        return NextResponse.json({ ok: true });
+      }
+      seenMessageIds.add(key.id);
+      if (seenMessageIds.size > 1000) seenMessageIds.delete(seenMessageIds.values().next().value as string);
+    }
 
     const config = await prisma.agentConfig.findFirst();
     if (!config) {

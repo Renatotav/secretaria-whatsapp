@@ -234,6 +234,32 @@ export async function sendMonthChart(config: AgentConfig, year: number, monthInd
   }
 }
 
+/** Entradas x saídas dos últimos 6 meses (barra = saiu, marca escura = entrou). */
+async function sendIncomeExpenseChart(config: AgentConfig): Promise<void> {
+  if (!config.ownerPhone || !config.evolutionUrl) return;
+  try {
+    const today = todayBRT();
+    const bars = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const t = await monthTotals(d.getFullYear(), d.getMonth());
+      bars.push({
+        label: `${MONTH_NAMES[d.getMonth()].slice(0, 3)}/${String(d.getFullYear()).slice(2)}`,
+        value: t.expense,
+        compare: t.income,
+        // Vermelho = saiu mais do que entrou; verde = sobrou.
+        color: t.expense > t.income ? "#e5606a" : "#2fb380",
+        valueLabel: `saiu ${brl(t.expense)} · entrou ${brl(t.income)}`,
+      });
+    }
+    const png = await barChartPng("Entradas x saídas", "Últimos 6 meses · barra = saiu · verde = sobrou, vermelho = faltou", bars, "marca escura = quanto entrou");
+    const evo = getEvoConfig(config);
+    await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), "📊 Entradas x saídas — últimos 6 meses");
+  } catch (err) {
+    console.error("[chart] falha ao gerar/enviar gráfico de entradas x saídas", err);
+  }
+}
+
 /** Imagem com o progresso de cada meta (enviada junto com "como estão minhas metas?"). */
 export async function sendGoalsChart(config: AgentConfig): Promise<void> {
   if (!config.ownerPhone || !config.evolutionUrl) return;
@@ -562,6 +588,8 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
 📅 "Fechamento do mês" — como fechou o mês passado, com gráfico.
+📈 Gráfico quando pedir: "gráfico dos gastos" (mês por categoria), "gráfico de entradas e saídas" (6 meses), "gráfico do mercado" (uma categoria), "gráfico das metas".
+↩️ Corrigir o último lançamento: "desfazer" apaga; "na verdade foi 250" troca o valor. Gasto sem valor ("gastei com uber"): ela pergunta quanto foi.
 🔁 "Quanto gasto com assinaturas?" — contas fixas e assinaturas.
 ❓ Pergunta livre sobre os números: "quanto gastei com Uber em setembro?", "qual minha maior compra no cartão?", "quanto falta pagar do Samsung?".
 🛒 Simulador: "posso comprar um tênis de 200 em 3x?", "e se meu salário for 3300?".
@@ -643,7 +671,7 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
     const expense = sum("expense");
     const balance = income - expense;
     const monthName = today.toLocaleDateString("pt-BR", { month: "long" });
-    return `💰 *Financeiro de ${monthName}:*\nEntradas: R$ ${income.toFixed(2)} (já recebido R$ ${sum("income", "paid").toFixed(2)})\nSaídas: R$ ${expense.toFixed(2)} (já pago R$ ${sum("expense", "paid").toFixed(2)} · a pagar R$ ${sum("expense", "pending").toFixed(2)})\n${balance >= 0 ? "🟢" : "🔴"} Fecha o mês com R$ ${balance.toFixed(2)}`;
+    return `💰 *Financeiro de ${monthName}:*\nEntradas: ${brl(income)} (já recebido ${brl(sum("income", "paid"))})\nSaídas: ${brl(expense)} (já pago ${brl(sum("expense", "paid"))} · a pagar ${brl(sum("expense", "pending"))})\n${balance >= 0 ? "🟢" : "🔴"} Fecha o mês com ${brl(balance)}`;
   }
 
   if (intent === "savings_summary") {
@@ -651,8 +679,8 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
     if (goals.length === 0) return "Nenhuma meta de economia encontrada.";
     return `🎯 *Metas de Economia:*\n${goals.map((g) => {
       const pct = (g.currentAmount / g.targetAmount) * 100;
-      if (g.currentAmount >= g.targetAmount) return `• 🏆 ${g.name}: R$ ${g.targetAmount.toFixed(2)} — *Conquistada!*`;
-      return `• ${g.name}: R$ ${g.currentAmount.toFixed(2)} de R$ ${g.targetAmount.toFixed(2)} (${pct.toFixed(0)}%)`;
+      if (g.currentAmount >= g.targetAmount) return `• 🏆 ${g.name}: ${brl(g.targetAmount)} — *Conquistada!*`;
+      return `• ${g.name}: ${brl(g.currentAmount)} de ${brl(g.targetAmount)} (${pct.toFixed(0)}%)`;
     }).join("\n")}`;
   }
 
@@ -684,6 +712,35 @@ function formatDayMonth(d: Date): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+const formatFullDate = (d: Date) => `${formatDayMonth(d)}/${d.getFullYear()}`;
+const PAYMENT_NAMES: Record<string, string> = { "cartão": "Cartão", pix: "Pix", "débito": "Débito", boleto: "Boleto", dinheiro: "Dinheiro", ticket: "Ticket" };
+
+/**
+ * Cartão padronizado de um lançamento, montado pelo código (não pela IA) —
+ * a mesma mensagem gera sempre a mesma resposta.
+ */
+function entryCard(
+  e: { description: string; category: string; subcategory: string; amount: number; type: string; paymentMethod: string; status: string; date: Date; purchaseDate: Date | null },
+  title = "✅ Lançamento salvo!"
+): string {
+  const isCard = e.paymentMethod === "cartão";
+  const method = PAYMENT_NAMES[e.paymentMethod] ?? e.paymentMethod;
+  const when = isCard
+    ? `💳 ${method} · fatura de ${formatFullDate(e.date)}`
+    : `🏦 ${method} · ${e.status === "paid" ? (e.type === "income" ? "recebido" : "pago") : "vence"} em ${formatFullDate(e.date)}`;
+  return [
+    title,
+    `📝 ${e.description || e.category}`,
+    `💰 ${brl(e.amount)}`,
+    `📂 ${e.category}${e.subcategory ? ` › ${e.subcategory}` : ""}`,
+    `📊 ${e.type === "income" ? "Receita" : "Despesa"}`,
+    when,
+    ...(isCard && e.purchaseDate ? [`📅 Compra em ${formatFullDate(e.purchaseDate)}`] : []),
+  ].join("\n");
+}
+
+const UNDO_HINT = "↩️ Errou? Responda *desfazer* ou *na verdade foi 25*.";
+
 function paymentLabel(paymentMethod: string, date: Date): string {
   return paymentMethod === "cartão"
     ? `💳 cartão, fatura de ${formatDayMonth(date)}`
@@ -712,7 +769,7 @@ async function applyPaymentReply(text: string, config: AgentConfig): Promise<str
 
   const label = entry.description || entry.category;
   if (entry.paymentMethod === choice) {
-    return `👍 "${label}" (R$ ${entry.amount.toFixed(2)}) já estava como ${paymentLabel(entry.paymentMethod, entry.date)}.`;
+    return `👍 "${label}" (${brl(entry.amount)}) já estava como ${paymentLabel(entry.paymentMethod, entry.date)}.`;
   }
 
   const purchase = entry.purchaseDate ?? entry.date;
@@ -724,7 +781,7 @@ async function applyPaymentReply(text: string, config: AgentConfig): Promise<str
     where: { id: entry.id },
     data: { paymentMethod: choice, date, status: isCard ? "pending" : "paid" },
   });
-  return `✅ Corrigido: "${label}" (R$ ${entry.amount.toFixed(2)}) agora é ${paymentLabel(choice, date)}.`;
+  return `✅ Corrigido: "${label}" (${brl(entry.amount)}) agora é ${paymentLabel(choice, date)}.`;
 }
 
 const SAVINGS_REPLY_MARK = "Responda *guarda*";
@@ -770,6 +827,77 @@ async function applySavingsReply(
   const newAmount = reserve.currentAmount + amount;
   await prisma.savingsGoal.update({ where: { id: reserve.id }, data: { currentAmount: newAmount } });
   return `✅ Guardado ${brl(amount)} na ${reserve.name}!\n💰 ${brl(newAmount)} de ${brl(reserve.targetAmount)} (${((newAmount / reserve.targetAmount) * 100).toFixed(0)}%)${newAmount >= reserve.targetAmount ? "\n🏆 *Meta conquistada!*" : ""}`;
+}
+
+// Último lançamento criado por mensagem: "desfazer" e "na verdade foi X" só
+// mexem no que foi criado nesse momento (o gasto, ou a série de parcelas).
+// Só na memória — depois de um reinício, a correção é pelo painel.
+let lastSaved: { since: Date } | null = null;
+// Gasto sem valor ("gastei com uber"): guarda a frase e espera o valor.
+let pendingAmount: { text: string; at: number } | null = null;
+
+const UNDO_RE = /^(desfaz(er)?|desfa[cç]a|apag(a|ue) (o |esse |este )?([uú]ltimo|lan[çc]amento|gasto)|cancela (o |esse |este )?([uú]ltimo|lan[çc]amento|gasto))[.!]?$/i;
+const NUMBER_PART = String.raw`(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)`;
+const EDIT_AMOUNT_RE = new RegExp(String.raw`^(na verdade|na real|corrigindo|errei,?)\s*(foi|era|é|e|deu|custou|o valor (foi|era|é))?\s*(r\$\s*)?${NUMBER_PART}\s*(reais|conto|contos)?[.!]?$`, "i");
+const AMOUNT_ONLY_RE = new RegExp(String.raw`^(foi\s*)?(r\$\s*)?${NUMBER_PART}\s*(reais|conto|contos)?[.!]?$`, "i");
+
+/** "1.234,56" / "32,50" / "32.50" / "250" → número. */
+function parseBrNumber(raw: string): number {
+  if (raw.includes(",")) return Number(raw.replace(/\./g, "").replace(",", "."));
+  if (/^\d{1,3}(\.\d{3})+$/.test(raw)) return Number(raw.replace(/\./g, ""));
+  return Number(raw);
+}
+
+/** O que foi criado no último lançamento por mensagem (o gasto ou a série de parcelas). */
+async function lastSavedEntries() {
+  if (!lastSaved) return [];
+  return prisma.financeEntry.findMany({
+    where: { source: "whatsapp", createdAt: { gte: new Date(lastSaved.since.getTime() - 2000), lte: new Date(lastSaved.since.getTime() + 30_000) } },
+    orderBy: { date: "asc" },
+  });
+}
+
+/** "desfazer" e "na verdade foi 250". Devolve a resposta, ou null se não for o caso. */
+async function applyUndoOrEdit(text: string): Promise<string | null> {
+  const t = text.trim();
+  const isUndo = UNDO_RE.test(t);
+  const edit = isUndo ? null : t.match(EDIT_AMOUNT_RE);
+  if (!isUndo && !edit) return null;
+
+  const entries = await lastSavedEntries();
+  if (entries.length === 0) {
+    return "🤔 Não achei um lançamento recente feito por mensagem para corrigir. Se foi outro, corrija pelo painel.";
+  }
+  const first = entries[0];
+  const label = first.description.replace(/\s*-?\s*Parcela \d+\/\d+.*$/, "").trim() || first.category;
+
+  if (isUndo) {
+    await prisma.financeEntry.deleteMany({ where: { id: { in: entries.map((e) => e.id) } } });
+    lastSaved = null;
+    return entries.length > 1
+      ? `🗑️ Lançamento removido: ${label} · ${entries.length} parcelas de ${brl(first.amount)}`
+      : `🗑️ Lançamento removido: ${label} · ${brl(first.amount)} · ${formatFullDate(first.purchaseDate ?? first.date)}`;
+  }
+
+  const amount = parseBrNumber(edit![edit!.length - 2]);
+  if (!(amount > 0)) return null;
+  await prisma.financeEntry.updateMany({ where: { id: { in: entries.map((e) => e.id) } }, data: { amount } });
+  if (entries.length > 1) return `✏️ Lançamento atualizado!\n📝 ${label}\n💰 ${entries.length} parcelas de ${brl(amount)}`;
+  return `${entryCard({ ...first, amount }, "✏️ Lançamento atualizado!")}\n\n${UNDO_HINT}`;
+}
+
+/** Valor respondido depois de "Quanto foi?": devolve a frase original completada. */
+function takeAmountReply(text: string): string | null {
+  if (!pendingAmount) return null;
+  const pending = pendingAmount;
+  if (Date.now() - pending.at > 30 * 60 * 1000) {
+    pendingAmount = null;
+    return null;
+  }
+  const m = text.trim().match(AMOUNT_ONLY_RE);
+  if (!m) return null;
+  pendingAmount = null;
+  return `${pending.text} — valor: R$ ${m[3]}`;
 }
 
 // Fatura em PDF com senha esperando o dono mandar a senha. Fica só na memória
@@ -830,6 +958,9 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
+  // Resposta com o valor que faltava ("25") completa a frase anterior.
+  joinedText = takeAmountReply(joinedText) ?? joinedText;
+
   // Senha de PDF não passa pela IA nem é gravada no histórico.
   if (await applyPdfPassword(joinedText, config)) return;
   if (await applyStatementChoice(joinedText, config)) return;
@@ -841,7 +972,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     include: { messages: { orderBy: { createdAt: "desc" }, take: config.historyLimit } },
   });
 
-  const paymentReply = (await applySavingsReply(joinedText, conv?.messages)) ?? (await applyPaymentReply(joinedText, config));
+  const paymentReply =
+    (await applyUndoOrEdit(joinedText)) ?? (await applySavingsReply(joinedText, conv?.messages)) ?? (await applyPaymentReply(joinedText, config));
   if (paymentReply) {
     if (!conv) {
       conv = await prisma.conversation.create({
@@ -888,6 +1020,12 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
       });
       break;
     case "finance": {
+      // Sem valor ("gastei com uber"): não grava, pergunta e espera a resposta.
+      if (!(route.amount > 0)) {
+        pendingAmount = { text: joinedText, at: Date.now() };
+        response = `💬 Quanto foi ${route.description ? `*${route.description}*` : "esse gasto"}? Responda só o valor (ex: 25,90).`;
+        break;
+      }
       // Gasto sem meio de pagamento dito na mensagem = cartão (o normal dele);
       // a confirmação pergunta se foi outro meio (ver applyPaymentReply).
       const askPayment = route.financeType === "expense" && !route.installments && !PAYMENT_STATED_RE.test(joinedText);
@@ -915,6 +1053,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         // projeção/dedupe de saveStatementEntries em vez de duplicar a lógica.
         const today = cardPurchaseDate;
         const compraEm = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
+        lastSaved = { since: new Date() };
         await saveStatementEntries(
           config,
           [
@@ -963,6 +1102,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         }
 
         if (existingPending) {
+          lastSaved = null; // baixa não cria lançamento: nada para desfazer
+
           // Vale o valor que ele disse (ex: salário veio menor que o previsto).
           const newAmount = route.amount > 0 ? route.amount : existingPending.amount;
           await prisma.financeEntry.update({
@@ -973,9 +1114,9 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               date: route.date ? parseLocalDate(route.date) : existingPending.date,
             }
           });
-          response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (R$ ${newAmount.toFixed(2)})`;
+          response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (${brl(newAmount)})`;
           if (Math.abs(newAmount - existingPending.amount) > 0.01) {
-            response += `\n(o previsto era R$ ${existingPending.amount.toFixed(2)} — atualizei para o valor que você informou)`;
+            response += `\n(o previsto era ${brl(existingPending.amount)} — atualizei para o valor que você informou)`;
           }
           if (route.financeType === "income" && /sal[aá]rio/i.test(existingPending.category)) {
             response += await buildSavingsSuggestion(newAmount);
@@ -998,6 +1139,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             }
           }
 
+          lastSaved = { since: new Date() };
           const created = await prisma.financeEntry.create({
             data: {
               type: route.financeType,
@@ -1015,12 +1157,13 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             },
           });
 
+          // Resposta montada pelo código (antes era o texto livre da IA).
+          response = `${entryCard(created, created.type === "income" ? "✅ Receita salva!" : "✅ Lançamento salvo!")}\n\n${
+            askPayment ? `${PAYMENT_QUESTION}\nOutro dia de compra? Responda a data (ex: 15/08).\n` : ""
+          }${UNDO_HINT}`;
+
           if (route.financeType === "income" && /sal[aá]rio/i.test(created.category)) {
             response += await buildSavingsSuggestion(created.amount);
-          }
-
-          if (askPayment) {
-            response = `✅ Anotado: ${created.description || created.category} R$ ${created.amount.toFixed(2)} — ${paymentLabel(created.paymentMethod, created.date)}.\n${PAYMENT_QUESTION}\n(Se a compra foi em outro dia, responda com a data, ex: 15/08.)`;
           }
 
           if (finalMood === "neutro" && route.financeType === "expense" && route.amount >= 100) {
@@ -1061,8 +1204,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               .some(kw => route.category.toLowerCase().includes(kw) || route.subcategory.toLowerCase().includes(kw));
 
             if ((percent >= 80 || isSensitiveCategory) && route.amount >= 30) {
-              const promptContext = `O usuário Renato registrou um gasto de R$ ${route.amount.toFixed(2)} na categoria "${route.category}" (Subcategoria: "${route.subcategory}").
-Neste mês, ele já gastou R$ ${totalSpent.toFixed(2)} de um orçamento de R$ ${budget.amount.toFixed(2)} nesta categoria (${percent.toFixed(0)}%).
+              const promptContext = `O usuário Renato registrou um gasto de ${brl(route.amount)} na categoria "${route.category}" (Subcategoria: "${route.subcategory}").
+Neste mês, ele já gastou ${brl(totalSpent)} de um orçamento de ${brl(budget.amount)} nesta categoria (${percent.toFixed(0)}%).
 Dê um "toque" inteligente, amigável e MUITO CURTO (máximo 2 linhas). 
 Se for delivery, besteira ou álcool e estiver alto, alerte sobre gastar muito com besteira e faça ele refletir se era necessário.
 Se for mercado e a compra for alta, lembre-o para focar no necessário para não estourar o mês.
@@ -1071,14 +1214,14 @@ Não seja robótico. Chame-o de Renato.`;
                 const { content } = await generateResponse([{ role: "user", content: promptContext }], "Você é uma assistente financeira.", 0.7, 150, providerOpts);
                 response += `\n\n💬 *Dica da IA:* ${content}`;
               } catch (e) {
-                if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${route.category}! (R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+                if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${route.category}! (${brl(totalSpent)} de ${brl(budget.amount)})`;
                 else if (percent >= 80) response += `\n\n⚠️ *Aviso:* ${percent.toFixed(0)}% do limite de ${route.category} atingido!`;
               }
             } else {
               if (percent >= 100) {
-                response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com esse gasto, você estourou o limite de ${route.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+                response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com esse gasto, você estourou o limite de ${route.category}! (Gastou ${brl(totalSpent)} de ${brl(budget.amount)})`;
               } else if (percent >= 80) {
-                response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+                response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam ${brl((budget.amount - totalSpent))})`;
               }
             }
           }
@@ -1104,7 +1247,7 @@ Não seja robótico. Chame-o de Renato.`;
           },
         });
         const formattedDate = newPDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-        response = `📅 Perfeito! Atualizei a data de compra de "${lastEntry.description || lastEntry.category}" (R$ ${lastEntry.amount.toFixed(2)}) para **${formattedDate}**.`;
+        response = `📅 Perfeito! Atualizei a data de compra de "${lastEntry.description || lastEntry.category}" (${brl(lastEntry.amount)}) para **${formattedDate}**.`;
       } else {
         response = "❌ Não encontrei nenhum lançamento financeiro recente para atualizar a data.";
       }
@@ -1113,7 +1256,7 @@ Não seja robótico. Chame-o de Renato.`;
     case "savings_add":
       const goals = await prisma.savingsGoal.findMany();
       if (goals.length === 0) {
-        response = `❌ Nenhuma meta de economia cadastrada para adicionar R$ ${route.amount.toFixed(2)}. Cadastre primeiro pelo painel!`;
+        response = `❌ Nenhuma meta de economia cadastrada para adicionar ${brl(route.amount)}. Cadastre primeiro pelo painel!`;
       } else {
         const term = route.goalName.toLowerCase();
         let targetGoal = goals.find((g) => g.name.toLowerCase() === term) 
@@ -1185,7 +1328,15 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
       }
       break;
     case "agenda_query":
-      if (route.queryIntent === "category_summary") {
+      if (route.queryIntent === "chart") {
+        // Pedido só do gráfico: texto curto e a imagem logo depois.
+        if (route.chartKind === "category") {
+          categorySummary = await buildCategorySummary(route.queryCategory);
+          response = categorySummary.text;
+        } else {
+          response = "📊 Já te mando o gráfico…";
+        }
+      } else if (route.queryIntent === "category_summary") {
         categorySummary = await buildCategorySummary(route.queryCategory);
         response = categorySummary.text;
       } else {
@@ -1211,6 +1362,12 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
   }
   if (categorySummary) {
     await sendCategoryChart(config, categorySummary);
+  }
+  if (route.type === "agenda_query" && route.queryIntent === "chart") {
+    const today = todayBRT();
+    if (route.chartKind === "income_expense") await sendIncomeExpenseChart(config);
+    else if (route.chartKind === "goals") await sendGoalsChart(config);
+    else if (route.chartKind !== "category") await sendMonthChart(config, today.getFullYear(), today.getMonth());
   }
 }
 
@@ -1448,11 +1605,11 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
     .filter((e) => !e.description.includes("(previsto)"))
     .reduce((s, e) => s + (e.type === "expense" ? e.amount : -e.amount), 0);
 
-  let response = `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: R$ ${total.toFixed(2)}`;
+  let response = `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: ${brl(total)}`;
   if (projected > 0) response += `\n📅 +${projected} parcela(s) futura(s) projetada(s) nos próximos meses.`;
   if (duplicates > 0) response += `\n♻️ ${duplicates} já estavam lançadas (ignoradas pra não duplicar).`;
   if (matchedManual.length > 0) {
-    const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — R$ ${e.amount.toFixed(2)}`).join("\n");
+    const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — ${brl(e.amount)}`).join("\n");
     response += `\n✍️ ${matchedManual.length} você já tinha anotado (mesmo valor, data parecida) — não lancei de novo:\n${list}${matchedManual.length > 15 ? "\n…" : ""}`;
   }
   await notifyOwner(config, response);
@@ -1656,7 +1813,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     });
     calculatedTotal = invoice.total;
   } else if (Math.abs(calculatedTotal - invoice.total) > 2.0) {
-    await notifyOwner(config, `⚠️ *Conta não fechou!* O total lido na nota foi R$ ${invoice.total.toFixed(2)}, mas a soma dos ${invoice.items.length} itens deu R$ ${calculatedTotal.toFixed(2)}. Por segurança contra alucinações da IA, não salvei a nota. Tente mandar uma foto mais nítida.`);
+    await notifyOwner(config, `⚠️ *Conta não fechou!* O total lido na nota foi ${brl(invoice.total)}, mas a soma dos ${invoice.items.length} itens deu ${brl(calculatedTotal)}. Por segurança contra alucinações da IA, não salvei a nota. Tente mandar uma foto mais nítida.`);
     return;
   }
 
@@ -1738,7 +1895,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     return "";
   });
 
-  let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : "Se foi no cartão, responda *1*."}${detective}`;
+  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : "Se foi no cartão, responda *1*."}${detective}`;
 
   if (finalMood === "neutro") {
     response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
@@ -1767,8 +1924,8 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
       .some(kw => invoice.category?.toLowerCase().includes(kw) || invoice.subcategory?.toLowerCase().includes(kw));
 
     if ((percent >= 80 || isSensitiveCategory) && invoice.total >= 50) {
-      const promptContext = `O usuário Renato registrou uma Nota Fiscal de R$ ${invoice.total.toFixed(2)} na categoria "${invoice.category}" (Subcategoria: "${invoice.subcategory}").
-Neste mês, ele já gastou R$ ${totalSpent.toFixed(2)} de um orçamento de R$ ${budget.amount.toFixed(2)} nesta categoria (${percent.toFixed(0)}%).
+      const promptContext = `O usuário Renato registrou uma Nota Fiscal de ${brl(invoice.total)} na categoria "${invoice.category}" (Subcategoria: "${invoice.subcategory}").
+Neste mês, ele já gastou ${brl(totalSpent)} de um orçamento de ${brl(budget.amount)} nesta categoria (${percent.toFixed(0)}%).
 Dê um "toque" inteligente, amigável e MUITO CURTO (máximo 2 linhas). 
 Se for mercado e a compra for alta, lembre-o para focar no necessário e cuidado com bebidas/besteiras para não estourar o limite.
 Se for delivery ou lanche, alerte sobre o excesso.
@@ -1777,14 +1934,14 @@ Não seja robótico. Chame-o de Renato.`;
         const { content } = await generateResponse([{ role: "user", content: promptContext }], "Você é uma assistente financeira.", 0.7, 150, providerOpts);
         response += `\n\n💬 *Dica da IA:* ${content}`;
       } catch (e) {
-        if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${invoice.category}! (R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+        if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${invoice.category}! (${brl(totalSpent)} de ${brl(budget.amount)})`;
         else if (percent >= 80) response += `\n\n⚠️ *Aviso:* ${percent.toFixed(0)}% do limite de ${invoice.category} atingido!`;
       }
     } else {
       if (percent >= 100) {
-        response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com essa nota, você estourou o limite de ${invoice.category}! (Gastou R$ ${totalSpent.toFixed(2)} de R$ ${budget.amount.toFixed(2)})`;
+        response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com essa nota, você estourou o limite de ${invoice.category}! (Gastou ${brl(totalSpent)} de ${brl(budget.amount)})`;
       } else if (percent >= 80) {
-        response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do limite de ${invoice.category}! (Restam R$ ${(budget.amount - totalSpent).toFixed(2)})`;
+        response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do limite de ${invoice.category}! (Restam ${brl((budget.amount - totalSpent))})`;
       }
     }
   }

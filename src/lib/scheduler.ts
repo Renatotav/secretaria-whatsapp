@@ -96,7 +96,7 @@ export function startScheduler(): void {
         });
 
         if (pendings.length > 0) {
-          const lines = pendings.map(p => `- ${p.description || p.category} (R$ ${p.amount.toFixed(2)})`).join("\n");
+          const lines = pendings.map(p => `- ${p.description || p.category} (R$ ${p.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`).join("\n");
           const msg = `🚨 *Lembrete Financeiro*\nVocê tem ${pendings.length} conta(s) pendente(s) para hoje ou atrasadas:\n\n${lines}\n\nResponda dizendo "paguei a conta X" para eu dar baixa!`;
           await sendTextWithTyping(
             evolutionConfig.evolutionUrl,

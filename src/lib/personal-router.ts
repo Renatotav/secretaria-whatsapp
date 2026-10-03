@@ -18,7 +18,7 @@ Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
 Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
 outro nome se nenhuma delas fizer sentido pro caso.`;
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart";
 
 export type PersonalRouteResult =
   | {
@@ -32,8 +32,10 @@ export type PersonalRouteResult =
   | {
       type: "agenda_query";
       queryIntent: PersonalQueryIntent;
-      /** Categoria (ou subcategoria) perguntada, só em category_summary. */
+      /** Categoria (ou subcategoria) perguntada, em category_summary e no gráfico de categoria. */
       queryCategory?: string;
+      /** Qual gráfico ele pediu (só em queryIntent "chart"). */
+      chartKind?: "categories" | "income_expense" | "category" | "goals";
       confirmation: string;
     }
   | {
@@ -137,6 +139,11 @@ Tipos:
        com "financeCategory" = a categoria da taxonomia abaixo (ex: "Moradia", "Alimentação") ou, se ele citar só
        uma subcategoria (luz, internet, mercado), o nome dessa subcategoria (ex: "Energia elétrica", "Supermercado").
        Use category_summary só para "como está/quanto está" uma categoria; perguntas mais específicas são finance_question.
+   Ex: pedido de GRÁFICO → chart, com "chartKind":
+       "me manda o gráfico dos gastos", "gráfico do mês" → "categories"
+       "gráfico de entradas e saídas", "gráfico dos últimos meses", "quanto entrou x saiu em gráfico" → "income_expense"
+       "gráfico do mercado", "gráfico da moradia" → "category" (e "financeCategory" = a categoria/subcategoria, como em category_summary)
+       "gráfico das metas" → "goals"
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
    ${FINANCE_TAXONOMY}
@@ -206,7 +213,8 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart",
+  "chartKind": "categories|income_expense|category|goals",
   "financeType": "income|expense",
   "amount": 0,
   "financeCategory": "<categoria curta>",
@@ -334,6 +342,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "subscriptions",
         "month_diagnosis",
         "category_summary",
+        "chart",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)
@@ -342,6 +351,9 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         type: "agenda_query",
         queryIntent,
         queryCategory: (parsed.financeCategory as string) || undefined,
+        chartKind: ["categories", "income_expense", "category", "goals"].includes(parsed.chartKind as string)
+          ? (parsed.chartKind as "categories" | "income_expense" | "category" | "goals")
+          : "categories",
         confirmation: (parsed.confirmation as string) || "",
       };
     }
