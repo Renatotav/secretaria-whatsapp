@@ -18,15 +18,26 @@ interface TextItem {
 }
 
 /**
+ * PDF protegido (fatura de banco costuma vir com senha): "need" = pede senha,
+ * "wrong" = a senha informada não abriu. Qualquer outro erro = null.
+ */
+export function pdfPasswordError(err: unknown): "need" | "wrong" | null {
+  const e = err as { name?: string; code?: number } | null;
+  if (e?.name !== "PasswordException") return null;
+  return e.code === 2 ? "wrong" : "need";
+}
+
+/**
  * Extrai o texto de um PDF (base64) usando o pdfjs-dist (motor do Firefox)
  * diretamente. PDFs sem camada de texto real (imagem escaneada) retornam
- * string vazia.
+ * string vazia. PDF com senha lança PasswordException (ver pdfPasswordError).
  */
-export async function extractPdfText(base64: string): Promise<string> {
+export async function extractPdfText(base64: string, password?: string): Promise<string> {
   const buffer = Buffer.from(base64, "base64");
   const loadingTask = getDocument({
     data: new Uint8Array(buffer),
     useSystemFonts: true,
+    ...(password ? { password } : {}),
   });
 
   try {

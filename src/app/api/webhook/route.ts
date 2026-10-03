@@ -10,11 +10,12 @@ import {
   handleGroupMessage,
   handleOwnerReply,
   handleStatementDocument,
+  askPdfPassword,
   handleStatementImage,
   handleInvoiceImage,
   notifyOwner,
 } from "@/lib/message-handlers";
-import { extractPdfText } from "@/lib/pdf";
+import { extractPdfText, pdfPasswordError } from "@/lib/pdf";
 
 export async function GET() {
   return NextResponse.json({ status: "webhook online" });
@@ -61,7 +62,18 @@ export async function POST(request: Request) {
       console.log("[webhook] PDF recebido no canal pessoal, processando extrato");
       try {
         const { base64 } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "documentMessage", "application/pdf");
-        const pdfText = base64 ? await extractPdfText(base64) : "";
+        let pdfText = "";
+        try {
+          pdfText = base64 ? await extractPdfText(base64) : "";
+        } catch (err) {
+          // Fatura protegida: guarda o arquivo na memória e pede a senha.
+          if (pdfPasswordError(err)) {
+            console.log("[webhook] PDF com senha, pedindo a senha ao dono");
+            await askPdfPassword(config, base64);
+            return NextResponse.json({ ok: true });
+          }
+          throw err;
+        }
         if (!pdfText) {
           console.log("[webhook] PDF sem texto extraível, avisando pra mandar print");
           await notifyOwner(

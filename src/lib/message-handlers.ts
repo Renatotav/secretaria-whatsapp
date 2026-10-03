@@ -557,7 +557,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
 const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gastei 45 no mercado", "recebi 3000 de salário", "comprei um celular de 291 em 17x".
   Depois do gasto ela pergunta o meio de pagamento: responder "2" pix, "3" débito, "4" dinheiro. Para mudar a data da compra, responder só o dia ("15/08").
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
-💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez.
+💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (só os do titular dele, se a fatura tiver outro cartão). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
@@ -769,9 +769,66 @@ async function applySavingsReply(
   return `✅ Guardado ${brl(amount)} na ${reserve.name}!\n💰 ${brl(newAmount)} de ${brl(reserve.targetAmount)} (${((newAmount / reserve.targetAmount) * 100).toFixed(0)}%)${newAmount >= reserve.targetAmount ? "\n🏆 *Meta conquistada!*" : ""}`;
 }
 
+// Fatura em PDF com senha esperando o dono mandar a senha. Fica só na memória
+// (some num reinício/deploy): nem o arquivo nem a senha vão para o banco ou log.
+let pendingPdf: { base64: string; at: number } | null = null;
+const PDF_PASSWORD_WINDOW_MS = 30 * 60 * 1000;
+
+export async function askPdfPassword(config: AgentConfig, base64: string): Promise<void> {
+  pendingPdf = { base64, at: Date.now() };
+  await notifyOwner(config, "🔒 Essa fatura veio com senha. Me manda *só a senha* do PDF que eu abro e leio.\nSe não quiser mais, responda *cancelar*.");
+}
+
+/**
+ * Próxima mensagem depois de um PDF com senha: tenta abrir com ela. Frase com
+ * espaço não é senha — segue o fluxo normal (e o PDF continua esperando).
+ * Devolve true se a mensagem foi tratada aqui.
+ */
+async function applyPdfPassword(text: string, config: AgentConfig): Promise<boolean> {
+  if (!pendingPdf) return false;
+  if (Date.now() - pendingPdf.at > PDF_PASSWORD_WINDOW_MS) {
+    pendingPdf = null;
+    return false;
+  }
+  const password = text.trim();
+  if (/^cancela/i.test(password)) {
+    pendingPdf = null;
+    await notifyOwner(config, "👍 Ok, deixei essa fatura de lado.");
+    return true;
+  }
+  if (!password || /\s/.test(password) || password.length > 40) return false;
+
+  const { base64 } = pendingPdf;
+  const { extractPdfText, pdfPasswordError } = await import("./pdf");
+  let pdfText: string;
+  try {
+    pdfText = await extractPdfText(base64, password);
+  } catch (err) {
+    if (pdfPasswordError(err) === "wrong") {
+      await notifyOwner(config, "❌ Essa senha não abriu o PDF. Confere e manda de novo, ou responda *cancelar*.");
+      return true;
+    }
+    pendingPdf = null;
+    console.error("[pdf] falha ao abrir PDF com senha", err instanceof Error ? err.message : err);
+    await notifyOwner(config, "⚠️ Não consegui abrir esse PDF. Manda um print de cada página da fatura que eu leio por imagem.");
+    return true;
+  }
+  pendingPdf = null;
+  if (!pdfText) {
+    await notifyOwner(config, "⚠️ Abri o PDF, mas ele não tem texto (é imagem escaneada). Manda um print de cada página em vez do arquivo.");
+    return true;
+  }
+  await notifyOwner(config, "🔓 Abri! Lendo a fatura, já te mando o resultado…");
+  await handleStatementDocument(pdfText);
+  return true;
+}
+
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
+
+  // Senha de PDF não passa pela IA nem é gravada no histórico.
+  if (await applyPdfPassword(joinedText, config)) return;
 
   const providerOpts = getProviderOpts(config);
 
