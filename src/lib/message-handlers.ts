@@ -334,7 +334,7 @@ async function buildMonthDiagnosis(): Promise<string> {
   const range = (mi: number) => ({ gte: new Date(y, mi, 1), lte: new Date(y, mi + 1, 0, 23, 59, 59) });
   const [entries, prevEntries] = await Promise.all([
     prisma.financeEntry.findMany({ where: { date: range(m) }, select: { type: true, amount: true, category: true, subcategory: true, description: true } }),
-    prisma.financeEntry.findMany({ where: { type: "expense", date: { gte: new Date(y, m - 2, 1), lte: new Date(y, m, 0, 23, 59, 59) } }, select: { amount: true, category: true, description: true } }),
+    prisma.financeEntry.findMany({ where: { type: "expense", date: { gte: new Date(y, m - 2, 1), lte: new Date(y, m, 0, 23, 59, 59) } }, select: { amount: true, category: true, description: true, date: true } }),
   ]);
 
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
@@ -362,10 +362,13 @@ async function buildMonthDiagnosis(): Promise<string> {
     }, {})
   ).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
-  // Anomalias: categoria do dia a dia acima de 1,5× a média mensal dos 2 meses anteriores (e +R$ 100).
+  // Anomalias: categoria do dia a dia acima de 1,5× a média mensal dos meses
+  // anteriores (até 2) e +R$ 100. A média divide só pelos meses que têm algum
+  // lançamento — mês vazio (antes de começar a usar o app) não conta como zero.
   const dailyByCat = daily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount), acc), {});
   const prevDaily = prevEntries.filter((e) => !isInstallment(e.description) && !isRecurring({ description: e.description, category: e.category }));
-  const prevAvg = prevDaily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount / 2), acc), {});
+  const monthsWithData = new Set(prevEntries.map((e) => `${e.date.getFullYear()}-${e.date.getMonth()}`)).size;
+  const prevAvg = monthsWithData === 0 ? {} : prevDaily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount / monthsWithData), acc), {});
   const anomalies = Object.entries(dailyByCat)
     .filter(([cat, v]) => (prevAvg[cat] || 0) > 0 && v > prevAvg[cat] * 1.5 && v - prevAvg[cat] > 100)
     .map(([cat, v]) => `• ${cat}: ${brl(v)} (média ${brl(prevAvg[cat])})`);
