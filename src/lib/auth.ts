@@ -1,20 +1,25 @@
 import { cookies } from "next/headers";
+import {
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_SECONDS,
+  createSessionToken,
+  verifySessionToken,
+  readCookie,
+} from "./session-token";
 
-export const SESSION_COOKIE = "agent_session";
-const SESSION_VALUE = "authenticated";
+export { SESSION_COOKIE };
 
-export function isAuthenticated(request: Request): boolean {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  return cookieHeader.includes(`${SESSION_COOKIE}=${SESSION_VALUE}`);
+export async function isAuthenticated(request: Request): Promise<boolean> {
+  return verifySessionToken(readCookie(request.headers.get("cookie") ?? "", SESSION_COOKIE));
 }
 
 export async function createSession(): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, SESSION_VALUE, {
+  cookieStore.set(SESSION_COOKIE, await createSessionToken(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: SESSION_MAX_AGE_SECONDS,
     path: "/",
   });
 }

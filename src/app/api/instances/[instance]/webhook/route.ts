@@ -6,7 +6,7 @@ import { withErrorHandling } from "@/lib/api-handler";
 
 export const POST = withErrorHandling(
   async (request: Request, context: { params: Promise<{ instance: string }> }) => {
-    if (!isAuthenticated(request)) {
+    if (!(await isAuthenticated(request))) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 

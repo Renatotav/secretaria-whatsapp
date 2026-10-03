@@ -5,7 +5,7 @@ import { withErrorHandling } from "@/lib/api-handler";
 import { autoMarkPaid } from "@/lib/auto-pay";
 
 export const GET = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -82,7 +82,7 @@ export const POST = withErrorHandling(async (request: Request) => {
 });
 
 export const DELETE = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
   const { searchParams } = new URL(request.url);

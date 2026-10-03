@@ -82,7 +82,11 @@ export async function POST(request: Request) {
     // cobre PDFs sem texto extraível e quem já manda print direto ou nota fiscal.
     if (isSelfChat && rawMessage.imageMessage) {
       const caption = ((rawMessage.imageMessage as Record<string, string>).caption || "").toLowerCase();
-      const isInvoice = caption.includes("nota") || caption.includes("mercado") || caption.includes("fatura") || caption.includes("recibo");
+      // "fatura"/"extrato" = fatura do cartão ou extrato → leitor de extrato
+      // (vários lançamentos). Antes "fatura" ia pro leitor de nota fiscal e a
+      // fatura inteira virava UM gasto de supermercado.
+      const isStatement = caption.includes("fatura") || caption.includes("extrato");
+      const isInvoice = !isStatement && (caption.includes("nota") || caption.includes("mercado") || caption.includes("recibo") || caption.includes("cupom"));
       
       console.log(`[webhook] imagem recebida no canal pessoal (isInvoice=${isInvoice})`);
       try {

@@ -5,7 +5,7 @@ import { withErrorHandling } from "@/lib/api-handler";
 import { autoMarkPaid } from "@/lib/auto-pay";
 
 export const GET = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 

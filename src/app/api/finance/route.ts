@@ -23,7 +23,7 @@ function seriesKey(e: { description: string }): string {
 }
 
 export const GET = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -75,7 +75,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 });
 
 export const POST = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -122,7 +122,7 @@ export const POST = withErrorHandling(async (request: Request) => {
 });
 
 export const PATCH = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -173,7 +173,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
 });
 
 export const DELETE = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 

@@ -170,12 +170,19 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
   }
 
   if (intent === "finance_summary") {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const entries = await prisma.financeEntry.findMany({ where: { date: { gte: monthStart } } });
-    const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
-    const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
-    return `💰 *Financeiro do mês:*\nReceitas: R$ ${income.toFixed(2)}\nDespesas: R$ ${expense.toFixed(2)}\nSaldo: R$ ${(income - expense).toFixed(2)}`;
+    // Só o mês atual (antes não tinha fim e somava parcelas/salários previstos
+    // de todos os meses futuros). Separa o que já saiu do que ainda vai sair.
+    const today = todayBRT();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+    const entries = await prisma.financeEntry.findMany({ where: { date: { gte: monthStart, lte: monthEnd } } });
+    const sum = (type: string, status?: string) =>
+      entries.filter((e) => e.type === type && (!status || e.status === status)).reduce((s, e) => s + e.amount, 0);
+    const income = sum("income");
+    const expense = sum("expense");
+    const balance = income - expense;
+    const monthName = today.toLocaleDateString("pt-BR", { month: "long" });
+    return `💰 *Financeiro de ${monthName}:*\nEntradas: R$ ${income.toFixed(2)} (já recebido R$ ${sum("income", "paid").toFixed(2)})\nSaídas: R$ ${expense.toFixed(2)} (já pago R$ ${sum("expense", "paid").toFixed(2)} · a pagar R$ ${sum("expense", "pending").toFixed(2)})\n${balance >= 0 ? "🟢" : "🔴"} Fecha o mês com R$ ${balance.toFixed(2)}`;
   }
 
   if (intent === "savings_summary") {
@@ -353,30 +360,47 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         );
         response = "";
       } else {
+        // "Paguei o aluguel" / "recebi o salário" dá baixa numa conta que já
+        // estava prevista, em vez de lançar outra. Só quando a mensagem fala
+        // em pagar/receber, só contas fora do cartão (compra no cartão nunca é
+        // "baixa"), vencendo agora (até 45 dias atrás / 10 dias à frente), e
+        // com o mesmo valor ou a mesma categoria+subcategoria. Antes bastava
+        // valor OU categoria iguais — um almoço no pix "pagava" um almoço
+        // antigo do cartão e o gasto novo nunca era lançado.
         let existingPending = null;
-        if (route.status === "paid") {
+        const settlesBill = route.status === "paid" && /\b(paguei|quitei|dei baixa|baixa|recebi|caiu|entrou)\b/i.test(joinedText);
+        if (settlesBill) {
+          const today = todayBRT();
           existingPending = await prisma.financeEntry.findFirst({
             where: {
               type: route.financeType,
               status: "pending",
+              paymentMethod: { not: "cartão" },
+              date: { gte: new Date(today.getTime() - 45 * 86400000), lte: new Date(today.getTime() + 10 * 86400000) },
               OR: [
-                { amount: route.amount },
-                { category: route.category }
-              ]
+                { amount: { gte: route.amount - 0.01, lte: route.amount + 0.01 } },
+                { category: route.category, subcategory: route.subcategory },
+              ],
             },
-            orderBy: { date: "asc" }
+            orderBy: { date: "asc" },
           });
         }
 
-        if (existingPending && route.status === "paid") {
+        if (existingPending) {
+          // Vale o valor que ele disse (ex: salário veio menor que o previsto).
+          const newAmount = route.amount > 0 ? route.amount : existingPending.amount;
           await prisma.financeEntry.update({
             where: { id: existingPending.id },
-            data: { 
+            data: {
               status: "paid",
+              amount: newAmount,
               date: route.date ? parseLocalDate(route.date) : existingPending.date,
             }
           });
-          response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (R$ ${existingPending.amount.toFixed(2)})`;
+          response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (R$ ${newAmount.toFixed(2)})`;
+          if (Math.abs(newAmount - existingPending.amount) > 0.01) {
+            response += `\n(o previsto era R$ ${existingPending.amount.toFixed(2)} — atualizei para o valor que você informou)`;
+          }
         } else {
           let finalMood = route.mood || "neutro";
           
@@ -638,7 +662,7 @@ export async function projectAndInsertFinanceEntries(
   entries: StatementEntry[],
   source: "whatsapp" | "dashboard" = "whatsapp",
   creditCardDueDay?: number
-): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number }> {
+): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number; matchedManual: StatementEntry[] }> {
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
   // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
   // parcela — ex: Anthropic, Netflix) com as entradas reais desse extrato,
@@ -720,6 +744,26 @@ export async function projectAndInsertFinanceEntries(
       .filter((k): k is string => k !== null)
   );
 
+  // Compras avulsas no cartão (sem parcela/assinatura) que o dono já anotou à
+  // mão: mesmo valor e data de compra até 3 dias de diferença. Cada lançamento
+  // existente só "absorve" uma linha da fatura — se ele anotou 1 almoço de
+  // R$ 26 e a fatura tem 2, o segundo entra.
+  const looseCard = candidates.filter((c) => !c.key && c.entry.type === "expense" && c.entry.paymentMethod === "cartão");
+  const manualCard = looseCard.length === 0 ? [] : await prisma.financeEntry.findMany({
+    where: {
+      type: "expense",
+      paymentMethod: "cartão",
+      date: {
+        gte: new Date(Math.min(...looseCard.map((c) => c.date.getTime())) - 40 * 86400000),
+        lte: new Date(Math.max(...looseCard.map((c) => c.date.getTime())) + 40 * 86400000),
+      },
+    },
+    select: { id: true, amount: true, date: true, purchaseDate: true },
+  });
+  const usedManual = new Set<string>();
+  const matchedManual: StatementEntry[] = [];
+  const DAY_MS = 86400000;
+
   const toInsert: StatementEntry[] = [];
   let duplicates = 0;
   let projected = 0;
@@ -732,6 +776,18 @@ export async function projectAndInsertFinanceEntries(
         continue;
       }
       seenThisBatch.add(c.key);
+    } else if (c.entry.type === "expense" && c.entry.paymentMethod === "cartão") {
+      const bought = c.entry.purchaseDate ? parseLocalDate(c.entry.purchaseDate) : c.date;
+      const match = manualCard.find((m) =>
+        !usedManual.has(m.id) &&
+        Math.abs(m.amount - c.entry.amount) <= 0.01 &&
+        Math.abs((m.purchaseDate ?? m.date).getTime() - bought.getTime()) <= 3 * DAY_MS
+      );
+      if (match) {
+        usedManual.add(match.id);
+        matchedManual.push(c.entry);
+        continue;
+      }
     }
     if (c.entry.description.includes("(previsto)")) projected++;
     toInsert.push(c.entry);
@@ -755,7 +811,7 @@ export async function projectAndInsertFinanceEntries(
     });
   }
 
-  return { toInsert, duplicates, projected };
+  return { toInsert, duplicates, projected, matchedManual };
 }
 
 export async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
@@ -764,10 +820,10 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
     return;
   }
 
-  const { toInsert, duplicates, projected } = await projectAndInsertFinanceEntries(entries, "whatsapp", config.creditCardDueDay);
+  const { toInsert, duplicates, projected, matchedManual } = await projectAndInsertFinanceEntries(entries, "whatsapp", config.creditCardDueDay);
 
   if (toInsert.length === 0) {
-    await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já tinham sido importadas antes.`);
+    await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já estavam lançadas (importadas antes ou anotadas por você).`);
     return;
   }
 
@@ -779,6 +835,10 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
   let response = `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: R$ ${total.toFixed(2)}`;
   if (projected > 0) response += `\n📅 +${projected} parcela(s) futura(s) projetada(s) nos próximos meses.`;
   if (duplicates > 0) response += `\n♻️ ${duplicates} já estavam lançadas (ignoradas pra não duplicar).`;
+  if (matchedManual.length > 0) {
+    const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — R$ ${e.amount.toFixed(2)}`).join("\n");
+    response += `\n✍️ ${matchedManual.length} você já tinha anotado (mesmo valor, data parecida) — não lancei de novo:\n${list}${matchedManual.length > 15 ? "\n…" : ""}`;
+  }
   await notifyOwner(config, response);
 }
 

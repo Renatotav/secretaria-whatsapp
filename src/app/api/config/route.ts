@@ -4,7 +4,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
 
 export const GET = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -16,7 +16,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 });
 
 export const PUT = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 

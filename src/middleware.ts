@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
-const SESSION_COOKIE = "agent_session";
 const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook"];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
@@ -17,8 +17,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session = request.cookies.get(SESSION_COOKIE);
-  if (!session || session.value !== "authenticated") {
+  // Cookie assinado (ver session-token.ts) — o valor antigo fixo não passa mais.
+  if (!(await verifySessionToken(request.cookies.get(SESSION_COOKIE)?.value))) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

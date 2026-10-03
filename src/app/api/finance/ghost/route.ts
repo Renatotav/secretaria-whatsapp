@@ -6,7 +6,7 @@ import { withErrorHandling } from "@/lib/api-handler";
 // GET: mostra TODAS as entradas antes de agosto/2026 para encontrar fantasmas no saldo
 // DELETE: apaga todas as entradas antes de agosto/2026 que estejam em branco ou com conta inválida
 export const GET = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -52,7 +52,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 });
 
 export const DELETE = withErrorHandling(async (request: Request) => {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 

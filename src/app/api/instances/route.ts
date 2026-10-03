@@ -4,7 +4,7 @@ import { isAuthenticated } from "@/lib/auth";
 import { fetchInstances } from "@/lib/evolution";
 
 export async function GET(request: Request) {
-  if (!isAuthenticated(request)) {
+  if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
