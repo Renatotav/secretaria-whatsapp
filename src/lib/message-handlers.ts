@@ -1419,6 +1419,16 @@ function installmentKey(baseDescription: string, purchaseDate: string, total: nu
   return `${baseDescription}|${purchaseDate}|${total}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
 }
 
+/** Parcela X/Y de mesmo valor no mesmo mês, qualquer que seja o nome. */
+function looseInstallmentKey(current: number, total: number, amount: number, targetDate: Date): string {
+  return `inst|${current}/${total}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
+}
+
+/** Assinatura de mesmo valor no mesmo mês, qualquer que seja o nome. */
+function looseSubscriptionKey(amount: number, targetDate: Date): string {
+  return `sub|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
+}
+
 function subscriptionKey(description: string, amount: number, targetDate: Date): string {
   return `sub|${description}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
 }
@@ -1501,40 +1511,44 @@ export async function projectAndInsertFinanceEntries(
         { description: { contains: "(recorrente)" } },
       ],
     },
-    select: { description: true, date: true, amount: true, category: true },
+    select: { id: true, description: true, date: true, amount: true, category: true },
   });
-  const existingKeys = new Set(
-    existing
-      .map((e) => {
-        const info = parseInstallmentInfo(e.description, e.date);
-        if (info) return installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date);
-        if (e.category === "Assinaturas" || /\(recorrente\)/.test(e.description)) {
-          const baseDescription = e.description.replace(/\s*\(previsto\)/, "").replace(/\s*\(recorrente\)/, "").trim();
-          return subscriptionKey(baseDescription, e.amount, e.date);
-        }
-        return null;
-      })
-      .filter((k): k is string => k !== null)
-  );
+  const existingKeys = new Set<string>();
+  // Chave sem o nome: a mesma parcela/assinatura anotada com outro nome
+  // ("Moto Scooter Elétrica - Parcela 1/5" x "MOVYX MOBILIDADE - Parcela 1/5").
+  const existingLooseKeys = new Map<string, string>();
+  for (const e of existing) {
+    const info = parseInstallmentInfo(e.description, e.date);
+    if (info) {
+      existingKeys.add(installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date));
+      existingLooseKeys.set(looseInstallmentKey(info.current, info.total, e.amount, e.date), e.id);
+    } else if (e.category === "Assinaturas" || /\(recorrente\)/.test(e.description)) {
+      const baseDescription = e.description.replace(/\s*\(previsto\)/, "").replace(/\s*\(recorrente\)/, "").trim();
+      existingKeys.add(subscriptionKey(baseDescription, e.amount, e.date));
+      existingLooseKeys.set(looseSubscriptionKey(e.amount, e.date), e.id);
+    }
+  }
 
-  // Compras avulsas no cartão (sem parcela/assinatura) que o dono já anotou à
-  // mão: mesmo valor e data de compra até 3 dias de diferença. Cada lançamento
-  // existente só "absorve" uma linha da fatura — se ele anotou 1 almoço de
-  // R$ 26 e a fatura tem 2, o segundo entra.
-  const looseCard = candidates.filter((c) => !c.key && c.entry.type === "expense" && c.entry.paymentMethod === "cartão");
-  const manualCard = looseCard.length === 0 ? [] : await prisma.financeEntry.findMany({
+  // Compras que o dono já anotou à mão (qualquer meio de pagamento — às vezes
+  // ele anota "pix" e foi no cartão): mesmo valor e data de compra até 3 dias
+  // de diferença. Cada lançamento existente só "absorve" uma linha da fatura —
+  // se ele anotou 1 almoço de R$ 26 e a fatura tem 2, o segundo entra.
+  const realCard = candidates.filter((c) => c.entry.type === "expense" && c.entry.paymentMethod === "cartão" && !c.entry.description.includes("(previsto)"));
+  const manualCard = realCard.length === 0 ? [] : await prisma.financeEntry.findMany({
     where: {
       type: "expense",
-      paymentMethod: "cartão",
       date: {
-        gte: new Date(Math.min(...looseCard.map((c) => c.date.getTime())) - 40 * 86400000),
-        lte: new Date(Math.max(...looseCard.map((c) => c.date.getTime())) + 40 * 86400000),
+        gte: new Date(Math.min(...realCard.map((c) => c.date.getTime())) - 40 * 86400000),
+        lte: new Date(Math.max(...realCard.map((c) => c.date.getTime())) + 40 * 86400000),
       },
     },
     select: { id: true, amount: true, date: true, purchaseDate: true },
   });
   const usedManual = new Set<string>();
   const matchedManual: StatementEntry[] = [];
+  // A fatura é a fonte confiável: o lançamento que já existia recebe o nome,
+  // a data e o meio de pagamento do cartão (a categoria dele é mantida).
+  const updates: { id: string; entry: StatementEntry }[] = [];
   const DAY_MS = 86400000;
 
   const toInsert: StatementEntry[] = [];
@@ -1543,13 +1557,28 @@ export async function projectAndInsertFinanceEntries(
   const seenThisBatch = new Set<string>();
 
   for (const c of candidates) {
+    const isProjection = c.entry.description.includes("(previsto)");
     if (c.key) {
       if (existingKeys.has(c.key) || seenThisBatch.has(c.key)) {
         duplicates++;
         continue;
       }
       seenThisBatch.add(c.key);
-    } else if (c.entry.type === "expense" && c.entry.paymentMethod === "cartão") {
+      const info = parseInstallmentInfo(c.entry.description, c.date);
+      const loose = info ? looseInstallmentKey(info.current, info.total, c.entry.amount, c.date) : looseSubscriptionKey(c.entry.amount, c.date);
+      const sameUnderOtherName = existingLooseKeys.get(loose);
+      if (sameUnderOtherName && !usedManual.has(sameUnderOtherName)) {
+        usedManual.add(sameUnderOtherName);
+        if (isProjection) {
+          duplicates++;
+        } else {
+          updates.push({ id: sameUnderOtherName, entry: c.entry });
+          matchedManual.push(c.entry);
+        }
+        continue;
+      }
+    }
+    if (!isProjection && c.entry.type === "expense" && c.entry.paymentMethod === "cartão") {
       const bought = c.entry.purchaseDate ? parseLocalDate(c.entry.purchaseDate) : c.date;
       const match = manualCard.find((m) =>
         !usedManual.has(m.id) &&
@@ -1558,12 +1587,27 @@ export async function projectAndInsertFinanceEntries(
       );
       if (match) {
         usedManual.add(match.id);
+        updates.push({ id: match.id, entry: c.entry });
         matchedManual.push(c.entry);
         continue;
       }
     }
-    if (c.entry.description.includes("(previsto)")) projected++;
+    if (isProjection) projected++;
     toInsert.push(c.entry);
+  }
+
+  for (const u of updates) {
+    await prisma.financeEntry.update({
+      where: { id: u.id },
+      data: {
+        description: u.entry.description,
+        amount: u.entry.amount,
+        date: parseLocalDate(u.entry.date),
+        purchaseDate: u.entry.purchaseDate ? parseLocalDate(u.entry.purchaseDate) : undefined,
+        paymentMethod: u.entry.paymentMethod,
+        status: u.entry.status || "pending",
+      },
+    });
   }
 
   if (toInsert.length > 0) {
@@ -1610,7 +1654,7 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
   if (duplicates > 0) response += `\n♻️ ${duplicates} já estavam lançadas (ignoradas pra não duplicar).`;
   if (matchedManual.length > 0) {
     const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — ${brl(e.amount)}`).join("\n");
-    response += `\n✍️ ${matchedManual.length} você já tinha anotado (mesmo valor, data parecida) — não lancei de novo:\n${list}${matchedManual.length > 15 ? "\n…" : ""}`;
+    response += `\n✍️ ${matchedManual.length} você já tinha anotado — não dupliquei; atualizei com o nome e a data do cartão (sua categoria ficou):\n${list}${matchedManual.length > 15 ? "\n…" : ""}`;
   }
   await notifyOwner(config, response);
 }
@@ -1667,7 +1711,8 @@ export async function handleStatementDocument(statementText: string): Promise<vo
 async function importCardSections(config: AgentConfig, statementText: string, chosen: CardSection[], total: number | null): Promise<void> {
   const { holderMatches } = await import("./pdf");
   const providerOpts = getProviderOpts(config);
-  const header = statementText.slice(0, 600);
+  const due = invoiceDueDate(statementText);
+  const header = `${due ? `VENCIMENTO DESTA FATURA: ${isoDay(due.getFullYear(), due.getMonth(), due.getDate())}\n` : ""}${statementText.slice(0, 600)}`;
   const entries: StatementEntry[] = [];
   for (const sec of chosen) {
     // Cartão com muitas compras estoura o tamanho da resposta da IA: manda em
@@ -1680,7 +1725,8 @@ ${header}
 TRANSAÇÕES DO CARTÃO FINAL ${sec.last4} (extraia todas estas). "Pagamento Fatura" é o pagamento da fatura anterior: ignore, não é receita.
 ${piece}`;
       // ownerName vazio: a escolha do cartão já foi feita aqui, o prompt não deve filtrar de novo.
-      parsed.push(...(await parseStatementEntries(text, providerOpts, "")));
+      const got = await parseStatementEntries(text, providerOpts, "");
+      parsed.push(...(due ? got.map((e) => applyInvoiceDates(e, due)) : got));
     }
     const mine = holderMatches(sec.holder, config.ownerName);
     entries.push(...(mine ? parsed : parsed.map((e) => ({ ...e, description: `${e.description} · cartão final ${sec.last4}`.slice(0, 200) }))));
@@ -1699,6 +1745,51 @@ ${piece}`;
       : `\n🧮 Conferi: li ${brl(read)}, mas a fatura diz ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
   }
   await notifyOwner(config, check);
+}
+
+const MONTHS_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const isoDay = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+/**
+ * Vencimento da fatura ("Vencimento: 10 de Outubro"). Sem ano impresso, usa o
+ * ano que deixa a data mais perto de hoje — a IA chutava (já saiu 2023).
+ */
+function invoiceDueDate(text: string): Date | null {
+  const m = text.match(/Vencimento:?\s*(\d{1,2})\s+de\s+([A-Za-zçÇ]+)(?:\s+de\s+(\d{4}))?/i);
+  if (!m) return null;
+  const month = MONTHS_PT.indexOf(m[2].toLowerCase().replace("marco", "março"));
+  if (month < 0) return null;
+  const day = Number(m[1]);
+  if (m[3]) return parseLocalDate(isoDay(Number(m[3]), month, day));
+  const today = todayBRT();
+  const options = [-1, 0, 1].map((dy) => parseLocalDate(isoDay(today.getFullYear() + dy, month, day)));
+  return options.reduce((best, d) => (Math.abs(d.getTime() - today.getTime()) < Math.abs(best.getTime() - today.getTime()) ? d : best));
+}
+
+/**
+ * Compra de fatura com vencimento conhecido: data = vencimento, ano da compra
+ * calculado (antes do vencimento; parcela X/Y ≈ X meses antes) e "a pagar"
+ * até a fatura vencer — a baixa automática marca como paga depois.
+ */
+function applyInvoiceDates(e: StatementEntry, due: Date): StatementEntry {
+  let purchaseDate = e.purchaseDate;
+  if (purchaseDate) {
+    const pd = parseLocalDate(purchaseDate);
+    const parcel = e.description.match(/Parcela (\d+)\/\d+/);
+    const target = parcel ? new Date(due.getFullYear(), due.getMonth() - Number(parcel[1]), due.getDate()) : due;
+    const options = [0, 1, 2]
+      .map((back) => parseLocalDate(isoDay(due.getFullYear() - back, pd.getMonth(), pd.getDate())))
+      .filter((d) => d.getTime() <= due.getTime());
+    const best = options.reduce<Date | null>((b, d) => (!b || Math.abs(d.getTime() - target.getTime()) < Math.abs(b.getTime() - target.getTime()) ? d : b), null);
+    if (best) purchaseDate = isoDay(best.getFullYear(), best.getMonth(), best.getDate());
+  }
+  return {
+    ...e,
+    date: isoDay(due.getFullYear(), due.getMonth(), due.getDate()),
+    purchaseDate,
+    paymentMethod: "cartão",
+    status: due.getTime() >= todayBRT().getTime() ? "pending" : "paid",
+  };
 }
 
 /**
