@@ -128,6 +128,9 @@ export async function POST(request: Request) {
         ).trim();
       } catch (err) {
         console.error("[webhook] falha ao transcrever áudio", err);
+        if (isSelfChat) {
+          await notifyOwner(config, "⚠️ Não consegui entender esse áudio. Pode mandar por texto?");
+        }
         return NextResponse.json({ ok: true });
       }
     }

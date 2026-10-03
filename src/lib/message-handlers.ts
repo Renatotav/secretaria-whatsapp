@@ -9,6 +9,7 @@ import {
   parseStatementImage,
   parseInvoiceImage,
   type PersonalQueryIntent,
+  type PersonalRouteResult,
   type StatementEntry,
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
@@ -146,7 +147,128 @@ export async function downloadIncomingMedia(
   return { base64, mimetype };
 }
 
+const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const signed = (v: number) => `${v >= 0 ? "+" : "−"}${brl(Math.abs(v))}`;
+
+/** Entradas, saídas e saídas por categoria de um mês (pelo `date`, que é o mês em que o dinheiro entra/sai). */
+async function monthTotals(year: number, monthIndex: number) {
+  const entries = await prisma.financeEntry.findMany({
+    where: { date: { gte: new Date(year, monthIndex, 1), lte: new Date(year, monthIndex + 1, 0, 23, 59, 59) } },
+    select: { type: true, amount: true, category: true },
+  });
+  const byCategory: Record<string, number> = {};
+  let income = 0;
+  let expense = 0;
+  for (const e of entries) {
+    if (e.type === "income") income += e.amount;
+    else {
+      expense += e.amount;
+      byCategory[e.category || "Outros"] = (byCategory[e.category || "Outros"] || 0) + e.amount;
+    }
+  }
+  return { income, expense, byCategory };
+}
+
+/**
+ * Fechamento de um mês: entrou x saiu, top 3 categorias contra o mês
+ * anterior e as metas. Usado pelo agendador todo dia 1º e por
+ * "fechamento do mês" no WhatsApp.
+ */
+export async function buildMonthClosing(year: number, monthIndex: number): Promise<string> {
+  const cur = await monthTotals(year, monthIndex);
+  const prevDate = new Date(year, monthIndex - 1, 1);
+  const prev = await monthTotals(prevDate.getFullYear(), prevDate.getMonth());
+  const balance = cur.income - cur.expense;
+
+  const top = Object.entries(cur.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topLines = top.map(([cat, v]) => {
+    const before = prev.byCategory[cat] || 0;
+    const diff = before > 0 ? ` (${v >= before ? "↑" : "↓"} ${Math.abs(((v - before) / before) * 100).toFixed(0)}% vs ${MONTH_NAMES[prevDate.getMonth()]})` : "";
+    return `• ${cat}: ${brl(v)}${diff}`;
+  });
+
+  const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
+  const goalLines = goals.map((g) =>
+    g.currentAmount >= g.targetAmount
+      ? `• 🏆 ${g.name}: conquistada`
+      : `• ${g.name}: ${brl(g.currentAmount)} de ${brl(g.targetAmount)} (${((g.currentAmount / g.targetAmount) * 100).toFixed(0)}%)`
+  );
+
+  return [
+    `📅 *Fechamento de ${MONTH_NAMES[monthIndex]}/${year}*`,
+    `Entrou: ${brl(cur.income)}`,
+    `Saiu: ${brl(cur.expense)}`,
+    `${balance >= 0 ? "🟢 Sobrou" : "🔴 Faltou"}: ${brl(Math.abs(balance))}`,
+    top.length ? `\n*O que mais pesou:*\n${topLines.join("\n")}` : "",
+    goalLines.length ? `\n*Metas:*\n${goalLines.join("\n")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+/**
+ * "E se meu salário for X?" / "Posso comprar Y em Nx?": recalcula o mês atual
+ * e os próximos 3 com o que já está lançado, trocando a renda pela hipotética
+ * e/ou somando a compra (no cartão, nas faturas certas). Não grava nada.
+ */
+async function simulateFinance(
+  route: Extract<PersonalRouteResult, { type: "finance_simulation" }>,
+  config: AgentConfig
+): Promise<string> {
+  const MONTHS = 4;
+  const today = todayBRT();
+  const purchaseTotal = route.simPurchaseAmount && route.simPurchaseAmount > 0 ? route.simPurchaseAmount : 0;
+  const installments = route.simPaymentMethod === "cartão" ? Math.max(1, Math.round(route.simInstallments || 1)) : 1;
+  const installmentValue = purchaseTotal / installments;
+  const firstBill = route.simPaymentMethod === "cartão"
+    ? creditCardBillDate(today, config.creditCardDueDay || 10, config.creditCardBestDay || 5)
+    : today;
+  const firstKey = firstBill.getFullYear() * 12 + firstBill.getMonth();
+
+  const lines: string[] = [];
+  let worstBefore = Infinity;
+  let worstAfter = Infinity;
+  let worstMonth = "";
+  for (let i = 0; i < MONTHS; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const t = await monthTotals(d.getFullYear(), d.getMonth());
+    const income = route.simIncome && route.simIncome > 0 ? route.simIncome : t.income;
+    const key = d.getFullYear() * 12 + d.getMonth();
+    const extra = purchaseTotal > 0 && key >= firstKey && key < firstKey + installments ? installmentValue : 0;
+    const before = income - t.expense;
+    const after = before - extra;
+    if (before < worstBefore) worstBefore = before;
+    if (after < worstAfter) { worstAfter = after; worstMonth = MONTH_NAMES[d.getMonth()]; }
+    const icon = after < 0 ? "🔴" : after < 300 ? "🟡" : "🟢";
+    lines.push(`${icon} ${MONTH_NAMES[d.getMonth()].slice(0, 3)}: ${signed(after)}${extra ? ` (com a parcela de ${brl(extra)})` : ""}`);
+  }
+
+  const header: string[] = [];
+  if (purchaseTotal > 0) {
+    header.push(`🤔 *${route.simDescription ? route.simDescription.charAt(0).toUpperCase() + route.simDescription.slice(1) : "Compra"} de ${brl(purchaseTotal)}*${installments > 1 ? ` em ${installments}× de ${brl(installmentValue)}` : ""} (${route.simPaymentMethod})`);
+  }
+  if (route.simIncome && route.simIncome > 0) header.push(`💼 Renda de ${brl(route.simIncome)} por mês`);
+  header.push("Como ficariam os meses (entra − sai, com o que já está lançado):");
+
+  let verdict = "";
+  if (purchaseTotal > 0) {
+    if (worstAfter >= 300) verdict = "✅ *Cabe.* Nenhum mês fica apertado.";
+    else if (worstAfter >= 0) verdict = `⚠️ *Cabe, mas aperta* ${worstMonth} (sobra só ${brl(worstAfter)}). Se der, espere um mês.`;
+    else if (worstBefore >= 0) verdict = `❌ *Não recomendo agora:* ${worstMonth} fica ${brl(Math.abs(worstAfter))} no vermelho por causa dessa compra.`;
+    else verdict = `❌ *Melhor não:* o mês de ${worstMonth} já está no vermelho mesmo sem essa compra.`;
+  }
+
+  return [...header, ...lines, verdict, "\n_Simulação — não lancei nada. Gastos do dia a dia ainda não lançados não entram na conta._"]
+    .filter(Boolean)
+    .join("\n");
+}
+
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
+  if (intent === "month_closing") {
+    const today = todayBRT();
+    const last = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    return buildMonthClosing(last.getFullYear(), last.getMonth());
+  }
+
   if (intent === "pending_today") {
     const items = await prisma.agendaItem.findMany({
       where: { done: false },
@@ -540,13 +662,22 @@ Não seja robótico. Chame-o de Renato.`;
         if (!targetGoal) {
           response = `❌ Não encontrei a meta "${route.goalName}". As metas que você tem são: ${goals.map((g) => g.name).join(", ")}.`;
         } else {
+          // "Tirei/usei/saquei X da reserva" = retirada, mesmo se a IA mandar positivo.
+          const isWithdraw = route.amount < 0 || /\b(tirei|retirei|saquei|usei|peguei)\b/i.test(joinedText);
+          const delta = isWithdraw ? -Math.abs(route.amount) : Math.abs(route.amount);
+          const newAmount = Math.max(0, targetGoal.currentAmount + delta);
           await prisma.savingsGoal.update({
             where: { id: targetGoal.id },
-            data: { currentAmount: targetGoal.currentAmount + route.amount }
+            data: { currentAmount: newAmount }
           });
-          response = `✅ Guardado R$ ${route.amount.toFixed(2)} em "${targetGoal.name}"!\n💰 Saldo atual da meta: R$ ${(targetGoal.currentAmount + route.amount).toFixed(2)} de R$ ${targetGoal.targetAmount.toFixed(2)}`;
+          response = isWithdraw
+            ? `💸 Retirei ${brl(Math.abs(delta))} de "${targetGoal.name}".\n💰 Saldo atual da meta: ${brl(newAmount)} de ${brl(targetGoal.targetAmount)}`
+            : `✅ Guardado ${brl(delta)} em "${targetGoal.name}"!\n💰 Saldo atual da meta: ${brl(newAmount)} de ${brl(targetGoal.targetAmount)}${newAmount >= targetGoal.targetAmount ? "\n🏆 *Meta conquistada!*" : ""}`;
         }
       }
+      break;
+    case "finance_simulation":
+      response = await simulateFinance(route, config);
       break;
     case "diary":
       await prisma.diaryEntry.create({

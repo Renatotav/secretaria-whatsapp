@@ -4,10 +4,12 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
+import { buildMonthClosing } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
 let lastFinanceReminderDate = "";
+let lastMonthClosingDate = "";
 let lastReminderHour = -1;
 
 export function startScheduler(): void {
@@ -105,6 +107,26 @@ export function startScheduler(): void {
             20,
             5
           );
+        }
+      }
+
+      // Fechamento do mês anterior (todo dia 1º, 09:05)
+      if (brtDate.getUTCDate() === 1 && hhmm >= "09:05" && lastMonthClosingDate !== todayDate && config.ownerPhone) {
+        lastMonthClosingDate = todayDate;
+        try {
+          const last = new Date(Date.UTC(brtDate.getUTCFullYear(), brtDate.getUTCMonth() - 1, 1));
+          const msg = await buildMonthClosing(last.getUTCFullYear(), last.getUTCMonth());
+          await sendTextWithTyping(
+            evolutionConfig.evolutionUrl,
+            evolutionConfig.evolutionApiKey,
+            evolutionConfig.instanceId,
+            config.ownerPhone,
+            msg,
+            20,
+            5
+          );
+        } catch (err) {
+          console.error("Erro ao enviar fechamento do mês:", err);
         }
       }
 

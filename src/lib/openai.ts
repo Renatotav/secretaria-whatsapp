@@ -169,9 +169,10 @@ export async function generateVisionResponse(
 }
 
 /**
- * Transcreve áudio (base64). Prioridade: Groq (whisper-large-v3) > OpenRouter
- * (openai/whisper-1) > OpenAI (whisper-1). Sem nenhuma chave configurada,
- * lança erro — quem chama deve tratar e logar.
+ * Transcreve áudio (base64). Prioridade: Groq (whisper-large-v3) > OpenAI
+ * (whisper-1) > OpenRouter (openai/whisper-1). A OpenAI vem antes do
+ * OpenRouter porque o OpenRouter não tem endpoint de transcrição — com as duas
+ * chaves configuradas, o áudio falhava sempre. Sem nenhuma chave, lança erro.
  */
 export async function transcribeAudio(
   base64: string,
@@ -195,6 +196,18 @@ export async function transcribeAudio(
     return result.text ?? "";
   }
 
+  const apiKey = providerOpts.openaiApiKey || process.env.OPENAI_API_KEY || "";
+  if (apiKey) {
+    const openai = new OpenAI({ apiKey });
+    const file = await toFile(buffer, filename);
+    const result = await openai.audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+      language: "pt",
+    });
+    return result.text ?? "";
+  }
+
   if (providerOpts.openrouterApiKey) {
     const openrouter = new OpenAI({
       apiKey: providerOpts.openrouterApiKey,
@@ -209,16 +222,5 @@ export async function transcribeAudio(
     return result.text ?? "";
   }
 
-  const apiKey = providerOpts.openaiApiKey ?? process.env.OPENAI_API_KEY ?? "";
-  if (!apiKey) {
-    throw new Error("Nenhuma chave configurada para transcrição de áudio (Groq, OpenRouter ou OpenAI)");
-  }
-  const openai = new OpenAI({ apiKey });
-  const file = await toFile(buffer, filename);
-  const result = await openai.audio.transcriptions.create({
-    file,
-    model: "whisper-1",
-    language: "pt",
-  });
-  return result.text ?? "";
+  throw new Error("Nenhuma chave configurada para transcrição de áudio (Groq, OpenAI ou OpenRouter)");
 }

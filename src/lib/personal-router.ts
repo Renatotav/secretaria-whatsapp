@@ -18,7 +18,7 @@ Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
 Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
 outro nome se nenhuma delas fizer sentido pro caso.`;
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing";
 
 export type PersonalRouteResult =
   | {
@@ -66,6 +66,16 @@ export type PersonalRouteResult =
       type: "finance_update_date";
       newPurchaseDate: string;
       confirmation: string;
+    }
+  | {
+      // "E se meu salário for 3.300?" / "Posso comprar um capacete de 350 em 3x?"
+      type: "finance_simulation";
+      simIncome: number | null;
+      simPurchaseAmount: number | null;
+      simInstallments: number | null;
+      simPaymentMethod: "cartão" | "pix" | "débito" | "dinheiro";
+      simDescription: string;
+      confirmation: string;
     };
 
 export async function routePersonalMessage(
@@ -104,6 +114,7 @@ Tipos:
    Ex: "Quanto gastei esse mês?" → finance_summary
    Ex: "Resumo do grupo PJe ontem" → group_summary
    Ex: "Como estão minhas metas?" ou "Quanto falta pro macbook?" → savings_summary
+   Ex: "Fechamento do mês" ou "Como fechou o mês passado?" → month_closing
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
    ${FINANCE_TAXONOMY}
@@ -134,23 +145,32 @@ Tipos:
 4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
 
-5. savings_add — guardar ou aportar dinheiro para uma Meta de Economia (SavingsGoal)
+5. savings_add — guardar OU tirar dinheiro de uma Meta de Economia (SavingsGoal)
    Ex: "Guarda 100 reais pra viagem" → type "savings_add", amount: 100, goalName: "viagem"
+   Ex: "Tirei 900 da reserva" → type "savings_add", amount: -900, goalName: "reserva"
+   (retirada = amount NEGATIVO)
 
 6. finance_update_date — o usuário está corrigindo ou fornecendo a data de compra de um gasto recém-lançado.
    Ex: "15/08" ou "foi dia 15" → type "finance_update_date", newPurchaseDate: "YYYY-MM-DD"
+
+7. finance_simulation — PERGUNTA hipotética, nada foi gasto ainda: "e se...", "posso comprar...?", "dá pra comprar...?", "se eu ganhar...".
+   NÃO é um gasto real: nunca use "finance" para essas perguntas.
+   Ex: "Posso comprar um capacete de 350 em 3x?" → simPurchaseAmount: 350 (valor TOTAL), simInstallments: 3, simPaymentMethod: "cartão", simDescription: "capacete"
+   Ex: "E se meu salário for 3300?" → simIncome: 3300
+   Ex: "Dá pra comprar um tênis de 200 no pix?" → simPurchaseAmount: 200, simInstallments: 1, simPaymentMethod: "pix", simDescription: "tênis"
+   Sem meio de pagamento dito = "cartão". simIncome = renda MENSAL total hipotética (ou null).
 
 IMPORTANTE:
 - Ao registrar um novo gasto (type: "finance"), na "confirmation" inclua SEMPRE uma menção amigável informando que a compra foi registrada para a data de hoje (ou a data identificada) e explicando que ele pode responder com outra data se quiser alterar. Exemplo: "💸 Anotado! Gasto de R$ 33,98 pendente para o dia 10/09 (compra em DD/MM). Se foi em outra data, basta me responder com o dia (ex: 15/08)."
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing",
   "financeType": "income|expense",
   "amount": 0,
   "financeCategory": "<categoria curta>",
@@ -166,6 +186,11 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "mood": "pessimo|ruim|neutro|bom|otimo",
   "diaryContent": "<texto>",
   "goalName": "<nome da meta>",
+  "simIncome": "renda mensal hipotética ou null",
+  "simPurchaseAmount": "valor total da compra hipotética ou null",
+  "simInstallments": "número de parcelas da compra hipotética ou null",
+  "simPaymentMethod": "cartão|pix|débito|dinheiro",
+  "simDescription": "<o que pensa em comprar>",
   "confirmation": "Sua resposta curta"
 }`;
 
@@ -223,6 +248,22 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       };
     }
 
+    if (parsed.type === "finance_simulation") {
+      const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+      const method = ["cartão", "pix", "débito", "dinheiro"].includes(parsed.simPaymentMethod as string)
+        ? (parsed.simPaymentMethod as "cartão" | "pix" | "débito" | "dinheiro")
+        : "cartão";
+      return {
+        type: "finance_simulation",
+        simIncome: num(parsed.simIncome),
+        simPurchaseAmount: num(parsed.simPurchaseAmount),
+        simInstallments: num(parsed.simInstallments),
+        simPaymentMethod: method,
+        simDescription: (parsed.simDescription as string) || "",
+        confirmation: (parsed.confirmation as string) || "",
+      };
+    }
+
     if (parsed.type === "finance_update_date") {
       return {
         type: "finance_update_date",
@@ -238,6 +279,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "finance_summary",
         "group_summary",
         "savings_summary",
+        "month_closing",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)
