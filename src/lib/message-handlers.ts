@@ -1419,14 +1419,14 @@ function installmentKey(baseDescription: string, purchaseDate: string, total: nu
   return `${baseDescription}|${purchaseDate}|${total}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
 }
 
-/** Parcela X/Y de mesmo valor no mesmo mês, qualquer que seja o nome. */
-function looseInstallmentKey(current: number, total: number, amount: number, targetDate: Date): string {
-  return `inst|${current}/${total}|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
+/** Parcela X/Y no mesmo mês, qualquer que seja o nome (o valor é comparado à parte, com tolerância). */
+function looseInstallmentKey(current: number, total: number, targetDate: Date): string {
+  return `inst|${current}/${total}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
 }
 
-/** Assinatura de mesmo valor no mesmo mês, qualquer que seja o nome. */
-function looseSubscriptionKey(amount: number, targetDate: Date): string {
-  return `sub|${amount.toFixed(2)}|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
+/** Assinatura no mesmo mês, qualquer que seja o nome (o valor é comparado à parte, com tolerância). */
+function looseSubscriptionKey(targetDate: Date): string {
+  return `sub|${targetDate.getFullYear()}-${targetDate.getMonth()}`;
 }
 
 function subscriptionKey(description: string, amount: number, targetDate: Date): string {
@@ -1516,22 +1516,25 @@ export async function projectAndInsertFinanceEntries(
   const existingKeys = new Set<string>();
   // Chave sem o nome: a mesma parcela/assinatura anotada com outro nome
   // ("Moto Scooter Elétrica - Parcela 1/5" x "MOVYX MOBILIDADE - Parcela 1/5").
-  const existingLooseKeys = new Map<string, string>();
+  const existingLooseKeys = new Map<string, { id: string; amount: number }[]>();
+  const addLoose = (key: string, id: string, amount: number) =>
+    existingLooseKeys.set(key, [...(existingLooseKeys.get(key) ?? []), { id, amount }]);
   for (const e of existing) {
     const info = parseInstallmentInfo(e.description, e.date);
     if (info) {
       existingKeys.add(installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date));
-      existingLooseKeys.set(looseInstallmentKey(info.current, info.total, e.amount, e.date), e.id);
+      addLoose(looseInstallmentKey(info.current, info.total, e.date), e.id, e.amount);
     } else if (e.category === "Assinaturas" || /\(recorrente\)/.test(e.description)) {
       const baseDescription = e.description.replace(/\s*\(previsto\)/, "").replace(/\s*\(recorrente\)/, "").trim();
       existingKeys.add(subscriptionKey(baseDescription, e.amount, e.date));
-      existingLooseKeys.set(looseSubscriptionKey(e.amount, e.date), e.id);
+      addLoose(looseSubscriptionKey(e.date), e.id, e.amount);
     }
   }
 
-  // Compras que o dono já anotou à mão (qualquer meio de pagamento — às vezes
-  // ele anota "pix" e foi no cartão): mesmo valor e data de compra até 3 dias
-  // de diferença. Cada lançamento existente só "absorve" uma linha da fatura —
+  // Compras que o dono já anotou à mão, com o nome dele ("sopa", "almoço") e
+  // qualquer meio de pagamento (às vezes anota "pix" e foi no cartão): mesmo
+  // valor (até R$ 0,10 de diferença) e data de compra até 5 dias de diferença
+  // (ele às vezes anota uns dias depois). Cada lançamento existente só "absorve" uma linha da fatura —
   // se ele anotou 1 almoço de R$ 26 e a fatura tem 2, o segundo entra.
   const realCard = candidates.filter((c) => c.entry.type === "expense" && c.entry.paymentMethod === "cartão" && !c.entry.description.includes("(previsto)"));
   const manualCard = realCard.length === 0 ? [] : await prisma.financeEntry.findMany({
@@ -1550,6 +1553,7 @@ export async function projectAndInsertFinanceEntries(
   // a data e o meio de pagamento do cartão (a categoria dele é mantida).
   const updates: { id: string; entry: StatementEntry }[] = [];
   const DAY_MS = 86400000;
+  const AMOUNT_TOLERANCE = 0.1;
 
   const toInsert: StatementEntry[] = [];
   let duplicates = 0;
@@ -1565,9 +1569,11 @@ export async function projectAndInsertFinanceEntries(
       }
       seenThisBatch.add(c.key);
       const info = parseInstallmentInfo(c.entry.description, c.date);
-      const loose = info ? looseInstallmentKey(info.current, info.total, c.entry.amount, c.date) : looseSubscriptionKey(c.entry.amount, c.date);
-      const sameUnderOtherName = existingLooseKeys.get(loose);
-      if (sameUnderOtherName && !usedManual.has(sameUnderOtherName)) {
+      const loose = info ? looseInstallmentKey(info.current, info.total, c.date) : looseSubscriptionKey(c.date);
+      const sameUnderOtherName = existingLooseKeys
+        .get(loose)
+        ?.find((x) => !usedManual.has(x.id) && Math.abs(x.amount - c.entry.amount) <= AMOUNT_TOLERANCE)?.id;
+      if (sameUnderOtherName) {
         usedManual.add(sameUnderOtherName);
         if (isProjection) {
           duplicates++;
@@ -1582,8 +1588,8 @@ export async function projectAndInsertFinanceEntries(
       const bought = c.entry.purchaseDate ? parseLocalDate(c.entry.purchaseDate) : c.date;
       const match = manualCard.find((m) =>
         !usedManual.has(m.id) &&
-        Math.abs(m.amount - c.entry.amount) <= 0.01 &&
-        Math.abs((m.purchaseDate ?? m.date).getTime() - bought.getTime()) <= 3 * DAY_MS
+        Math.abs(m.amount - c.entry.amount) <= AMOUNT_TOLERANCE &&
+        Math.abs((m.purchaseDate ?? m.date).getTime() - bought.getTime()) <= 5 * DAY_MS
       );
       if (match) {
         usedManual.add(match.id);
