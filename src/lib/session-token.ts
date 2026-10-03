@@ -4,7 +4,7 @@
  * dá pra forjar o cookie lendo o código — antes o valor era fixo
  * ("authenticated") e o repositório é público.
  *
- * Usa Web Crypto pra rodar igual no middleware (Edge) e nas rotas (Node).
+ * Usa Web Crypto pra rodar igual no proxy (src/proxy.ts) e nas rotas.
  */
 export const SESSION_COOKIE = "agent_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 dias

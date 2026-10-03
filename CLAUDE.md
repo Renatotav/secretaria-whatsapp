@@ -26,7 +26,7 @@ Arquivos-chave:
 | `src/lib/message-handlers.ts` | Tudo que acontece com mensagem do canal pessoal (lançar gasto, nota fiscal, extrato/fatura, consultas, simulador, metas) |
 | `src/lib/personal-router.ts` | Prompt + parsing que classifica a mensagem (finance, agenda_add, agenda_query, diary, savings_add, finance_simulation…) |
 | `src/lib/dates.ts` | `parseLocalDate`, `todayBRT`, `creditCardBillDate` |
-| `src/lib/session-token.ts`, `src/lib/auth.ts`, `src/middleware.ts` | Login do painel (token assinado com HMAC) |
+| `src/lib/session-token.ts`, `src/lib/auth.ts`, `src/proxy.ts` | Login do painel (token assinado com HMAC) |
 | `src/lib/auto-pay.ts` | Baixa automática só de compras no cartão com fatura vencida |
 | `src/app/api/finance/route.ts` | CRUD do financeiro do painel |
 
