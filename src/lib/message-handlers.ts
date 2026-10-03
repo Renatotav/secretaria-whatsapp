@@ -541,6 +541,51 @@ async function applyPaymentReply(text: string, config: AgentConfig): Promise<str
   return `✅ Corrigido: "${label}" (R$ ${entry.amount.toFixed(2)}) agora é ${paymentLabel(choice, date)}.`;
 }
 
+const SAVINGS_REPLY_MARK = "Responda *guarda*";
+
+/** Acha a meta de reserva (nome com "reserva"), se existir. */
+async function findReserveGoal() {
+  const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
+  return goals.find((g) => /reserva/i.test(g.name)) ?? null;
+}
+
+/**
+ * Depois de receber salário: quanto sobra no mês (entradas − saídas já
+ * lançadas) e uma sugestão de quanto guardar na Reserva — 10% do que entrou,
+ * limitado à metade da sobra, arredondado para dezena.
+ */
+async function buildSavingsSuggestion(received: number): Promise<string> {
+  const today = todayBRT();
+  const { income, expense } = await monthTotals(today.getFullYear(), today.getMonth());
+  const leftover = income - expense;
+  const month = MONTH_NAMES[today.getMonth()];
+  const reserve = await findReserveGoal();
+  if (leftover <= 0) {
+    return `\n\n⚠️ Com o que já está lançado, ${month} fecha em −${brl(Math.abs(leftover))}.${reserve ? ` Se usar a ${reserve.name}, me avise: "tirei X da ${reserve.name.toLowerCase()}".` : ""}`;
+  }
+  const suggestion = Math.floor(Math.min(received * 0.1, leftover * 0.5) / 10) * 10;
+  if (!reserve || suggestion < 10) return `\n\n🟢 Depois das contas de ${month}, sobram ${brl(leftover)}.`;
+  return `\n\n💰 Depois das contas de ${month}, sobram ${brl(leftover)}. Que tal guardar *${brl(suggestion)}* na ${reserve.name}? ${SAVINGS_REPLY_MARK} que eu já somo.`;
+}
+
+/** Resposta "guarda" logo depois da sugestão acima: soma o valor sugerido na Reserva. */
+async function applySavingsReply(
+  text: string,
+  messages: { role: string; content: string; createdAt: Date }[] | undefined
+): Promise<string | null> {
+  if (!/^(sim,?\s*)?(pode\s+)?guarda(r)?(\s+sim)?[.!]?$/i.test(text.trim())) return null;
+  const lastAssistant = messages?.find((m) => m.role === "assistant");
+  if (!lastAssistant || !lastAssistant.content.includes(SAVINGS_REPLY_MARK)) return null;
+  if (Date.now() - lastAssistant.createdAt.getTime() > PAYMENT_REPLY_WINDOW_MS) return null;
+  const match = lastAssistant.content.match(/guardar \*R\$\s?([\d.]+,\d{2})\*/);
+  const reserve = await findReserveGoal();
+  if (!match || !reserve) return null;
+  const amount = Number(match[1].replace(/\./g, "").replace(",", "."));
+  const newAmount = reserve.currentAmount + amount;
+  await prisma.savingsGoal.update({ where: { id: reserve.id }, data: { currentAmount: newAmount } });
+  return `✅ Guardado ${brl(amount)} na ${reserve.name}!\n💰 ${brl(newAmount)} de ${brl(reserve.targetAmount)} (${((newAmount / reserve.targetAmount) * 100).toFixed(0)}%)${newAmount >= reserve.targetAmount ? "\n🏆 *Meta conquistada!*" : ""}`;
+}
+
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
@@ -552,7 +597,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     include: { messages: { orderBy: { createdAt: "desc" }, take: config.historyLimit } },
   });
 
-  const paymentReply = await applyPaymentReply(joinedText, config);
+  const paymentReply = (await applySavingsReply(joinedText, conv?.messages)) ?? (await applyPaymentReply(joinedText, config));
   if (paymentReply) {
     if (!conv) {
       conv = await prisma.conversation.create({
@@ -659,6 +704,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               OR: [
                 { amount: { gte: route.amount - 0.01, lte: route.amount + 0.01 } },
                 { category: route.category, subcategory: route.subcategory },
+                // Entrada: basta a categoria (ex: salário previsto com subcategoria diferente).
+                ...(route.financeType === "income" ? [{ category: route.category }] : []),
               ],
             },
             orderBy: { date: "asc" },
@@ -679,6 +726,9 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           response = `✅ Baixa confirmada na conta pendente:\n${existingPending.description || existingPending.category} (R$ ${newAmount.toFixed(2)})`;
           if (Math.abs(newAmount - existingPending.amount) > 0.01) {
             response += `\n(o previsto era R$ ${existingPending.amount.toFixed(2)} — atualizei para o valor que você informou)`;
+          }
+          if (route.financeType === "income" && /sal[aá]rio/i.test(existingPending.category)) {
+            response += await buildSavingsSuggestion(newAmount);
           }
         } else {
           let finalMood = route.mood || "neutro";
@@ -714,6 +764,10 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               source: "whatsapp",
             },
           });
+
+          if (route.financeType === "income" && /sal[aá]rio/i.test(created.category)) {
+            response += await buildSavingsSuggestion(created.amount);
+          }
 
           if (askPayment) {
             response = `✅ Anotado: ${created.description || created.category} R$ ${created.amount.toFixed(2)} — ${paymentLabel(created.paymentMethod, created.date)}.\n${PAYMENT_QUESTION}\n(Se a compra foi em outro dia, responda com a data, ex: 15/08.)`;
