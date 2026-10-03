@@ -438,10 +438,55 @@ Retorne APENAS um JSON válido no formato:
 { "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado", "paymentMethod": "cartão", "account": "Principal" } ] }`;
 }
 
+/**
+ * Resposta cortada pelo limite de tamanho da IA (fatura longa): recupera os
+ * itens de "entries" que vieram completos, em vez de perder todos.
+ */
+function salvageEntries(content: string): unknown[] {
+  const start = content.indexOf("[", content.indexOf('"entries"'));
+  if (start < 0) return [];
+  const items: unknown[] = [];
+  let depth = 0;
+  let inString = false;
+  let objStart = -1;
+  for (let i = start + 1; i < content.length; i++) {
+    const ch = content[i];
+    if (inString) {
+      if (ch === "\\") i++;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && objStart >= 0) {
+        try {
+          items.push(JSON.parse(content.slice(objStart, i + 1)));
+        } catch {
+          // item malformado: pula
+        }
+        objStart = -1;
+      }
+    } else if (ch === "]" && depth === 0) break;
+  }
+  return items;
+}
+
 function parseStatementResponse(content: string, source: string): StatementEntry[] {
   try {
     const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
-    const parsed = JSON.parse(json) as { entries?: unknown[] };
+    let parsed: { entries?: unknown[] };
+    try {
+      parsed = JSON.parse(json) as { entries?: unknown[] };
+    } catch (err) {
+      const salvaged = salvageEntries(content);
+      if (salvaged.length === 0) throw err;
+      console.error(`[statement:${source}] JSON cortado; aproveitei ${salvaged.length} transações completas`);
+      parsed = { entries: salvaged };
+    }
     if (!Array.isArray(parsed.entries)) {
       console.error(`[statement:${source}] resposta sem "entries" array. Conteúdo bruto (500 chars):`, content.slice(0, 500));
       return [];

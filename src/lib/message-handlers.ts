@@ -1670,13 +1670,18 @@ async function importCardSections(config: AgentConfig, statementText: string, ch
   const header = statementText.slice(0, 600);
   const entries: StatementEntry[] = [];
   for (const sec of chosen) {
-    const text = `CABEÇALHO DA FATURA (só para saber o vencimento — NÃO extraia transações daqui):
+    // Cartão com muitas compras estoura o tamanho da resposta da IA: manda em
+    // pedaços de ~20 compras, sempre cortando no início de uma compra.
+    const parsed: StatementEntry[] = [];
+    for (const piece of splitTransactions(sec.text, 1000)) {
+      const text = `CABEÇALHO DA FATURA (só para saber o vencimento — NÃO extraia transações daqui):
 ${header}
 
 TRANSAÇÕES DO CARTÃO FINAL ${sec.last4} (extraia todas estas). "Pagamento Fatura" é o pagamento da fatura anterior: ignore, não é receita.
-${sec.text}`;
-    // ownerName vazio: a escolha do cartão já foi feita aqui, o prompt não deve filtrar de novo.
-    const parsed = await parseStatementEntries(text, providerOpts, "");
+${piece}`;
+      // ownerName vazio: a escolha do cartão já foi feita aqui, o prompt não deve filtrar de novo.
+      parsed.push(...(await parseStatementEntries(text, providerOpts, "")));
+    }
     const mine = holderMatches(sec.holder, config.ownerName);
     entries.push(...(mine ? parsed : parsed.map((e) => ({ ...e, description: `${e.description} · cartão final ${sec.last4}`.slice(0, 200) }))));
   }
@@ -1694,6 +1699,25 @@ ${sec.text}`;
       : `\n🧮 Conferi: li ${brl(read)}, mas a fatura diz ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
   }
   await notifyOwner(config, check);
+}
+
+/**
+ * Divide o texto de um cartão em pedaços de até maxChars, cortando antes de
+ * uma data de compra ("14 fev", "03 set"), para nenhuma compra ficar partida.
+ */
+function splitTransactions(text: string, maxChars: number): string[] {
+  const parts = text.split(/(?=\b\d{2} (?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b)/i);
+  const pieces: string[] = [];
+  let current = "";
+  for (const part of parts) {
+    if (current && current.length + part.length > maxChars) {
+      pieces.push(current);
+      current = "";
+    }
+    current += part;
+  }
+  if (current.trim()) pieces.push(current);
+  return pieces;
 }
 
 /** Resposta à pergunta "quais cartões importo?". Devolve true se tratou a mensagem. */
