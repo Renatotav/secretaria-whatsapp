@@ -675,11 +675,13 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   });
 
   const items: { label: string; amount: number; date: Date }[] = [];
-  const cards = new Map<string, { amount: number; date: Date; count: number }>();
+  // Um cartão por conta: "Principal" é o cartão dele; outra conta (ex: compra
+  // no cartão de outra pessoa) vira linha própria — ele paga cada uma à parte.
+  const cards = new Map<string, { amount: number; date: Date; count: number; account: string }>();
   for (const e of pending) {
     if (e.paymentMethod === "cartão") {
-      const key = e.date.toISOString().slice(0, 10);
-      const c = cards.get(key) ?? { amount: 0, date: e.date, count: 0 };
+      const key = `${e.account}|${e.date.toISOString().slice(0, 10)}`;
+      const c = cards.get(key) ?? { amount: 0, date: e.date, count: 0, account: e.account };
       c.amount += e.amount;
       c.count++;
       cards.set(key, c);
@@ -688,7 +690,10 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
       items.push({ label: name || e.subcategory || e.category, amount: e.amount, date: e.date });
     }
   }
-  for (const c of cards.values()) items.push({ label: `💳 Fatura do cartão (${c.count} compras)`, amount: c.amount, date: c.date });
+  for (const c of cards.values()) {
+    const name = c.account === "Principal" ? "Fatura do cartão" : c.account;
+    items.push({ label: `💳 ${name} (${c.count} ${c.count === 1 ? "compra" : "compras"})`, amount: c.amount, date: c.date });
+  }
   items.sort((a, b) => a.date.getTime() - b.date.getTime());
 
   if (items.length === 0) return mode === "reminder" ? "" : `✅ Nenhuma conta a pagar até o fim de ${MONTH_NAMES[today.getMonth()]}!`;
