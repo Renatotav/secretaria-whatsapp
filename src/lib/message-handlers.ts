@@ -252,6 +252,92 @@ export async function sendGoalsChart(config: AgentConfig): Promise<void> {
 }
 
 /**
+ * Gastos de uma categoria no mês (ou só de uma subcategoria, se ele perguntou
+ * por "luz", "mercado"...): já pago x a pagar, mês anterior e o teto do
+ * orçamento. Devolve o texto e as barras por subcategoria para o gráfico.
+ */
+async function categoryMonth(name: string, year: number, monthIndex: number) {
+  const range = { gte: new Date(year, monthIndex, 1), lte: new Date(year, monthIndex + 1, 0, 23, 59, 59) };
+  const select = { amount: true, status: true, subcategory: true, description: true, category: true };
+  const byCategory = await prisma.financeEntry.findMany({
+    where: { type: "expense", date: range, category: { equals: name, mode: "insensitive" } },
+    select,
+  });
+  if (byCategory.length) return { entries: byCategory, label: byCategory[0].category };
+  const bySub = await prisma.financeEntry.findMany({
+    where: { type: "expense", date: range, subcategory: { equals: name, mode: "insensitive" } },
+    select,
+  });
+  return { entries: bySub, label: bySub[0]?.subcategory };
+}
+
+async function buildCategorySummary(name: string | undefined) {
+  if (!name) return { text: "🤔 Não entendi de qual categoria. Ex: \"como está meu gasto com moradia?\"", bars: [], title: "" };
+  const today = todayBRT();
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const prevDate = new Date(y, m - 1, 1);
+  const curMonth = await categoryMonth(name, y, m);
+  const prevMonth = await categoryMonth(name, prevDate.getFullYear(), prevDate.getMonth());
+  const cur = curMonth.entries;
+  const prev = prevMonth.entries;
+  const sum = (l: { amount: number }[]) => l.reduce((s, e) => s + e.amount, 0);
+  const label = curMonth.label || prevMonth.label || name;
+
+  if (cur.length === 0 && prev.length === 0) {
+    return { text: `🔎 Não achei gastos de *${name}* em ${MONTH_NAMES[m]} nem em ${MONTH_NAMES[prevDate.getMonth()]}.`, bars: [], title: "" };
+  }
+
+  const total = sum(cur);
+  const paid = sum(cur.filter((e) => e.status === "paid"));
+  const prevTotal = sum(prev);
+  const monthKey = `${y}-${String(m + 1).padStart(2, "0")}`;
+  const budgets = await prisma.budget.findMany({
+    where: { category: { equals: label, mode: "insensitive" }, subcategory: "", month: { in: [monthKey, "default"] } },
+  });
+  const budget = budgets.find((b) => b.month === monthKey) ?? budgets.find((b) => b.month === "default");
+
+  // Agrupa por subcategoria (ou descrição, quando não tem) para o gráfico.
+  const group = (l: typeof cur) =>
+    l.reduce<Record<string, number>>((acc, e) => {
+      const k = e.subcategory || e.description.replace(/\s*-?\s*Parcela \d+\/\d+.*$/, "").trim() || "Outros";
+      acc[k] = (acc[k] || 0) + e.amount;
+      return acc;
+    }, {});
+  const curGroups = group(cur);
+  const prevGroups = group(prev);
+  const bars = Object.entries(curGroups)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, value]) => ({ label: k, value, compare: prevGroups[k] }));
+
+  const diff = total - prevTotal;
+  const lines = [
+    `📂 *${label} em ${MONTH_NAMES[m]}*`,
+    `Total: ${brl(total)} (já pago ${brl(paid)} · a pagar ${brl(total - paid)})`,
+    prevTotal > 0
+      ? `${diff > 0 ? "🔺" : diff < 0 ? "🔻" : "➖"} ${MONTH_NAMES[prevDate.getMonth()]}: ${brl(prevTotal)} (${diff >= 0 ? "+" : "−"}${brl(Math.abs(diff))})`
+      : "",
+    budget
+      ? `${total > budget.amount ? "🔴 Passou" : "🟢 Dentro"} do teto de ${brl(budget.amount)}${total > budget.amount ? ` em ${brl(total - budget.amount)}` : ` (sobram ${brl(budget.amount - total)})`}`
+      : "",
+  ].filter(Boolean);
+  return { text: lines.join("\n"), bars, title: `${label} em ${MONTH_NAMES[m]}/${y}`, prevLabel: MONTH_NAMES[prevDate.getMonth()] };
+}
+
+/** Gráfico por subcategoria de "como está meu gasto com X?". */
+async function sendCategoryChart(config: AgentConfig, summary: Awaited<ReturnType<typeof buildCategorySummary>>): Promise<void> {
+  if (!config.ownerPhone || !config.evolutionUrl || summary.bars.length === 0) return;
+  try {
+    const total = summary.bars.reduce((s, b) => s + b.value, 0);
+    const png = await barChartPng(summary.title, `Total ${brl(total)}`, summary.bars, `marca escura = ${summary.prevLabel}`);
+    const evo = getEvoConfig(config);
+    await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), `📊 ${summary.title}`);
+  } catch (err) {
+    console.error("[chart] falha ao gerar/enviar gráfico da categoria", err);
+  }
+}
+
+/**
  * "E se meu salário for X?" / "Posso comprar Y em Nx?": recalcula o mês atual
  * e os próximos 3 com o que já está lançado, trocando a renda pela hipotética
  * e/ou somando a compra (no cartão, nas faturas certas). Não grava nada.
@@ -421,7 +507,9 @@ async function answerFinanceQuestion(question: string, providerOpts: ProviderOpt
 "Budget"(id, month 'AAAA-MM'|'default', category, subcategory, amount)`;
   const sqlPrompt = `${schema}
 Hoje é ${today.toISOString().slice(0, 10)}. Escreva UMA consulta SQL PostgreSQL (somente SELECT, pode usar WITH) que responda: "${question}".
-Use ILIKE para buscar texto em description/category. Limite a 50 linhas. Responda APENAS com o SQL, sem markdown e sem explicação.`;
+Use ILIKE para buscar texto em description/category. Limite a 50 linhas.
+Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do mês de hoje). Nunca some meses futuros
+(lançamentos projetados) a menos que a pergunta peça explicitamente o futuro ("quanto falta pagar", "até o fim do ano"...). Responda APENAS com o SQL, sem markdown e sem explicação.`;
 
   let sql = "";
   try {
@@ -677,6 +765,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   await prisma.message.create({ data: { conversationId: conv.id, role: "user", content: joinedText } });
 
   let response = route.confirmation;
+  let categorySummary: Awaited<ReturnType<typeof buildCategorySummary>> | null = null;
 
   switch (route.type) {
     case "agenda_add":
@@ -981,7 +1070,12 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
       }
       break;
     case "agenda_query":
-      response = await buildQueryResponse(route.queryIntent);
+      if (route.queryIntent === "category_summary") {
+        categorySummary = await buildCategorySummary(route.queryCategory);
+        response = categorySummary.text;
+      } else {
+        response = await buildQueryResponse(route.queryIntent);
+      }
       break;
   }
 
@@ -999,6 +1093,9 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
   }
   if (route.type === "agenda_query" && route.queryIntent === "savings_summary") {
     await sendGoalsChart(config);
+  }
+  if (categorySummary) {
+    await sendCategoryChart(config, categorySummary);
   }
 }
 

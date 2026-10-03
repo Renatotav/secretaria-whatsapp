@@ -18,7 +18,7 @@ Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
 Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
 outro nome se nenhuma delas fizer sentido pro caso.`;
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary";
 
 export type PersonalRouteResult =
   | {
@@ -32,6 +32,8 @@ export type PersonalRouteResult =
   | {
       type: "agenda_query";
       queryIntent: PersonalQueryIntent;
+      /** Categoria (ou subcategoria) perguntada, só em category_summary. */
+      queryCategory?: string;
       confirmation: string;
     }
   | {
@@ -123,6 +125,10 @@ Tipos:
    Ex: "Fechamento do mês" ou "Como fechou o mês passado?" → month_closing
    Ex: "Quanto gasto com assinaturas?" ou "Quais minhas contas fixas?" → subscriptions
    Ex: "Por que estourei o mês?", "Onde estou gastando mais?", "Como está meu mês?" → month_diagnosis
+   Ex: "Como está meu gasto com moradia?", "Quanto tá o mercado esse mês?", "Como estão minhas contas de luz?" → category_summary,
+       com "financeCategory" = a categoria da taxonomia abaixo (ex: "Moradia", "Alimentação") ou, se ele citar só
+       uma subcategoria (luz, internet, mercado), o nome dessa subcategoria (ex: "Energia elétrica", "Supermercado").
+       Use category_summary só para "como está/quanto está" uma categoria; perguntas mais específicas são finance_question.
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
    ${FINANCE_TAXONOMY}
@@ -182,7 +188,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary",
   "financeType": "income|expense",
   "amount": 0,
   "financeCategory": "<categoria curta>",
@@ -303,6 +309,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "month_closing",
         "subscriptions",
         "month_diagnosis",
+        "category_summary",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)
@@ -310,6 +317,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       return {
         type: "agenda_query",
         queryIntent,
+        queryCategory: (parsed.financeCategory as string) || undefined,
         confirmation: (parsed.confirmation as string) || "",
       };
     }
