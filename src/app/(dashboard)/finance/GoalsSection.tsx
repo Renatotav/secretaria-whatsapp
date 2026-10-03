@@ -113,10 +113,14 @@ export function GoalsSection() {
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
         {goals.map((g) => {
           const percent = Math.min((g.currentAmount / g.targetAmount) * 100, 100);
+          const conquered = g.currentAmount >= g.targetAmount;
           return (
             <div key={g.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 12, position: "relative" }}>
               <button onClick={() => deleteGoal(g.id)} style={{ position: "absolute", top: 4, right: 4, background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 14 }}>×</button>
               <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: g.color }}>{g.name}</h3>
+              {conquered && (
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>🏆 Conquistada!</div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
                 <span>R$ {g.currentAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                 <span>R$ {g.targetAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
@@ -124,7 +128,7 @@ export function GoalsSection() {
               <div style={{ height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
                 <div style={{ height: "100%", background: g.color, width: `${percent}%`, transition: "width 0.3s" }} />
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
+              {!conquered && <div style={{ display: "flex", gap: 6 }}>
                 <input
                   type="number"
                   placeholder="Adicionar R$"
@@ -135,7 +139,7 @@ export function GoalsSection() {
                 <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px" }} onClick={() => addMoney(g.id)}>
                   +
                 </button>
-              </div>
+              </div>}
             </div>
           );
         })}

@@ -190,6 +190,7 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
     if (goals.length === 0) return "Nenhuma meta de economia encontrada.";
     return `🎯 *Metas de Economia:*\n${goals.map((g) => {
       const pct = (g.currentAmount / g.targetAmount) * 100;
+      if (g.currentAmount >= g.targetAmount) return `• 🏆 ${g.name}: R$ ${g.targetAmount.toFixed(2)} — *Conquistada!*`;
       return `• ${g.name}: R$ ${g.currentAmount.toFixed(2)} de R$ ${g.targetAmount.toFixed(2)} (${pct.toFixed(0)}%)`;
     }).join("\n")}`;
   }
