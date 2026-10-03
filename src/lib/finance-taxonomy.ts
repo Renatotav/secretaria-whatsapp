@@ -14,8 +14,10 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
   expense: {
     "Moradia": ["Aluguel", "Condomínio", "Energia elétrica", "Água/Esgoto", "Internet", "Gás", "Plano de celular", "Manutenção da casa"],
     "Alimentação": ["Supermercado", "Restaurantes", "Delivery", "Padaria/Lanche"],
-    // Sem "Combustível": a moto dele é elétrica (a recarga entra na conta de luz).
-    "Transporte": ["Uber/Taxi", "Veículo", "Manutenção veículo", "Seguro", "Transporte público"],
+    // Moto separada de Transporte, para ver quanto ela custa por mês sem
+    // misturar com Uber. Sem "Combustível": a moto é elétrica (recarga = luz).
+    "Moto": ["Parcela", "Seguro", "Manutenção/peças"],
+    "Transporte": ["Uber/Taxi", "Transporte público"],
     "Saúde": ["Farmácia", "Plano de saúde", "Consultas"],
     // "Assinaturas" = cobrança que se repete todo mês: o sistema projeta os
     // próximos meses só para esta categoria (ver isRecurring/projeção).
@@ -37,10 +39,11 @@ Categorias de DESPESA (expense): ${fmt(FINANCE_TAXONOMY_DATA.expense)}.
 REGRAS:
 - Use SEMPRE uma categoria E uma subcategoria desta lista (subcategoria nunca vazia).
 - A categoria é O QUE foi comprado, nunca COMO foi pago: compra parcelada ou no cartão
-  continua na categoria do produto (parcela da moto = Transporte › Veículo; celular ou
+  continua na categoria do produto (parcela da moto = Moto › Parcela; celular ou
   teclado = Compras › Eletrônicos). "Impostos e taxas" só para IOF, juros, tarifas,
   impostos e empréstimos.
-- Exemplos: Uber/99 = Transporte › Uber/Taxi; farmácia = Saúde › Farmácia; academia =
+- Exemplos: Uber/99 = Transporte › Uber/Taxi; MOVYX/scooter elétrica = Moto › Parcela; seguro
+  da scooter = Moto › Seguro; peças/acessórios da moto = Moto › Manutenção/peças; farmácia = Saúde › Farmácia; academia =
   Assinaturas › Academia (cobrança mensal); Spotify/Netflix = Assinaturas › Streaming; Claude/ChatGPT/hospedagem
   de site = Assinaturas › Apps/Softwares; IOF de compra internacional = Impostos e taxas › IOF;
   marmita/restaurante/bar = Alimentação › Restaurantes; iFood = Alimentação › Delivery;
