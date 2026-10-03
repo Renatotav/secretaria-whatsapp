@@ -675,6 +675,9 @@ const PAYMENT_OPTIONS: Record<string, "cartão" | "pix" | "débito" | "dinheiro"
 };
 const PAYMENT_QUESTION = "Pagou de outro jeito? Responda *2* pix · *3* débito · *4* dinheiro";
 const PAYMENT_REPLY_WINDOW_MS = 60 * 60 * 1000;
+// A mensagem cita uma data, um mês ou a fatura? Só assim a fatura que a IA
+// extraiu ("billDate") passa por cima da regra do melhor dia.
+const BILL_STATED_RE = /\d{1,2}\/\d{1,2}|\bfatura\b|\bvencimento\b|\b(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i;
 const PAYMENT_STATED_RE = /\b(pix|d[ée]bito|dinheiro|esp[ée]cie|boleto|cart[ãa]o|cr[ée]dito|ticket|vale)\b/i;
 
 function formatDayMonth(d: Date): string {
@@ -892,12 +895,17 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
 
       // Compra no cartão: a data do lançamento é o vencimento da fatura certa
       // (regra fixa em código, não fica a critério da IA); a data real da
-      // compra vai em purchaseDate.
+      // compra vai em purchaseDate. Exceção: se ele disse explicitamente a
+      // fatura ("pagamento para dia 10/11"), vale o que ele disse — o
+      // fechamento às vezes muda (ex: feriado/eleição).
       const isCardExpense = route.paymentMethod === "cartão" && route.financeType === "expense";
       const cardPurchaseDate = route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT();
       if (isCardExpense) {
         route.purchaseDate = cardPurchaseDate.toISOString();
-        route.date = creditCardBillDate(cardPurchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5).toISOString();
+        route.date = (route.billDate && BILL_STATED_RE.test(joinedText)
+          ? parseLocalDate(route.billDate)
+          : creditCardBillDate(cardPurchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5)
+        ).toISOString();
         route.status = "pending";
       }
 

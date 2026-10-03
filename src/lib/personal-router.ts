@@ -46,6 +46,8 @@ export type PersonalRouteResult =
       installments: number | null;
       date: string | null;
       purchaseDate: string | null;
+      /** Fatura/data de pagamento que ele disse EXPLICITAMENTE; passa por cima da regra do melhor dia. */
+      billDate: string | null;
       paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro";
       account: string;
       status: "paid" | "pending";
@@ -161,6 +163,10 @@ Tipos:
         ANTES do dia ${creditCardBestDay} cai na fatura que vence no dia ${creditCardDueDay} do
         mesmo mês; compra a partir do dia ${creditCardBestDay} cai na fatura do mês seguinte.
         Em "date" coloque esse vencimento e em "purchaseDate" o dia real da compra.
+     6) FATURA DITA PELO DONO: se ele disser EXPLICITAMENTE a fatura ou o dia do pagamento
+        ("pagamento para dia 10/11", "vai na fatura de novembro", "cai em 10/12"), coloque essa
+        data em "billDate" (YYYY-MM-DD; "fatura de novembro" = dia ${creditCardDueDay} de novembro).
+        Ela vale mais que a regra acima. Se ele não disser, "billDate" = null.
 
 4. diary — RELATO pessoal: como foi o dia, o que sentiu, uma reflexão ou desabafo.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
@@ -209,6 +215,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "installments": "número total de parcelas ou null",
   "date": "ISO8601 da data de vencimento ou null",
   "purchaseDate": "ISO8601 da data real em que a compra foi feita, ou null",
+  "billDate": "YYYY-MM-DD da fatura/pagamento que ele disse explicitamente, ou null",
   "newPurchaseDate": "ISO8601 (YYYY-MM-DD) para finance_update_date",
   "paymentMethod": "cartão|pix|débito|boleto|dinheiro",
   "account": "Principal|Ticket Alimentação",
@@ -252,6 +259,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
         date: (parsed.date as string) || (parsed.financeDate as string) || null,
         purchaseDate: (parsed.purchaseDate as string) || (parsed.financePurchaseDate as string) || null,
+        billDate: typeof parsed.billDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(parsed.billDate) ? parsed.billDate.slice(0, 10) : null,
         paymentMethod,
         account: (parsed.account as string) || "Principal",
         status,
