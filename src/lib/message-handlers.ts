@@ -12,7 +12,7 @@ import {
   type StatementEntry,
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
-import { parseLocalDate } from "./dates";
+import { parseLocalDate, todayBRT, creditCardBillDate } from "./dates";
 import type { AgentConfig } from "@prisma/client";
 
 export function extractText(message: Record<string, unknown>): string {
@@ -212,7 +212,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     .map((m) => `${m.role === "user" ? "Dono" : "Secretária"}: ${m.content}`)
     .join("\n");
 
-  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay);
+  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
 
   if (!conv) {
     conv = await prisma.conversation.create({
@@ -237,12 +237,23 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         },
       });
       break;
-    case "finance":
+    case "finance": {
+      // Compra no cartão: a data do lançamento é o vencimento da fatura certa
+      // (regra fixa em código, não fica a critério da IA); a data real da
+      // compra vai em purchaseDate.
+      const isCardExpense = route.paymentMethod === "cartão" && route.financeType === "expense";
+      const cardPurchaseDate = route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT();
+      if (isCardExpense) {
+        route.purchaseDate = cardPurchaseDate.toISOString();
+        route.date = creditCardBillDate(cardPurchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5).toISOString();
+        route.status = "pending";
+      }
+
       if (route.installments) {
         // Compra parcelada relatada por mensagem (não veio de extrato) — usa
         // o mesmo formato "Parcela X/Y (compra em DD/MM)" pra reaproveitar a
         // projeção/dedupe de saveStatementEntries em vez de duplicar a lógica.
-        const today = new Date();
+        const today = cardPurchaseDate;
         const compraEm = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
         await saveStatementEntries(
           config,
@@ -384,6 +395,7 @@ Não seja robótico. Chame-o de Renato.`;
         }
       }
       break;
+    }
     case "finance_update_date": {
       const lastEntry = await prisma.financeEntry.findFirst({
         where: { source: "whatsapp" },
@@ -391,9 +403,15 @@ Não seja robótico. Chame-o de Renato.`;
       });
       if (lastEntry) {
         const newPDate = parseLocalDate(route.newPurchaseDate);
+        // Compra avulsa no cartão: mudar a data da compra pode mudar a fatura.
+        // Parcelas ficam de fora (cada uma já tem o vencimento do seu mês).
+        const isSingleCardExpense = lastEntry.paymentMethod === "cartão" && lastEntry.type === "expense" && !/Parcela \d+\/\d+/.test(lastEntry.description);
         await prisma.financeEntry.update({
           where: { id: lastEntry.id },
-          data: { purchaseDate: newPDate },
+          data: {
+            purchaseDate: newPDate,
+            ...(isSingleCardExpense && { date: creditCardBillDate(newPDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5) }),
+          },
         });
         const formattedDate = newPDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
         response = `📅 Perfeito! Atualizei a data de compra de "${lastEntry.description || lastEntry.category}" (R$ ${lastEntry.amount.toFixed(2)}) para **${formattedDate}**.`;
@@ -740,11 +758,11 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     return;
   }
 
-  let invoiceDate = invoice.date ? parseLocalDate(invoice.date) : new Date();
+  let invoiceDate = invoice.date ? parseLocalDate(invoice.date) : todayBRT();
   // Valida o ano: só aceita ano atual ±1 (ex: 2025-2027 em 2026)
   const currentYear = new Date().getFullYear();
   if (invoiceDate.getFullYear() < currentYear - 1 || invoiceDate.getFullYear() > currentYear + 1) {
-    invoiceDate = new Date();
+    invoiceDate = todayBRT();
   }
   const purchaseDate = new Date(invoiceDate);
   
@@ -766,11 +784,8 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     account = "Principal";
   }
 
-  const dueDay = config.creditCardDueDay || 10;
   if (status === "pending" && paymentMethod === "cartão") {
-    const isAfterClose = invoiceDate.getDate() >= (dueDay - 7); // Assume close is 7 days before due date
-    const dueMonth = isAfterClose ? invoiceDate.getMonth() + 1 : invoiceDate.getMonth();
-    invoiceDate = new Date(invoiceDate.getFullYear(), dueMonth, dueDay);
+    invoiceDate = creditCardBillDate(purchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5);
   }
 
   let finalMood = "neutro";

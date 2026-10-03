@@ -33,6 +33,7 @@ interface Config {
   typingMsPerChar: number;
   typingMaxSeconds: number;
   creditCardDueDay: number;
+  creditCardBestDay: number;
 }
 
 const DEFAULT: Config = {
@@ -66,6 +67,7 @@ const DEFAULT: Config = {
   typingMsPerChar: 35,
   typingMaxSeconds: 8,
   creditCardDueDay: 10,
+  creditCardBestDay: 5,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -190,6 +192,15 @@ export default function ConfigPage() {
               max={31}
               value={config.creditCardDueDay}
               onChange={(e) => set("creditCardDueDay", Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Melhor dia de compra no cartão" hint="Compras a partir deste dia caem na fatura do mês seguinte (ex: 5 → compra em 05/10 vence em 10/11)">
+            <input
+              type="number"
+              min={1}
+              max={31}
+              value={config.creditCardBestDay}
+              onChange={(e) => set("creditCardBestDay", Number(e.target.value))}
             />
           </Field>
         </Section>

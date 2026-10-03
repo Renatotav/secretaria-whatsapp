@@ -74,7 +74,8 @@ export async function routePersonalMessage(
   providerOpts: ProviderOptions,
   recentContext?: string,
   customPrompt?: string,
-  creditCardDueDay: number = 10
+  creditCardDueDay: number = 10,
+  creditCardBestDay: number = 5
 ): Promise<PersonalRouteResult> {
   const now = new Date();
   const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
@@ -124,6 +125,10 @@ Tipos:
      2) Aluguel, Moradia, Luz, Água, Condomínio, Contas de Casa: use SEMPRE "pix" (ou "boleto" se mencionado).
      3) Lançamentos futuros/pendentes no Pix (ex: Aluguel a pagar) MANTÊM "pix", JAMAIS convertem para cartão.
      4) SOMENTE compras no Cartão de Crédito ou parceladas no cartão usam "cartão".
+     5) DATA DE COMPRA NO CARTÃO: a fatura vence todo dia ${creditCardDueDay}. Compra feita
+        ANTES do dia ${creditCardBestDay} cai na fatura que vence no dia ${creditCardDueDay} do
+        mesmo mês; compra a partir do dia ${creditCardBestDay} cai na fatura do mês seguinte.
+        Em "date" coloque esse vencimento e em "purchaseDate" o dia real da compra.
 
 4. diary — reflexão, nota pessoal, cumprimento, ou o que não se encaixa em outros.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
