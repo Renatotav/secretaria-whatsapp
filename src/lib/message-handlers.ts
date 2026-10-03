@@ -675,13 +675,13 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   });
 
   const items: { label: string; amount: number; date: Date }[] = [];
-  // Um cartão por conta: "Principal" é o cartão dele; outra conta (ex: compra
-  // no cartão de outra pessoa) vira linha própria — ele paga cada uma à parte.
-  const cards = new Map<string, { amount: number; date: Date; count: number; account: string }>();
+  // Uma linha por cartão: campo "card" vazio = o cartão dele; preenchido =
+  // cartão de outra pessoa (ex: "Santander do Bruno") — ele paga cada um à parte.
+  const cards = new Map<string, { amount: number; date: Date; count: number; card: string }>();
   for (const e of pending) {
     if (e.paymentMethod === "cartão") {
-      const key = `${e.account}|${e.date.toISOString().slice(0, 10)}`;
-      const c = cards.get(key) ?? { amount: 0, date: e.date, count: 0, account: e.account };
+      const key = `${e.card}|${e.date.toISOString().slice(0, 10)}`;
+      const c = cards.get(key) ?? { amount: 0, date: e.date, count: 0, card: e.card };
       c.amount += e.amount;
       c.count++;
       cards.set(key, c);
@@ -691,7 +691,7 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
     }
   }
   for (const c of cards.values()) {
-    const name = c.account === "Principal" ? "Fatura do cartão" : c.account;
+    const name = c.card ? `Cartão ${c.card}` : "Fatura do cartão";
     items.push({ label: `💳 ${name} (${c.count} ${c.count === 1 ? "compra" : "compras"})`, amount: c.amount, date: c.date });
   }
   items.sort((a, b) => a.date.getTime() - b.date.getTime());

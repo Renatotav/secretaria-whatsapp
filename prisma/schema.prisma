@@ -167,6 +167,8 @@ model FinanceEntry {
   purchaseDate DateTime?
   paymentMethod String  @default("pix")
   account     String   @default("Principal")
+  /// Cartão de outra pessoa/banco (ex: "Santander do Bruno"); vazio = o cartão do dono.
+  card        String   @default("")
   status      String   @default("paid")
   mood        String   @default("neutro")
   source      String   @default("dashboard")
