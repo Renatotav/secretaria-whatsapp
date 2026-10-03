@@ -23,6 +23,10 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Fonte para o texto dos gráficos enviados no WhatsApp (src/lib/chart.ts);
+# a imagem Alpine não vem com nenhuma.
+RUN apk add --no-cache fontconfig font-dejavu
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 

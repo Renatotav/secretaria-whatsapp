@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
-import { sendTextWithTyping, getBase64FromMediaMessage, fetchGroupInfo, findContact } from "./evolution";
+import { sendTextWithTyping, sendWhatsAppImage, getBase64FromMediaMessage, fetchGroupInfo, findContact } from "./evolution";
+import { barChartPng } from "./chart";
 import { transcribeAudio, generateResponse, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
@@ -203,6 +204,34 @@ export async function buildMonthClosing(year: number, monthIndex: number): Promi
     top.length ? `\n*O que mais pesou:*\n${topLines.join("\n")}` : "",
     goalLines.length ? `\n*Metas:*\n${goalLines.join("\n")}` : "",
   ].filter(Boolean).join("\n");
+}
+
+/**
+ * Manda o gráfico de gastos por categoria de um mês (com a marca do mês
+ * anterior). Falha só é logada — o texto já foi enviado antes.
+ */
+export async function sendMonthChart(config: AgentConfig, year: number, monthIndex: number): Promise<void> {
+  if (!config.ownerPhone || !config.evolutionUrl) return;
+  try {
+    const cur = await monthTotals(year, monthIndex);
+    const prevDate = new Date(year, monthIndex - 1, 1);
+    const prev = await monthTotals(prevDate.getFullYear(), prevDate.getMonth());
+    const bars = Object.entries(cur.byCategory)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({ label, value, compare: prev.byCategory[label] }));
+    if (bars.length === 0) return;
+    const balance = cur.income - cur.expense;
+    const png = await barChartPng(
+      `Gastos de ${MONTH_NAMES[monthIndex]}/${year}`,
+      `Saiu ${brl(cur.expense)} · ${balance >= 0 ? "sobra" : "faltam"} ${brl(Math.abs(balance))}`,
+      bars,
+      `marca escura = ${MONTH_NAMES[prevDate.getMonth()]}`
+    );
+    const evo = getEvoConfig(config);
+    await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), `📊 Gastos por categoria — ${MONTH_NAMES[monthIndex]}`);
+  } catch (err) {
+    console.error("[chart] falha ao gerar/enviar gráfico", err);
+  }
 }
 
 /**
@@ -940,6 +969,13 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
 
   if (response) {
     await notifyOwner(config, response);
+  }
+
+  // Fechamento e diagnóstico vêm com o gráfico de gastos por categoria.
+  if (route.type === "agenda_query" && (route.queryIntent === "month_closing" || route.queryIntent === "month_diagnosis")) {
+    const today = todayBRT();
+    const ref = route.queryIntent === "month_closing" ? new Date(today.getFullYear(), today.getMonth() - 1, 1) : today;
+    await sendMonthChart(config, ref.getFullYear(), ref.getMonth());
   }
 }
 

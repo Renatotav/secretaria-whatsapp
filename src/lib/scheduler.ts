@@ -4,7 +4,7 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing } from "./message-handlers";
+import { buildMonthClosing, sendMonthChart } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -125,6 +125,7 @@ export function startScheduler(): void {
             20,
             5
           );
+          await sendMonthChart(config, last.getUTCFullYear(), last.getUTCMonth());
         } catch (err) {
           console.error("Erro ao enviar fechamento do mês:", err);
         }

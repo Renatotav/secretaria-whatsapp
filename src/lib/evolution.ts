@@ -38,6 +38,34 @@ export async function sendWhatsAppMessage(
   });
 }
 
+/** Manda uma imagem (PNG em base64) com legenda opcional. */
+export async function sendWhatsAppImage(
+  evolutionUrl: string,
+  evolutionApiKey: string,
+  instanceId: string,
+  phone: string,
+  pngBase64: string,
+  caption = "",
+  fileName = "grafico.png"
+): Promise<void> {
+  const url = `${evolutionUrl}/message/sendMedia/${instanceId}`;
+  await evolutionFetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: evolutionApiKey,
+    },
+    body: JSON.stringify({
+      number: phone,
+      mediatype: "image",
+      mimetype: "image/png",
+      media: pngBase64,
+      fileName,
+      caption,
+    }),
+  });
+}
+
 export async function sendPresence(
   evolutionUrl: string,
   evolutionApiKey: string,
