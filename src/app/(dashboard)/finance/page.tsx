@@ -1369,7 +1369,7 @@ export default function FinancePage() {
           )}
           {!loading && visibleEntries.length > 0 && (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <table className="entries-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
                     <th style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>Data</th>
@@ -1388,7 +1388,7 @@ export default function FinancePage() {
                   {visibleEntries.map((e) => {
                     if (editingId === e.id) {
                       return (
-                        <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
+                        <tr key={e.id} className="edit-row" style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
                           <td style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
                             <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Vencimento" />
                             <input type="date" value={editForm.purchaseDate} onChange={(ev) => setEditForm((f) => ({ ...f, purchaseDate: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Data da Compra" />
@@ -1568,14 +1568,15 @@ export default function FinancePage() {
                     }
 
                     return (
-                      <tr key={e.id} style={{ borderBottom: "1px solid var(--border-light)" }}>
-                        <td style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
-                          <div>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
+                      <tr key={e.id} className="entry-row" style={{ borderBottom: "1px solid var(--border-light)" }}>
+                        <td className="c-date" style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
+                          <div><span className="only-mobile">{e.paymentMethod === "cartão" ? "Fatura " : ""}</span>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
                           {e.purchaseDate && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Compra: {new Date(e.purchaseDate).toLocaleDateString("pt-BR")}</div>}
                         </td>
-                        <td style={{ padding: "8px 8px" }}>
+                        <td className="c-cat" style={{ padding: "8px 8px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {e.category || "—"}
+                            {e.subcategory && <span className="only-mobile" style={{ color: "var(--text-muted)" }}>› {e.subcategory}</span>}
                             {e.mood && e.mood !== "neutro" && MOOD_MAP.get(e.mood) && (
                               <span title={MOOD_MAP.get(e.mood)?.label} style={{ fontSize: 14 }}>
                                 {MOOD_MAP.get(e.mood)?.emoji}
@@ -1583,23 +1584,24 @@ export default function FinancePage() {
                             )}
                           </div>
                         </td>
-                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 100, wordWrap: "break-word", whiteSpace: "normal" }}>{e.subcategory || "—"}</td>
-                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 150, wordWrap: "break-word", whiteSpace: "normal" }}>{e.description || "—"}</td>
-                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
-                        <td style={{ padding: "8px 8px", color: "var(--text-muted)", textTransform: "capitalize" }}>
+                        <td className="c-sub" style={{ padding: "8px 8px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{e.subcategory || "—"}</td>
+                        <td className="c-desc" style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 220, overflowWrap: "anywhere", whiteSpace: "normal" }}>{e.description || e.subcategory || e.category || "—"}</td>
+                        <td className="c-acc" style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
+                        <td className="c-pay" style={{ padding: "8px 8px", color: "var(--text-muted)", textTransform: "capitalize" }}>
                           {e.paymentMethod || "Pix"}
                         </td>
-                        <td style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
+                        <td className="c-status" style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
                           <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: e.status === "paid" ? "var(--success-dim)" : "var(--warning-dim)", color: e.status === "paid" ? "var(--success)" : "var(--warning)", border: `1px solid ${e.status === "paid" ? "var(--success)" : "var(--warning)"}` }}>
                             {e.type === "income" 
                               ? (e.status === "paid" ? "Recebido" : "A receber") 
                               : (e.status === "paid" ? "Pago" : "Pendente")}
                           </span>
                         </td>
-                        <td style={{ padding: "8px 8px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                        <td className="c-src" style={{ padding: "8px 8px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
                           {e.source === "whatsapp" ? "📱 WhatsApp" : "🖥️ Painel"}
                         </td>
                         <td
+                          className="c-val"
                           style={{
                             padding: "8px 8px",
                             textAlign: "right",
@@ -1610,7 +1612,7 @@ export default function FinancePage() {
                         >
                           {e.type === "income" ? "+" : "-"} {formatMoney(e.amount)}
                         </td>
-                        <td style={{ padding: "8px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <td className="c-act" style={{ padding: "8px 8px", textAlign: "right", whiteSpace: "nowrap" }}>
                           {e._count && e._count.invoiceItems > 0 && (
                             <button className="btn-ghost" style={{ fontSize: 11, padding: "4px 8px", marginRight: 4 }} onClick={() => setSelectedInvoiceId(e.id)} title="Ver itens da nota fiscal">
                               🛒 Itens
