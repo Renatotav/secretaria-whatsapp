@@ -557,7 +557,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
 const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gastei 45 no mercado", "recebi 3000 de salário", "comprei um celular de 291 em 17x".
   Depois do gasto ela pergunta o meio de pagamento: responder "2" pix, "3" débito, "4" dinheiro. Para mudar a data da compra, responder só o dia ("15/08").
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
-💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (só os do titular dele, se a fatura tiver outro cartão). PDF com senha: ela pede a senha e ele responde só com ela.
+💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
@@ -829,6 +829,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
 
   // Senha de PDF não passa pela IA nem é gravada no histórico.
   if (await applyPdfPassword(joinedText, config)) return;
+  if (await applyStatementChoice(joinedText, config)) return;
 
   const providerOpts = getProviderOpts(config);
 
@@ -1454,45 +1455,114 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
  * no Financeiro. É um fluxo à parte de handleSelfMessage porque um extrato
  * vira MUITOS lançamentos, não uma classificação única.
  */
+// Fatura com mais de um cartão esperando o dono escolher quais importar.
+// Só na memória, como o PDF com senha.
+type CardSection = import("./pdf").CardSection;
+let pendingStatement: { text: string; sections: CardSection[]; total: number | null; at: number } | null = null;
+const STATEMENT_CHOICE_WINDOW_MS = 30 * 60 * 1000;
+
 export async function handleStatementDocument(statementText: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
-  const providerOpts = getProviderOpts(config);
-
-  // Fatura com cartão adicional (ex: titular é outra pessoa e o dono é o
-  // adicional): manda pra IA só o bloco "Final XXXX - NOME" do dono, mais o
-  // começo da fatura (vencimento). Sem cabeçalho de cartão, segue o texto todo.
+  // Fatura com titular + adicionais: separa pelos cabeçalhos "Final XXXX - NOME".
+  // Um cartão só importa direto; mais de um, pergunta quais importar.
   const { splitCardSections, holderMatches } = await import("./pdf");
   const sections = splitCardSections(statementText);
-  const mine = sections.filter((sec) => holderMatches(sec.holder, config.ownerName));
-  let text = statementText;
-  if (mine.length > 0) {
-    text = `CABEÇALHO DA FATURA (só para saber o vencimento — NÃO extraia transações daqui):
-${statementText.slice(0, 600)}
-
-TRANSAÇÕES DO CARTÃO DE ${config.ownerName.toUpperCase()} (extraia todas estas):
-${mine.map((sec) => sec.text).join("\n")}`;
-    console.log(`[statement:pdf] ${sections.length} cartão(ões) na fatura, ${mine.length} do dono; ${text.length} caracteres`);
+  if (sections.length === 1) {
+    await importCardSections(config, statementText, sections, null);
+    return;
+  }
+  if (sections.length > 1) {
+    const totalMatch = statementText.match(/Valor da fatura:?\s*R\$\s*([\d.]+,\d{2})/i);
+    const total = totalMatch ? Number(totalMatch[1].replace(/\./g, "").replace(",", ".")) : null;
+    pendingStatement = { text: statementText, sections, total, at: Date.now() };
+    const lines = sections.map((sec, i) =>
+      `*${i + 1}* — ${sec.holder} (final ${sec.last4})${sec.subtotal !== null ? `: ${brl(sec.subtotal)}` : ""}${holderMatches(sec.holder, config.ownerName) ? " ← você" : ""}`
+    );
+    const example = sections.findIndex((sec) => holderMatches(sec.holder, config.ownerName)) + 1 || 1;
+    await notifyOwner(
+      config,
+      `💳 Essa fatura tem ${sections.length} cartões:\n${lines.join("\n")}${total !== null ? `\nTotal da fatura (todos juntos): ${brl(total)}` : ""}\n\nQuais eu importo? Responda *${example}*, *1 e 2*, *tudo* ou o nome. Para desistir, *cancelar*.`
+    );
+    return;
   }
 
-  const entries = await parseStatementEntries(text, providerOpts, config.ownerName);
+  // Sem cabeçalho de cartão: texto todo, com o filtro de titular no prompt.
+  const entries = await parseStatementEntries(statementText, getProviderOpts(config), config.ownerName);
   await saveStatementEntries(config, entries, "o PDF");
+}
 
-  if (mine.length > 0 && entries.length > 0) {
-    const others = sections.length - mine.length;
-    const read = entries.reduce((sum, e) => sum + (e.type === "expense" ? e.amount : -e.amount), 0);
-    const expected = mine.every((sec) => sec.subtotal !== null) ? mine.reduce((sum, sec) => sum + (sec.subtotal ?? 0), 0) : null;
-    const cards = mine.map((sec) => `final ${sec.last4}`).join(", ");
-    let check = `📄 Li só o seu cartão (${cards})${others > 0 ? ` e ignorei ${others} outro(s) cartão(ões) da fatura` : ""}.`;
-    if (expected !== null) {
-      const diff = Math.round((expected - read) * 100) / 100;
-      check += Math.abs(diff) < 0.05
-        ? `\n🧮 Conferi: ${brl(read)} = subtotal da fatura ✅`
-        : `\n🧮 Conferi: li ${brl(read)}, mas o subtotal da fatura é ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
-    }
-    await notifyOwner(config, check);
+/**
+ * Importa os cartões escolhidos: cada um vai separado para a IA (fatura longa
+ * não é cortada) e, no fim, confere com o subtotal impresso — ou com o valor
+ * total da fatura, quando importou todos. Compras de cartão que não é do dono
+ * ganham "· cartão final XXXX" na descrição.
+ */
+async function importCardSections(config: AgentConfig, statementText: string, chosen: CardSection[], total: number | null): Promise<void> {
+  const { holderMatches } = await import("./pdf");
+  const providerOpts = getProviderOpts(config);
+  const header = statementText.slice(0, 600);
+  const entries: StatementEntry[] = [];
+  for (const sec of chosen) {
+    const text = `CABEÇALHO DA FATURA (só para saber o vencimento — NÃO extraia transações daqui):
+${header}
+
+TRANSAÇÕES DO CARTÃO FINAL ${sec.last4} (extraia todas estas). "Pagamento Fatura" é o pagamento da fatura anterior: ignore, não é receita.
+${sec.text}`;
+    // ownerName vazio: a escolha do cartão já foi feita aqui, o prompt não deve filtrar de novo.
+    const parsed = await parseStatementEntries(text, providerOpts, "");
+    const mine = holderMatches(sec.holder, config.ownerName);
+    entries.push(...(mine ? parsed : parsed.map((e) => ({ ...e, description: `${e.description} · cartão final ${sec.last4}`.slice(0, 200) }))));
   }
+  console.log(`[statement:pdf] ${chosen.length} cartão(ões) importado(s), ${entries.length} transações`);
+  await saveStatementEntries(config, entries, "o PDF");
+  if (entries.length === 0) return;
+
+  const read = entries.reduce((sum, e) => sum + (e.type === "expense" ? e.amount : -e.amount), 0);
+  const expected = total ?? (chosen.every((sec) => sec.subtotal !== null) ? chosen.reduce((sum, sec) => sum + (sec.subtotal ?? 0), 0) : null);
+  let check = `📄 Cartões lidos: ${chosen.map((sec) => `final ${sec.last4}`).join(", ")}.`;
+  if (expected !== null) {
+    const diff = Math.round((expected - read) * 100) / 100;
+    check += Math.abs(diff) < 0.05
+      ? `\n🧮 Conferi: ${brl(read)} = ${total !== null ? "total da fatura" : "subtotal da fatura"} ✅`
+      : `\n🧮 Conferi: li ${brl(read)}, mas a fatura diz ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
+  }
+  await notifyOwner(config, check);
+}
+
+/** Resposta à pergunta "quais cartões importo?". Devolve true se tratou a mensagem. */
+async function applyStatementChoice(text: string, config: AgentConfig): Promise<boolean> {
+  if (!pendingStatement) return false;
+  if (Date.now() - pendingStatement.at > STATEMENT_CHOICE_WINDOW_MS) {
+    pendingStatement = null;
+    return false;
+  }
+  const answer = text.trim().toLowerCase();
+  if (/^cancela/.test(answer)) {
+    pendingStatement = null;
+    await notifyOwner(config, "👍 Ok, não importei essa fatura.");
+    return true;
+  }
+  // Frase longa não é resposta à pergunta (ex: "gastei 2 reais no pão").
+  if (answer.length > 40) return false;
+  const { sections, text: statementText, total } = pendingStatement;
+  const normalize = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  let chosen: CardSection[];
+  if (/\b(tud[oa]|todos|todas|ambos|os dois|as duas)\b/.test(answer)) {
+    chosen = sections;
+  } else {
+    const numbers = (answer.match(/\d+/g) ?? []).map(Number).filter((n) => n >= 1 && n <= sections.length);
+    const words = normalize(answer).split(/[^A-Z]+/).filter((w) => w.length >= 3);
+    // Só o primeiro nome: titular e adicional costumam ter o mesmo sobrenome.
+    chosen = sections.filter((sec, i) => numbers.includes(i + 1) || words.includes(normalize(sec.holder).split(/[^A-Z]+/)[0]));
+  }
+  if (chosen.length === 0) return false;
+
+  pendingStatement = null;
+  await notifyOwner(config, `👍 Importando ${chosen.length === sections.length ? "todos os cartões" : chosen.map((sec) => sec.holder).join(" e ")}…`);
+  await importCardSections(config, statementText, chosen, chosen.length === sections.length ? total : null);
+  return true;
 }
 
 /**
