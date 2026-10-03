@@ -336,15 +336,44 @@ async function buildCategorySummary(name: string | undefined) {
     .sort((a, b) => b[1] - a[1])
     .map(([k, value]) => ({ label: k, value, compare: prevGroups[k] }));
 
+  // Próximos meses da mesma categoria: o que ainda vai cair (parcelas,
+  // seguro...) — mostra a próxima de cada parte e quanto falta no total.
+  const monthEnd = new Date(y, m + 1, 0, 23, 59, 59);
+  const future = await prisma.financeEntry.findMany({
+    where: {
+      type: "expense",
+      date: { gt: monthEnd },
+      OR: [{ category: { equals: label, mode: "insensitive" } }, { subcategory: { equals: label, mode: "insensitive" } }],
+    },
+    select: { amount: true, date: true, subcategory: true, category: true },
+    orderBy: { date: "asc" },
+  });
+  const byCategory = future.some((f) => f.category.toLowerCase() === label.toLowerCase());
+  const partOf = (e: { subcategory: string; category: string }) => (byCategory ? e.subcategory || "Outros" : e.category);
+  const nextByPart = new Map<string, { amount: number; date: Date }>();
+  for (const f of future) if (!nextByPart.has(partOf(f))) nextByPart.set(partOf(f), { amount: f.amount, date: f.date });
+  const parts = [...new Set([...Object.keys(curGroups), ...nextByPart.keys()])];
+  const partLines = parts.map((p) => {
+    const next = nextByPart.get(p);
+    const nextTxt = next ? `próxima ${brl(next.amount)} em ${formatDayMonth(next.date)}` : "";
+    return curGroups[p] ? `• ${p}: ${brl(curGroups[p])}` : `• ${p}: nada este mês${nextTxt ? ` · ${nextTxt}` : ""}`;
+  });
+  const futureTotal = sum(future);
+  const last = future[future.length - 1];
+
   const diff = total - prevTotal;
   const lines = [
     `📂 *${label} em ${MONTH_NAMES[m]}*`,
     `Total: ${brl(total)} (já pago ${brl(paid)} · a pagar ${brl(total - paid)})`,
+    parts.length > 1 || nextByPart.size > 0 ? `\n${partLines.join("\n")}\n` : "",
     prevTotal > 0
       ? `${diff > 0 ? "🔺" : diff < 0 ? "🔻" : "➖"} ${MONTH_NAMES[prevDate.getMonth()]}: ${brl(prevTotal)} (${diff >= 0 ? "+" : "−"}${brl(Math.abs(diff))})`
       : "",
     budget
       ? `${total > budget.amount ? "🔴 Passou" : "🟢 Dentro"} do teto de ${brl(budget.amount)}${total > budget.amount ? ` em ${brl(total - budget.amount)}` : ` (sobram ${brl(budget.amount - total)})`}`
+      : "",
+    futureTotal > 0
+      ? `📆 Falta pagar nos próximos meses: ${brl(futureTotal)} (até ${MONTH_NAMES[last.date.getMonth()].slice(0, 3)}/${String(last.date.getFullYear()).slice(2)})`
       : "",
   ].filter(Boolean);
   return { text: lines.join("\n"), bars, title: `${label} em ${MONTH_NAMES[m]}/${y}`, prevLabel: MONTH_NAMES[prevDate.getMonth()] };
