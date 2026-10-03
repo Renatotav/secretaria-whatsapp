@@ -262,7 +262,163 @@ async function simulateFinance(
     .join("\n");
 }
 
+const isInstallment = (d: string) => /Parcela \d+\/\d+/.test(d);
+const isRecurring = (e: { description: string; category: string }) =>
+  e.category === "Assinaturas" || (/\((previsto|recorrente)\)/i.test(e.description) && !isInstallment(e.description));
+const baseName = (e: { description: string; category: string; subcategory: string }) =>
+  e.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim() || e.subcategory || e.category;
+
+/** "Quanto gasto com assinaturas?": o que se repete todo mês, com o custo no ano. */
+async function buildSubscriptionsResponse(): Promise<string> {
+  const today = todayBRT();
+  const entries = await prisma.financeEntry.findMany({
+    where: {
+      type: "expense",
+      date: { gte: new Date(today.getFullYear(), today.getMonth(), 1), lte: new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59) },
+    },
+    select: { description: true, category: true, subcategory: true, amount: true },
+  });
+  const recurring = entries.filter(isRecurring);
+  if (recurring.length === 0) return "Não encontrei assinaturas nem contas fixas lançadas neste mês.";
+
+  const subs = recurring.filter((e) => e.category === "Assinaturas").sort((a, b) => b.amount - a.amount);
+  const fixed = recurring.filter((e) => e.category !== "Assinaturas").sort((a, b) => b.amount - a.amount);
+  const line = (e: (typeof recurring)[number]) => `• ${baseName(e)}: ${brl(e.amount)}/mês · ${brl(e.amount * 12)}/ano`;
+  const total = (l: typeof recurring) => l.reduce((s, e) => s + e.amount, 0);
+
+  const parts = [`📌 *Assinaturas e contas fixas de ${MONTH_NAMES[today.getMonth()]}*`];
+  if (subs.length) parts.push(`\n*Assinaturas* (${brl(total(subs))}/mês · ${brl(total(subs) * 12)}/ano)`, ...subs.map(line));
+  if (fixed.length) parts.push(`\n*Contas fixas* (${brl(total(fixed))}/mês)`, ...fixed.map(line));
+  parts.push(`\n💡 Alguma assinatura você não usa? Cancelar uma de ${brl(subs[0]?.amount ?? 0)} libera ${brl((subs[0]?.amount ?? 0) * 12)} no ano.`);
+  return parts.join("\n");
+}
+
+/**
+ * "Por que estourei o mês?": separa o mês em parcelas, contas fixas/assinaturas
+ * e gastos do dia a dia, aponta a causa principal e compara as categorias do
+ * dia a dia com a média dos 2 meses anteriores (anomalias).
+ */
+async function buildMonthDiagnosis(): Promise<string> {
+  const today = todayBRT();
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const range = (mi: number) => ({ gte: new Date(y, mi, 1), lte: new Date(y, mi + 1, 0, 23, 59, 59) });
+  const [entries, prevEntries] = await Promise.all([
+    prisma.financeEntry.findMany({ where: { date: range(m) }, select: { type: true, amount: true, category: true, subcategory: true, description: true } }),
+    prisma.financeEntry.findMany({ where: { type: "expense", date: { gte: new Date(y, m - 2, 1), lte: new Date(y, m, 0, 23, 59, 59) } }, select: { amount: true, category: true, description: true } }),
+  ]);
+
+  const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
+  const expenses = entries.filter((e) => e.type === "expense");
+  const installments = expenses.filter((e) => isInstallment(e.description));
+  const recurring = expenses.filter((e) => !isInstallment(e.description) && isRecurring(e));
+  const daily = expenses.filter((e) => !isInstallment(e.description) && !isRecurring(e));
+  const sum = (l: { amount: number }[]) => l.reduce((s, e) => s + e.amount, 0);
+  const total = sum(expenses);
+  const balance = income - total;
+
+  const buckets = [
+    { name: "parcelas no cartão", value: sum(installments), action: "segurar compras parceladas novas até as atuais terminarem" },
+    { name: "contas fixas e assinaturas", value: sum(recurring), action: "revisar assinaturas que você não usa" },
+    { name: "gastos do dia a dia", value: sum(daily), action: "definir um teto semanal para o dia a dia" },
+  ].sort((a, b) => b.value - a.value);
+  const main = buckets[0];
+  const pct = (v: number) => (total > 0 ? `${((v / total) * 100).toFixed(0)}%` : "0%");
+
+  const topInstallments = Object.entries(
+    installments.reduce<Record<string, number>>((acc, e) => {
+      const k = e.description.replace(/\s*-?\s*Parcela \d+\/\d+.*$/, "").replace(/\s*\(compra em [^)]*\)/, "").trim();
+      acc[k] = (acc[k] || 0) + e.amount;
+      return acc;
+    }, {})
+  ).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  // Anomalias: categoria do dia a dia acima de 1,5× a média mensal dos 2 meses anteriores (e +R$ 100).
+  const dailyByCat = daily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount), acc), {});
+  const prevDaily = prevEntries.filter((e) => !isInstallment(e.description) && !isRecurring({ description: e.description, category: e.category }));
+  const prevAvg = prevDaily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount / 2), acc), {});
+  const anomalies = Object.entries(dailyByCat)
+    .filter(([cat, v]) => (prevAvg[cat] || 0) > 0 && v > prevAvg[cat] * 1.5 && v - prevAvg[cat] > 100)
+    .map(([cat, v]) => `• ${cat}: ${brl(v)} (média ${brl(prevAvg[cat])})`);
+
+  const risk = balance >= 300 ? "baixo" : balance >= 0 ? "médio" : "alto";
+  const lines = [
+    `🎯 *Diagnóstico de ${MONTH_NAMES[m]}*`,
+    `${balance >= 0 ? "🟢" : "🔴"} Entra ${brl(income)} · sai ${brl(total)} · ${balance >= 0 ? "sobra" : "falta"} ${brl(Math.abs(balance))}`,
+    `\n*Causa principal:* ${main.name} — ${brl(main.value)} (${pct(main.value)} das saídas)`,
+    ...buckets.slice(1).map((b) => `• ${b.name}: ${brl(b.value)} (${pct(b.value)})`),
+  ];
+  if (main.name === "parcelas no cartão" && topInstallments.length) {
+    lines.push(`\n*Parcelas que mais pesam:*`, ...topInstallments.map(([k, v]) => `• ${k}: ${brl(v)}`));
+  }
+  if (anomalies.length) lines.push(`\n🔍 *Fora do normal:*`, ...anomalies);
+  lines.push(`\n*Risco:* ${risk} · *Ação:* ${main.action}.`);
+  return lines.join("\n");
+}
+
+/**
+ * Pergunta livre sobre o financeiro: a IA escreve um SELECT, que roda numa
+ * transação SOMENTE LEITURA com tempo limite, e depois resume o resultado.
+ * Só tabelas do financeiro; qualquer coisa que não seja um SELECT único é recusada.
+ */
+async function answerFinanceQuestion(question: string, providerOpts: ProviderOptions): Promise<string> {
+  const today = todayBRT();
+  const schema = `Tabelas PostgreSQL (nomes entre aspas duplas):
+"FinanceEntry"(id, type 'income'|'expense', amount float, category, subcategory, description, date timestamp, "purchaseDate" timestamp|null, "paymentMethod" 'cartão'|'pix'|'débito'|'boleto'|'dinheiro'|'ticket', account, status 'paid'|'pending', mood, source)
+  - date = mês em que o dinheiro sai/entra (compra no cartão = dia do vencimento da fatura); "purchaseDate" = dia real da compra.
+  - Parcelas têm "Parcela X/Y" na description; "(previsto)" = lançamento futuro projetado.
+"InvoiceItem"(id, "financeEntryId", name, category, amount, quantity, "unitPrice") — itens de nota fiscal de mercado.
+"SavingsGoal"(id, name, "targetAmount", "currentAmount", deadline)
+"Budget"(id, month 'AAAA-MM'|'default', category, subcategory, amount)`;
+  const sqlPrompt = `${schema}
+Hoje é ${today.toISOString().slice(0, 10)}. Escreva UMA consulta SQL PostgreSQL (somente SELECT, pode usar WITH) que responda: "${question}".
+Use ILIKE para buscar texto em description/category. Limite a 50 linhas. Responda APENAS com o SQL, sem markdown e sem explicação.`;
+
+  let sql = "";
+  try {
+    const { content } = await generateResponse([{ role: "user", content: sqlPrompt }], "Você escreve SQL PostgreSQL correto e seguro.", 0, 400, providerOpts);
+    sql = content.replace(/```sql|```/gi, "").trim().replace(/;\s*$/, "");
+  } catch {
+    return "⚠️ Não consegui pensar na consulta agora. Tenta perguntar de outro jeito?";
+  }
+
+  const forbidden = /\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|vacuum|call|do|execute|set|reset|lock|listen|notify|pg_sleep)\b|;|\bpg_|"(AgentConfig|Conversation|Message|GroupMessage|GroupConfig)"/i;
+  if (!/^\s*(select|with)\b/i.test(sql) || forbidden.test(sql)) {
+    console.error("[finance_question] SQL recusado", sql);
+    return "⚠️ Não consegui montar uma consulta segura para essa pergunta. Tenta de outro jeito?";
+  }
+
+  let rows: unknown[] = [];
+  try {
+    rows = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+      await tx.$executeRawUnsafe("SET LOCAL statement_timeout = 5000");
+      return tx.$queryRawUnsafe<unknown[]>(sql);
+    });
+  } catch (err) {
+    console.error("[finance_question] erro ao consultar", err, sql);
+    return "⚠️ Não consegui buscar isso no banco. Tenta perguntar de outro jeito?";
+  }
+
+  const data = JSON.stringify(rows.slice(0, 50), (_k, v) => (typeof v === "bigint" ? Number(v) : v));
+  try {
+    const { content } = await generateResponse(
+      [{ role: "user", content: `Pergunta: "${question}"\nResultado da consulta (JSON): ${data}\n\nResponda em português, curto (até 6 linhas), com a conclusão primeiro e os números em R$. Se o resultado estiver vazio, diga que não encontrou lançamentos.` }],
+      "Você é a secretária financeira pessoal do Renato. Responda só com base nos dados recebidos, sem inventar números.",
+      0.2,
+      300,
+      providerOpts
+    );
+    return `🧠 ${content.trim()}`;
+  } catch {
+    return `🧠 Encontrei ${rows.length} resultado(s), mas não consegui resumir agora.`;
+  }
+}
+
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
+  if (intent === "subscriptions") return buildSubscriptionsResponse();
+  if (intent === "month_diagnosis") return buildMonthDiagnosis();
+
   if (intent === "month_closing") {
     const today = todayBRT();
     const last = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -678,6 +834,9 @@ Não seja robótico. Chame-o de Renato.`;
       break;
     case "finance_simulation":
       response = await simulateFinance(route, config);
+      break;
+    case "finance_question":
+      response = await answerFinanceQuestion(route.question, providerOpts);
       break;
     case "diary":
       await prisma.diaryEntry.create({

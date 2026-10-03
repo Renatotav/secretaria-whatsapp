@@ -18,7 +18,7 @@ Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
 Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
 outro nome se nenhuma delas fizer sentido pro caso.`;
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis";
 
 export type PersonalRouteResult =
   | {
@@ -65,6 +65,12 @@ export type PersonalRouteResult =
   | {
       type: "finance_update_date";
       newPurchaseDate: string;
+      confirmation: string;
+    }
+  | {
+      // Pergunta livre sobre os próprios números ("quanto gastei com Uber em setembro?")
+      type: "finance_question";
+      question: string;
       confirmation: string;
     }
   | {
@@ -115,6 +121,8 @@ Tipos:
    Ex: "Resumo do grupo PJe ontem" → group_summary
    Ex: "Como estão minhas metas?" ou "Quanto falta pro macbook?" → savings_summary
    Ex: "Fechamento do mês" ou "Como fechou o mês passado?" → month_closing
+   Ex: "Quanto gasto com assinaturas?" ou "Quais minhas contas fixas?" → subscriptions
+   Ex: "Por que estourei o mês?", "Onde estou gastando mais?", "Como está meu mês?" → month_diagnosis
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
    ${FINANCE_TAXONOMY}
@@ -160,17 +168,21 @@ Tipos:
    Ex: "Dá pra comprar um tênis de 200 no pix?" → simPurchaseAmount: 200, simInstallments: 1, simPaymentMethod: "pix", simDescription: "tênis"
    Sem meio de pagamento dito = "cartão". simIncome = renda MENSAL total hipotética (ou null).
 
+8. finance_question — PERGUNTA sobre números do próprio financeiro que não se encaixa nos atalhos de agenda_query.
+   Ex: "Quanto gastei com Uber em setembro?", "Qual foi minha maior compra no cartão?", "Quantas vezes pedi delivery esse mês?", "Quanto falta pagar do Samsung?"
+   Coloque a pergunta inteira em "question". NÃO é um gasto novo (nunca use "finance" para perguntas).
+
 IMPORTANTE:
 - Ao registrar um novo gasto (type: "finance"), na "confirmation" inclua SEMPRE uma menção amigável informando que a compra foi registrada para a data de hoje (ou a data identificada) e explicando que ele pode responder com outra data se quiser alterar. Exemplo: "💸 Anotado! Gasto de R$ 33,98 pendente para o dia 10/09 (compra em DD/MM). Se foi em outra data, basta me responder com o dia (ex: 15/08)."
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation|finance_question",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis",
   "financeType": "income|expense",
   "amount": 0,
   "financeCategory": "<categoria curta>",
@@ -191,6 +203,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "simInstallments": "número de parcelas da compra hipotética ou null",
   "simPaymentMethod": "cartão|pix|débito|dinheiro",
   "simDescription": "<o que pensa em comprar>",
+  "question": "<pergunta do usuário, para finance_question>",
   "confirmation": "Sua resposta curta"
 }`;
 
@@ -248,6 +261,14 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       };
     }
 
+    if (parsed.type === "finance_question") {
+      return {
+        type: "finance_question",
+        question: (parsed.question as string) || message,
+        confirmation: (parsed.confirmation as string) || "",
+      };
+    }
+
     if (parsed.type === "finance_simulation") {
       const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
       const method = ["cartão", "pix", "débito", "dinheiro"].includes(parsed.simPaymentMethod as string)
@@ -280,6 +301,8 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "group_summary",
         "savings_summary",
         "month_closing",
+        "subscriptions",
+        "month_diagnosis",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)
