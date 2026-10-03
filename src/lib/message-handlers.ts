@@ -1441,11 +1441,43 @@ const SUBSCRIPTION_PROJECTION_MONTHS = 11;
  * novo. Não notifica o dono — quem chama decide se/como avisar (o fluxo de
  * extrato via WhatsApp avisa; edição manual no painel não precisa).
  */
+// Marketplaces vendem de tudo: o nome da loja não diz o que foi comprado.
+const MARKETPLACE_RE = /^(AMAZON|MERCADO ?LIVRE|MERCADO\*|MERCADOPAGO|SHOPEE|ALIEXPRESS|MAGALU|SHEIN|PAYPAL|PG \*|PAGSEGURO|PIX)/;
+
+/**
+ * Memória por loja: compra de uma loja que já apareceu antes (com categoria e
+ * subcategoria) recebe a mesma classificação — decidida pelo código, não pela
+ * IA, então "DL*UBERRIDES" é sempre Transporte › Uber/Taxi.
+ */
+async function applyMerchantMemory(entries: StatementEntry[]): Promise<StatementEntry[]> {
+  if (!entries.some((e) => e.type === "expense")) return entries;
+  const { merchantKey } = await import("./finance-taxonomy");
+  const history = await prisma.financeEntry.findMany({
+    where: { type: "expense", subcategory: { not: "" } },
+    select: { description: true, category: true, subcategory: true },
+    orderBy: { createdAt: "desc" },
+    take: 3000,
+  });
+  const known = new Map<string, { category: string; subcategory: string }>();
+  for (const h of history) {
+    const key = merchantKey(h.description);
+    if (key && !known.has(key)) known.set(key, { category: h.category, subcategory: h.subcategory });
+  }
+  return entries.map((e) => {
+    if (e.type !== "expense") return e;
+    const key = merchantKey(e.description);
+    if (!key || MARKETPLACE_RE.test(key)) return e;
+    const k = known.get(key);
+    return k ? { ...e, category: k.category, subcategory: k.subcategory } : e;
+  });
+}
+
 export async function projectAndInsertFinanceEntries(
   entries: StatementEntry[],
   source: "whatsapp" | "dashboard" = "whatsapp",
   creditCardDueDay?: number
 ): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number; matchedManual: StatementEntry[] }> {
+  entries = await applyMerchantMemory(entries);
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
   // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
   // parcela — ex: Anthropic, Netflix) com as entradas reais desse extrato,

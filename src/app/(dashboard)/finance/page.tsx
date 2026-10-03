@@ -7,6 +7,7 @@ import { BudgetsManager } from "./BudgetsManager";
 import { CreditCardsSection } from "./CreditCardsSection";
 import { InsightsModal } from "./InsightsModal";
 import { InvoiceDrawer } from "./InvoiceDrawer";
+import { FINANCE_TAXONOMY_DATA } from "@/lib/finance-taxonomy";
 
 interface FinanceEntry {
   id: string;
@@ -84,29 +85,8 @@ const MOODS = [
 ];
 const MOOD_MAP = new Map(MOODS.map(m => [m.key, m]));
 
-// Categoria/subcategoria padrão por tipo, baseado na planilha antiga do usuário.
-const DEFAULT_TAXONOMY: Record<"income" | "expense", Record<string, string[]>> = {
-  income: {
-    "Salário": ["Salário fixo", "Vale Alimentação", "Bônus"],
-    "Renda Extra": ["Freelance", "Comissões", "Venda de produtos"],
-    "Renda Passiva": ["Dividendos"],
-    "Dinheiro em Conta": ["Nubank"],
-    "Outros": ["Reembolso", "Restituição IR"],
-  },
-  expense: {
-    "Moradia": ["Aluguel", "Financiamento", "Condomínio", "Energia elétrica", "Água/Esgoto", "Internet", "Gás"],
-    "Alimentação": ["Supermercado", "Restaurantes", "Delivery"],
-    "Transporte": ["Combustível", "Manutenção veículo", "Seguro", "Transporte público", "Uber/Taxi"],
-    "Saúde": ["Plano de saúde", "Medicamentos"],
-    "Imposto": ["IR", "INSS", "IPVA", "IOF"],
-    "Educação": ["Cursos", "Mensalidade", "Livros"],
-    "Assinaturas": ["Streaming", "Apps/Softwares", "Academia"],
-    "Pessoal": ["Roupas", "Beleza", "Lazer"],
-    "Financeiro": ["Cartão de crédito", "Parcelas no cartão", "Tarifas bancárias", "Empréstimos"],
-    "Família": ["Mesada", "Gastos com filhos"],
-    "Outros": ["Imprevistos", "Manutenção", "Presentes"],
-  },
-};
+// Categoria/subcategoria padrão: a mesma lista usada pela IA (WhatsApp/fatura).
+const DEFAULT_TAXONOMY = FINANCE_TAXONOMY_DATA;
 
 function categoriesForType(type: string): string[] {
   return Object.keys(DEFAULT_TAXONOMY[type === "income" ? "income" : "expense"]);

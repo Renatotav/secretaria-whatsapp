@@ -1,22 +1,8 @@
 import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
+import { taxonomyPrompt } from "./finance-taxonomy";
 
-// Taxonomia de categorias/subcategorias financeiras — mesma usada no seletor
-// manual do painel Financeiro (baseada na planilha antiga do usuário), pra
-// tudo que a IA classifica (mensagem no WhatsApp ou extrato) usar os mesmos
-// nomes de categoria.
-const FINANCE_TAXONOMY = `Categorias de RECEITA (income): Salário (Salário fixo, Vale Alimentação, Bônus),
-Renda Extra (Freelance, Comissões, Venda de produtos), Renda Passiva (Dividendos),
-Dinheiro em Conta (Nubank), Outros (Reembolso, Restituição IR).
-Categorias de DESPESA (expense): Moradia (Aluguel, Financiamento, Condomínio,
-Energia elétrica, Água/Esgoto, Internet, Gás), Alimentação (Supermercado,
-Restaurantes, Delivery), Transporte (Combustível, Manutenção veículo, Seguro,
-Transporte público, Uber/Taxi), Saúde (Plano de saúde, Medicamentos), Imposto
-(IR, INSS, IPVA, IOF), Educação (Cursos, Mensalidade, Livros), Assinaturas (Streaming,
-Apps/Softwares, Academia), Pessoal (Roupas, Beleza, Lazer), Financeiro (Cartão de
-crédito, Parcelas no cartão, Tarifas bancárias, Empréstimos), Família (Mesada,
-Gastos com filhos), Outros (Imprevistos, Manutenção, Presentes).
-Prefira essas categorias/subcategorias quando a transação encaixar bem; só use
-outro nome se nenhuma delas fizer sentido pro caso.`;
+// Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
+const FINANCE_TAXONOMY = taxonomyPrompt();
 
 export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart";
 
@@ -158,7 +144,7 @@ Tipos:
    "installments" null. As parcelas restantes são lançadas automaticamente nos
    meses seguintes — não precisa mencionar isso na "confirmation".
    Ex: "Comprei um Samsung S25 de 291 no cartão do Bruno, em 17x" → expense,
-   291, categoria "Financeiro", subcategoria "Parcelas no cartão", installments: 17
+   291, categoria "Compras", subcategoria "Eletrônicos", installments: 17
 
    - REGRA PARA MEIO DE PAGAMENTO (paymentMethod):
      1) Receitas e Salário: use SEMPRE "pix".
@@ -437,7 +423,7 @@ institucional). Se não conseguir identificar nenhuma transação real, retorne
 uma lista vazia.
 
 Retorne APENAS um JSON válido no formato:
-{ "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Mercado", "paymentMethod": "cartão", "account": "Principal" } ] }`;
+{ "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Supermercado", "paymentMethod": "cartão", "account": "Principal" } ] }`;
 }
 
 /**
