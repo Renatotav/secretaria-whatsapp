@@ -4,7 +4,7 @@ import { taxonomyPrompt } from "./finance-taxonomy";
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
 const FINANCE_TAXONOMY = taxonomyPrompt();
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart" | "bills_due";
 
 export type PersonalRouteResult =
   | {
@@ -116,6 +116,8 @@ Tipos:
    Ex: "O que tenho pendente hoje?" → pending_today
    Ex: "Quais chamados estão abertos?" → open_tickets
    Ex: "Quanto gastei esse mês?" → finance_summary
+   Ex: "O que falta pagar?", "Quais contas tenho pra pagar?", "O que vence essa semana?", "Tem conta atrasada?" → bills_due
+       (contas/boletos/fatura a PAGAR; "o que tenho pendente hoje?" sem falar de conta continua pending_today)
    Ex: "Resumo do grupo PJe ontem" → group_summary
    Ex: "Como estão minhas metas?" ou "Quanto falta pro macbook?" → savings_summary
    Ex: "Fechamento do mês" ou "Como fechou o mês passado?" → month_closing
@@ -199,7 +201,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart|bills_due",
   "chartKind": "categories|income_expense|category|goals",
   "financeType": "income|expense",
   "amount": 0,
@@ -329,6 +331,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "month_diagnosis",
         "category_summary",
         "chart",
+        "bills_due",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)

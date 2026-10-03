@@ -614,6 +614,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
 💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
+📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
 📅 "Fechamento do mês" — como fechou o mês passado, com gráfico.
@@ -655,7 +656,58 @@ Regras:
   }
 }
 
+/**
+ * Contas a pagar: atrasadas + o que vence até o fim do mês. Compras no cartão
+ * viram UMA linha por fatura (senão o dia 10 teria dezenas de linhas).
+ * mode "reminder" (lembrete das 9h): só vencidas e as que vencem em até 3
+ * dias — devolve "" se não houver nada, para não mandar mensagem à toa.
+ */
+export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promise<string> {
+  const today = todayBRT();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const DAY = 86400000;
+  const until = mode === "reminder"
+    ? new Date(startToday.getTime() + 4 * DAY - 1)
+    : new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+  const pending = await prisma.financeEntry.findMany({
+    where: { type: "expense", status: "pending", date: { lte: until } },
+    orderBy: { date: "asc" },
+  });
+
+  const items: { label: string; amount: number; date: Date }[] = [];
+  const cards = new Map<string, { amount: number; date: Date; count: number }>();
+  for (const e of pending) {
+    if (e.paymentMethod === "cartão") {
+      const key = e.date.toISOString().slice(0, 10);
+      const c = cards.get(key) ?? { amount: 0, date: e.date, count: 0 };
+      c.amount += e.amount;
+      c.count++;
+      cards.set(key, c);
+    } else {
+      const name = e.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim();
+      items.push({ label: name || e.subcategory || e.category, amount: e.amount, date: e.date });
+    }
+  }
+  for (const c of cards.values()) items.push({ label: `💳 Fatura do cartão (${c.count} compras)`, amount: c.amount, date: c.date });
+  items.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  if (items.length === 0) return mode === "reminder" ? "" : `✅ Nenhuma conta a pagar até o fim de ${MONTH_NAMES[today.getMonth()]}!`;
+
+  const line = (i: (typeof items)[number]) => {
+    const day = new Date(i.date.getFullYear(), i.date.getMonth(), i.date.getDate()).getTime();
+    const diff = Math.round((day - startToday.getTime()) / DAY);
+    const when = diff < 0 ? `venceu ${formatDayMonth(i.date)}!` : diff === 0 ? "vence HOJE" : diff === 1 ? "vence amanhã" : `vence ${formatDayMonth(i.date)}`;
+    const icon = diff < 0 ? "🔴" : diff <= 3 ? "🟡" : "⚪";
+    return `${icon} ${i.label} — ${brl(i.amount)} (${when})`;
+  };
+  const total = items.reduce((sum, i) => sum + i.amount, 0);
+  const title = mode === "reminder" ? "⏰ *Contas vencendo*" : `📋 *Contas a pagar até o fim de ${MONTH_NAMES[today.getMonth()]}*`;
+  const footer = mode === "reminder" ? `\nJá pagou? Me diga "paguei o aluguel" que eu dou baixa.` : "";
+  return `${title}\n${items.map(line).join("\n")}\n\nTotal: ${brl(total)}${footer}`;
+}
+
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
+  if (intent === "bills_due") return buildBillsDue("query");
   if (intent === "subscriptions") return buildSubscriptionsResponse();
   if (intent === "month_diagnosis") return buildMonthDiagnosis();
 

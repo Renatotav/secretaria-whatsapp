@@ -4,7 +4,7 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing, sendMonthChart } from "./message-handlers";
+import { buildMonthClosing, sendMonthChart, buildBillsDue } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -81,32 +81,25 @@ export function startScheduler(): void {
         }
       }
 
-      // Finance reminders (09:00)
-      if (hhmm === "09:00" && lastFinanceReminderDate !== todayDate) {
+      // Contas vencendo (09:00): vencidas e as que vencem em até 3 dias, com a
+      // fatura do cartão numa linha só. Nada vencendo = nenhuma mensagem.
+      if (hhmm === "09:00" && lastFinanceReminderDate !== todayDate && config.ownerPhone) {
         lastFinanceReminderDate = todayDate;
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-        
-        const pendings = await prisma.financeEntry.findMany({
-          where: {
-            type: "expense",
-            status: "pending",
-            date: { lte: endOfToday } // Hoje ou atrasado
+        try {
+          const msg = await buildBillsDue("reminder");
+          if (msg) {
+            await sendTextWithTyping(
+              evolutionConfig.evolutionUrl,
+              evolutionConfig.evolutionApiKey,
+              evolutionConfig.instanceId,
+              config.ownerPhone,
+              msg,
+              20,
+              5
+            );
           }
-        });
-
-        if (pendings.length > 0) {
-          const lines = pendings.map(p => `- ${p.description || p.category} (R$ ${p.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`).join("\n");
-          const msg = `🚨 *Lembrete Financeiro*\nVocê tem ${pendings.length} conta(s) pendente(s) para hoje ou atrasadas:\n\n${lines}\n\nResponda dizendo "paguei a conta X" para eu dar baixa!`;
-          await sendTextWithTyping(
-            evolutionConfig.evolutionUrl,
-            evolutionConfig.evolutionApiKey,
-            evolutionConfig.instanceId,
-            config.ownerPhone,
-            msg,
-            20,
-            5
-          );
+        } catch (err) {
+          console.error("Erro ao enviar lembrete de contas:", err);
         }
       }
 
