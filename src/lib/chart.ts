@@ -66,3 +66,48 @@ export async function barChartPng(title: string, subtitle: string, bars: ChartBa
   const sharp = (await import("sharp")).default;
   return sharp(Buffer.from(barChartSvg(title, subtitle, bars, compareLabel)), { density: 144 }).png().toBuffer();
 }
+
+export interface ProgressBar {
+  label: string;
+  current: number;
+  target: number;
+  color?: string;
+}
+
+/** Barras de progresso das metas (trilho cinza + preenchimento até a %). */
+export function progressChartSvg(title: string, goals: ProgressBar[]): string {
+  const width = 800;
+  const rowHeight = 108;
+  const top = 96;
+  const items = goals.slice(0, 6);
+  const height = top + items.length * rowHeight + 20;
+  const trackX = 32;
+  const trackW = width - 64;
+
+  const rows = items
+    .map((g, i) => {
+      const y = top + i * rowHeight;
+      const pct = g.target > 0 ? Math.min(1, g.current / g.target) : 0;
+      const done = g.current >= g.target;
+      const color = g.color || COLORS[i % COLORS.length];
+      const status = done ? "Conquistada!" : `${(pct * 100).toFixed(0)}%`;
+      return `
+    <text x="${trackX}" y="${y}" font-size="20" font-weight="bold" fill="#1f2430">${escapeXml(g.label)}</text>
+    <text x="${trackX + trackW}" y="${y}" text-anchor="end" font-size="18" font-weight="bold" fill="${done ? "#2fb380" : "#1f2430"}">${escapeXml(status)}</text>
+    <rect x="${trackX}" y="${y + 14}" width="${trackW}" height="26" rx="13" fill="#e8eaf0"/>
+    <rect x="${trackX}" y="${y + 14}" width="${Math.max(26, trackW * pct)}" height="26" rx="13" fill="${color}"/>
+    <text x="${trackX}" y="${y + 64}" font-size="16" fill="#5b6270">${escapeXml(`${brl(g.current)} de ${brl(g.target)}`)}${done ? "" : escapeXml(` · faltam ${brl(g.target - g.current)}`)}</text>`;
+    })
+    .join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="DejaVu Sans, Arial, sans-serif">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="32" y="52" font-size="28" font-weight="bold" fill="#1f2430">${escapeXml(title)}</text>
+  ${rows}
+</svg>`;
+}
+
+export async function progressChartPng(title: string, goals: ProgressBar[]): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  return sharp(Buffer.from(progressChartSvg(title, goals)), { density: 144 }).png().toBuffer();
+}

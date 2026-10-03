@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { sendTextWithTyping, sendWhatsAppImage, getBase64FromMediaMessage, fetchGroupInfo, findContact } from "./evolution";
-import { barChartPng } from "./chart";
+import { barChartPng, progressChartPng } from "./chart";
 import { transcribeAudio, generateResponse, type ProviderOptions } from "./openai";
 import { analyzePrivateMessage } from "./analyzer";
 import { classifyGroupMessage } from "./classifier";
@@ -231,6 +231,23 @@ export async function sendMonthChart(config: AgentConfig, year: number, monthInd
     await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), `📊 Gastos por categoria — ${MONTH_NAMES[monthIndex]}`);
   } catch (err) {
     console.error("[chart] falha ao gerar/enviar gráfico", err);
+  }
+}
+
+/** Imagem com o progresso de cada meta (enviada junto com "como estão minhas metas?"). */
+export async function sendGoalsChart(config: AgentConfig): Promise<void> {
+  if (!config.ownerPhone || !config.evolutionUrl) return;
+  try {
+    const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
+    if (goals.length === 0) return;
+    const png = await progressChartPng(
+      "Minhas metas",
+      goals.map((g) => ({ label: g.name, current: g.currentAmount, target: g.targetAmount, color: g.color }))
+    );
+    const evo = getEvoConfig(config);
+    await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), "🎯 Suas metas");
+  } catch (err) {
+    console.error("[chart] falha ao gerar/enviar gráfico de metas", err);
   }
 }
 
@@ -980,6 +997,9 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
     const ref = route.queryIntent === "month_closing" ? new Date(today.getFullYear(), today.getMonth() - 1, 1) : today;
     await sendMonthChart(config, ref.getFullYear(), ref.getMonth());
   }
+  if (route.type === "agenda_query" && route.queryIntent === "savings_summary") {
+    await sendGoalsChart(config);
+  }
 }
 
 /**
@@ -1254,6 +1274,48 @@ export async function handleStatementImage(base64: string, mimetype: string): Pr
   await saveStatementEntries(config, entries, "a imagem");
 }
 
+/** Nome do item da nota normalizado para comparar compras (mercado abrevia sempre igual). */
+const itemKey = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+/** Preço efetivamente pago por unidade/kg (já com desconto), não o de tabela. */
+const paidUnitPrice = (i: { amount: number; quantity: number; unitPrice: number }) =>
+  i.quantity > 0 && i.amount > 0 ? i.amount / i.quantity : i.unitPrice;
+
+/**
+ * Detetive do mercado: compara cada item da nota nova com a última vez que o
+ * mesmo item foi comprado (outra nota) e lista o que mudou ≥5% e ≥R$ 0,20.
+ */
+async function priceChanges(entryId: string, items: { name: string; amount: number; quantity: number; unitPrice: number }[]): Promise<string> {
+  const previous = await prisma.invoiceItem.findMany({
+    where: { financeEntryId: { not: entryId } },
+    orderBy: { createdAt: "desc" },
+    take: 3000,
+    select: { name: true, amount: true, quantity: true, unitPrice: true, createdAt: true },
+  });
+  const lastByKey = new Map<string, (typeof previous)[number]>();
+  for (const p of previous) if (!lastByKey.has(itemKey(p.name))) lastByKey.set(itemKey(p.name), p);
+
+  const seen = new Set<string>();
+  const changes: { text: string; pct: number }[] = [];
+  for (const i of items) {
+    const key = itemKey(i.name);
+    const last = lastByKey.get(key);
+    if (!last || seen.has(key)) continue;
+    seen.add(key);
+    const before = paidUnitPrice(last);
+    const now = paidUnitPrice(i);
+    if (before <= 0 || now <= 0) continue;
+    const pct = ((now - before) / before) * 100;
+    if (Math.abs(pct) < 5 || Math.abs(now - before) < 0.2) continue;
+    changes.push({
+      pct,
+      text: `${pct > 0 ? "📈" : "📉"} ${i.name}: ${brl(before)} → ${brl(now)} (${pct > 0 ? "+" : ""}${pct.toFixed(0)}%, desde ${formatDayMonth(last.createdAt)})`,
+    });
+  }
+  if (changes.length === 0) return "";
+  changes.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+  return `\n\n🛒 *Detetive do mercado:*\n${changes.slice(0, 6).map((c) => c.text).join("\n")}`;
+}
+
 export async function handleInvoiceImage(base64: string, mimetype: string, caption: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
@@ -1358,7 +1420,12 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     }
   });
 
-  let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : "Se foi no cartão, responda *1*."}`;
+  const detective = await priceChanges(entry.id, invoice.items).catch((err) => {
+    console.error("[detetive] falha ao comparar preços", err);
+    return "";
+  });
+
+  let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : "Se foi no cartão, responda *1*."}${detective}`;
 
   if (finalMood === "neutro") {
     response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
