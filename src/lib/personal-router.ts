@@ -424,6 +424,8 @@ Para cada transação, identifique:
 - description: a descrição da transação como aparece no extrato (curta, real).
   Se for FATURA DE CARTÃO, inclua também a indicação da parcela se houver (ex: "AMAZON BR - Parcela 6/10").
 - amount: valor numérico positivo (sem sinal, sem "R$").
+  Compra internacional mostra o valor em dólar e a cotação (ex: "USD 21,36 | Cotação USD: R$5,42  115,82"):
+  use SEMPRE o valor em REAIS cobrado na fatura (115,82), nunca o valor em dólar.
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
 - category e subcategory: ${FINANCE_TAXONOMY}
   Se não der pra inferir a subcategoria, deixe vazio.
