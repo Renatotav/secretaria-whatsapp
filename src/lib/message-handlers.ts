@@ -1459,8 +1459,40 @@ export async function handleStatementDocument(statementText: string): Promise<vo
   if (!config || !config.ownerPhone) return;
 
   const providerOpts = getProviderOpts(config);
-  const entries = await parseStatementEntries(statementText, providerOpts, config.ownerName);
+
+  // Fatura com cartão adicional (ex: titular é outra pessoa e o dono é o
+  // adicional): manda pra IA só o bloco "Final XXXX - NOME" do dono, mais o
+  // começo da fatura (vencimento). Sem cabeçalho de cartão, segue o texto todo.
+  const { splitCardSections, holderMatches } = await import("./pdf");
+  const sections = splitCardSections(statementText);
+  const mine = sections.filter((sec) => holderMatches(sec.holder, config.ownerName));
+  let text = statementText;
+  if (mine.length > 0) {
+    text = `CABEÇALHO DA FATURA (só para saber o vencimento — NÃO extraia transações daqui):
+${statementText.slice(0, 600)}
+
+TRANSAÇÕES DO CARTÃO DE ${config.ownerName.toUpperCase()} (extraia todas estas):
+${mine.map((sec) => sec.text).join("\n")}`;
+    console.log(`[statement:pdf] ${sections.length} cartão(ões) na fatura, ${mine.length} do dono; ${text.length} caracteres`);
+  }
+
+  const entries = await parseStatementEntries(text, providerOpts, config.ownerName);
   await saveStatementEntries(config, entries, "o PDF");
+
+  if (mine.length > 0 && entries.length > 0) {
+    const others = sections.length - mine.length;
+    const read = entries.reduce((sum, e) => sum + (e.type === "expense" ? e.amount : -e.amount), 0);
+    const expected = mine.every((sec) => sec.subtotal !== null) ? mine.reduce((sum, sec) => sum + (sec.subtotal ?? 0), 0) : null;
+    const cards = mine.map((sec) => `final ${sec.last4}`).join(", ");
+    let check = `📄 Li só o seu cartão (${cards})${others > 0 ? ` e ignorei ${others} outro(s) cartão(ões) da fatura` : ""}.`;
+    if (expected !== null) {
+      const diff = Math.round((expected - read) * 100) / 100;
+      check += Math.abs(diff) < 0.05
+        ? `\n🧮 Conferi: ${brl(read)} = subtotal da fatura ✅`
+        : `\n🧮 Conferi: li ${brl(read)}, mas o subtotal da fatura é ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
+    }
+    await notifyOwner(config, check);
+  }
 }
 
 /**
