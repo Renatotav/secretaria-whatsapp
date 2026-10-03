@@ -1292,6 +1292,7 @@ export default function FinancePage() {
               >
                 <option value="pix">Pix</option>
                 <option value="cartão">Cartão</option>
+                <option value="débito">Débito</option>
                 <option value="dinheiro">Dinheiro</option>
                 <option value="boleto">Boleto</option>
                 <option value="ticket">Ticket / Vale</option>
@@ -1540,6 +1541,7 @@ export default function FinancePage() {
                             >
                               <option value="pix">Pix</option>
                               <option value="cartão">Cartão</option>
+                              <option value="débito">Débito</option>
                               <option value="boleto">Boleto</option>
                               <option value="dinheiro">Dinheiro</option>
                             </select>

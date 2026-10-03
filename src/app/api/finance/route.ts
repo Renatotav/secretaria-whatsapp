@@ -6,6 +6,22 @@ import { parseLocalDate } from "@/lib/dates";
 import { projectAndInsertFinanceEntries } from "@/lib/message-handlers";
 import { autoMarkPaid } from "@/lib/auto-pay";
 
+/** Faz parte de uma série: parcela, mês previsto/recorrente, ou assinatura. */
+function isSeriesEntry(e: { description: string; category: string }): boolean {
+  return /Parcela \d+\/\d+/.test(e.description) || /\((previsto|recorrente)\)/i.test(e.description) || e.category === "Assinaturas";
+}
+
+/** Descrição sem número de parcela, "(compra em ...)" e "(previsto)" — igual entre itens da mesma série. */
+function seriesKey(e: { description: string }): string {
+  return e.description
+    .replace(/\s*-?\s*Parcela \d+\/\d+/gi, "")
+    .replace(/\s*\(compra em [^)]*\)/gi, "")
+    .replace(/\s*\((previsto|recorrente)\)/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 export const GET = withErrorHandling(async (request: Request) => {
   if (!isAuthenticated(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -124,28 +140,33 @@ export const PATCH = withErrorHandling(async (request: Request) => {
   if (typeof data.subcategory === "string") data.subcategory = data.subcategory.trim();
   if (typeof data.description === "string") data.description = data.description.trim();
 
+  const before = await prisma.financeEntry.findUnique({ where: { id } });
   const updated = await prisma.financeEntry.update({ where: { id }, data });
 
-  // Sincroniza paymentMethod / account com lançamentos do mesmo item/categoria (ex: Salário previsto, Aluguel previsto)
-  if (data.paymentMethod || data.account) {
-    const baseDesc = updated.description ? updated.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim() : "";
-    const updateData: any = {};
-    if (data.paymentMethod) updateData.paymentMethod = data.paymentMethod as string;
-    if (data.account) updateData.account = data.account as string;
+  // Trocou o meio de pagamento / conta de um item de SÉRIE (parcelas da mesma
+  // compra, ou meses previstos do mesmo aluguel/salário/assinatura)? Leva a
+  // troca pros outros itens da mesma série. Compra avulsa (mercado, almoço,
+  // Uber...) nunca arrasta outras — antes isso pegava a categoria inteira.
+  const updateData: { paymentMethod?: string; account?: string } = {};
+  if (before && data.paymentMethod && data.paymentMethod !== before.paymentMethod) updateData.paymentMethod = data.paymentMethod as string;
+  if (before && data.account && data.account !== before.account) updateData.account = data.account as string;
 
-    await prisma.financeEntry.updateMany({
+  if (Object.keys(updateData).length > 0 && isSeriesEntry(updated)) {
+    const key = seriesKey(updated);
+    const siblings = await prisma.financeEntry.findMany({
       where: {
-        OR: [
-          ...(baseDesc ? [{ description: { contains: baseDesc, mode: "insensitive" as const } }] : []),
-          {
-            category: updated.category,
-            subcategory: updated.subcategory,
-          }
-        ],
-        id: { not: updated.id }
+        id: { not: updated.id },
+        type: updated.type,
+        category: updated.category,
+        subcategory: updated.subcategory,
+        amount: { gte: updated.amount - 0.01, lte: updated.amount + 0.01 },
       },
-      data: updateData
+      select: { id: true, description: true, category: true },
     });
+    const sameSeries = siblings.filter((s) => isSeriesEntry(s) && seriesKey(s) === key).map((s) => s.id);
+    if (sameSeries.length > 0) {
+      await prisma.financeEntry.updateMany({ where: { id: { in: sameSeries } }, data: updateData });
+    }
   }
 
   return NextResponse.json(updated);

@@ -195,6 +195,66 @@ export interface SelfMessageMeta {
   messageTimestamp: number;
 }
 
+// Quase tudo do dono é no cartão de crédito (milhas): quando ele não diz como
+// pagou, o gasto entra como cartão e a confirmação pergunta se foi outro meio.
+// Ele responde só com o número (ou o nome) e corrigimos SÓ aquele lançamento.
+const PAYMENT_OPTIONS: Record<string, "cartão" | "pix" | "débito" | "dinheiro"> = {
+  "1": "cartão", "cartão": "cartão", "cartao": "cartão", "crédito": "cartão", "credito": "cartão",
+  "2": "pix", "pix": "pix",
+  "3": "débito", "débito": "débito", "debito": "débito",
+  "4": "dinheiro", "dinheiro": "dinheiro", "espécie": "dinheiro", "especie": "dinheiro",
+};
+const PAYMENT_QUESTION = "Pagou de outro jeito? Responda *2* pix · *3* débito · *4* dinheiro";
+const PAYMENT_REPLY_WINDOW_MS = 60 * 60 * 1000;
+const PAYMENT_STATED_RE = /\b(pix|d[ée]bito|dinheiro|esp[ée]cie|boleto|cart[ãa]o|cr[ée]dito|ticket|vale)\b/i;
+
+function formatDayMonth(d: Date): string {
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function paymentLabel(paymentMethod: string, date: Date): string {
+  return paymentMethod === "cartão"
+    ? `💳 cartão, fatura de ${formatDayMonth(date)}`
+    : `${paymentMethod}, pago em ${formatDayMonth(date)}`;
+}
+
+/**
+ * Resposta curta ("2", "pix", "débito"...) logo depois de um gasto lançado
+ * pelo WhatsApp: troca o meio de pagamento só desse lançamento e recalcula a
+ * data (cartão vai pro vencimento da fatura; o resto sai no dia da compra).
+ * Devolve a mensagem de confirmação, ou null se não for esse caso.
+ */
+async function applyPaymentReply(text: string, config: AgentConfig): Promise<string | null> {
+  const choice = PAYMENT_OPTIONS[text.trim().toLowerCase().replace(/[.!]+$/, "")];
+  if (!choice) return null;
+
+  const entry = await prisma.financeEntry.findFirst({
+    where: {
+      source: "whatsapp",
+      type: "expense",
+      createdAt: { gte: new Date(Date.now() - PAYMENT_REPLY_WINDOW_MS) },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!entry || /Parcela \d+\/\d+/.test(entry.description)) return null;
+
+  const label = entry.description || entry.category;
+  if (entry.paymentMethod === choice) {
+    return `👍 "${label}" (R$ ${entry.amount.toFixed(2)}) já estava como ${paymentLabel(entry.paymentMethod, entry.date)}.`;
+  }
+
+  const purchase = entry.purchaseDate ?? entry.date;
+  const isCard = choice === "cartão";
+  const date = isCard
+    ? creditCardBillDate(purchase, config.creditCardDueDay || 10, config.creditCardBestDay || 5)
+    : purchase;
+  await prisma.financeEntry.update({
+    where: { id: entry.id },
+    data: { paymentMethod: choice, date, status: isCard ? "pending" : "paid" },
+  });
+  return `✅ Corrigido: "${label}" (R$ ${entry.amount.toFixed(2)}) agora é ${paymentLabel(choice, date)}.`;
+}
+
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
@@ -205,6 +265,20 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     where: { phone: config.ownerPhone, source: "self" },
     include: { messages: { orderBy: { createdAt: "desc" }, take: config.historyLimit } },
   });
+
+  const paymentReply = await applyPaymentReply(joinedText, config);
+  if (paymentReply) {
+    if (!conv) {
+      conv = await prisma.conversation.create({
+        data: { phone: config.ownerPhone, source: "self" },
+        include: { messages: { orderBy: { createdAt: "desc" }, take: config.historyLimit } },
+      });
+    }
+    await prisma.message.create({ data: { conversationId: conv.id, role: "user", content: joinedText } });
+    await prisma.message.create({ data: { conversationId: conv.id, role: "assistant", content: paymentReply } });
+    await notifyOwner(config, paymentReply);
+    return;
+  }
 
   const recentContext = conv?.messages
     .slice()
@@ -238,6 +312,11 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
       });
       break;
     case "finance": {
+      // Gasto sem meio de pagamento dito na mensagem = cartão (o normal dele);
+      // a confirmação pergunta se foi outro meio (ver applyPaymentReply).
+      const askPayment = route.financeType === "expense" && !route.installments && !PAYMENT_STATED_RE.test(joinedText);
+      if (askPayment) route.paymentMethod = "cartão";
+
       // Compra no cartão: a data do lançamento é o vencimento da fatura certa
       // (regra fixa em código, não fica a critério da IA); a data real da
       // compra vai em purchaseDate.
@@ -316,7 +395,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             }
           }
 
-          await prisma.financeEntry.create({
+          const created = await prisma.financeEntry.create({
             data: {
               type: route.financeType,
               amount: route.amount,
@@ -332,6 +411,10 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               source: "whatsapp",
             },
           });
+
+          if (askPayment) {
+            response = `✅ Anotado: ${created.description || created.category} R$ ${created.amount.toFixed(2)} — ${paymentLabel(created.paymentMethod, created.date)}.\n${PAYMENT_QUESTION}\n(Se a compra foi em outro dia, responda com a data, ex: 15/08.)`;
+          }
 
           if (finalMood === "neutro" && route.financeType === "expense" && route.amount >= 100) {
             response += `\n\n🤔 Percebi esse gasto mais elevado. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
@@ -766,23 +849,26 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   }
   const purchaseDate = new Date(invoiceDate);
   
-  let paymentMethod = (invoice.paymentMethod || "pix").toLowerCase();
-  let account = invoice.account || "Principal";
-  let status = invoice.status || "paid";
+  // Débito/pix/dinheiro/ticket só quando a nota mostra isso; qualquer outra
+  // coisa (crédito, TEF crédito, ou não deu pra ler) vira cartão de crédito,
+  // que é o normal do dono — a confirmação pergunta se foi outro meio.
+  const readMethod = (invoice.paymentMethod || "").toLowerCase();
+  let paymentMethod: string;
+  let account = "Principal";
+  let status: "paid" | "pending" = "paid";
 
-  const isCreditCard = paymentMethod.includes("cart") || paymentMethod.includes("cred") || paymentMethod.includes("tef");
-
-  if (isCreditCard && paymentMethod !== "ticket") {
+  if (readMethod === "ticket" || (invoice.account || "").toLowerCase().includes("ticket")) {
+    paymentMethod = "ticket";
+    account = "Ticket Alimentação";
+  } else if (/d[ée]bito/.test(readMethod)) {
+    paymentMethod = "débito";
+  } else if (/pix|dinheiro|esp[ée]cie|boleto/.test(readMethod)) {
+    paymentMethod = readMethod.includes("pix") ? "pix" : readMethod.includes("boleto") ? "boleto" : "dinheiro";
+  } else {
     paymentMethod = "cartão";
     status = "pending";
-    account = "Principal";
-  } else if (paymentMethod === "ticket" || account.toLowerCase().includes("ticket")) {
-    paymentMethod = "ticket";
-    status = "paid";
-    account = "Ticket Alimentação";
-  } else {
-    account = "Principal";
   }
+  if (paymentMethod !== "cartão") invoiceDate = purchaseDate;
 
   if (status === "pending" && paymentMethod === "cartão") {
     invoiceDate = creditCardBillDate(purchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5);
@@ -828,7 +914,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     }
   });
 
-  let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)`;
+  let response = `✅ Nota fiscal de R$ ${invoice.total.toFixed(2)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : "Se foi no cartão, responda *1*."}`;
 
   if (finalMood === "neutro") {
     response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;

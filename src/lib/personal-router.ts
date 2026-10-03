@@ -44,7 +44,7 @@ export type PersonalRouteResult =
       installments: number | null;
       date: string | null;
       purchaseDate: string | null;
-      paymentMethod: "cartão" | "pix" | "boleto" | "dinheiro";
+      paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro";
       account: string;
       status: "paid" | "pending";
       mood?: string;
@@ -125,6 +125,7 @@ Tipos:
      2) Aluguel, Moradia, Luz, Água, Condomínio, Contas de Casa: use SEMPRE "pix" (ou "boleto" se mencionado).
      3) Lançamentos futuros/pendentes no Pix (ex: Aluguel a pagar) MANTÊM "pix", JAMAIS convertem para cartão.
      4) SOMENTE compras no Cartão de Crédito ou parceladas no cartão usam "cartão".
+     4b) Cartão de débito / "no débito" = "débito" (sai na hora, status "paid", NÃO é cartão de crédito).
      5) DATA DE COMPRA NO CARTÃO: a fatura vence todo dia ${creditCardDueDay}. Compra feita
         ANTES do dia ${creditCardBestDay} cai na fatura que vence no dia ${creditCardDueDay} do
         mesmo mês; compra a partir do dia ${creditCardBestDay} cai na fatura do mês seguinte.
@@ -159,7 +160,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "date": "ISO8601 da data de vencimento ou null",
   "purchaseDate": "ISO8601 da data real em que a compra foi feita, ou null",
   "newPurchaseDate": "ISO8601 (YYYY-MM-DD) para finance_update_date",
-  "paymentMethod": "cartão|pix|boleto|dinheiro",
+  "paymentMethod": "cartão|pix|débito|boleto|dinheiro",
   "account": "Principal|Ticket Alimentação",
   "status": "paid|pending",
   "mood": "pessimo|ruim|neutro|bom|otimo",
@@ -183,7 +184,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     if (parsed.type === "finance") {
       const installmentsNum = Number(parsed.installments);
       const status = parsed.status === "pending" ? "pending" : "paid";
-      let paymentMethod = ["cartão", "pix", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
+      let paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
 
       return {
         type: "finance",
@@ -353,7 +354,7 @@ function parseStatementResponse(content: string, source: string): StatementEntry
           type: typeof e.type === "string" && e.type === "income" ? "income" : "expense",
           category: typeof e.category === "string" ? e.category : "Outros",
           subcategory: typeof e.subcategory === "string" ? e.subcategory : "",
-          paymentMethod: ["cartão", "pix", "boleto", "dinheiro"].includes(e.paymentMethod as string) ? (e.paymentMethod as any) : "pix",
+          paymentMethod: ["cartão", "pix", "débito", "boleto", "dinheiro"].includes(e.paymentMethod as string) ? (e.paymentMethod as any) : "pix",
           account: (e.account as string) || "Principal",
           status: e.status === "pending" ? "pending" : "paid",
         };
@@ -427,7 +428,7 @@ export interface InvoiceEntry {
   total: number;
   category: string;
   subcategory: string;
-  paymentMethod: "cartão" | "pix" | "boleto" | "dinheiro" | "ticket";
+  paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro" | "ticket";
   account: string;
   status: "paid" | "pending";
   items: InvoiceItemEntry[];
@@ -450,7 +451,7 @@ Metadados:
 - total: o VALOR A PAGAR final da nota (após descontos, número, sem cifrão). Ex: "VALOR A PAGAR R$ 65,39" -> total: 65.39.
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
-- paymentMethod: descubra a forma de pagamento ("cartão", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". O padrão é "pix".
+- paymentMethod: descubra a forma de pagamento ("cartão", "débito", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". "DEBITO", "Cartão de Débito", "TEF Débito" → use "débito". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". Se a nota NÃO mostrar a forma de pagamento, retorne "" (vazio) — não chute.
 - account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "Ticket Alimentação" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
 - status: REGRA ABSOLUTA: cartão de crédito ("cartão", TEF Rotativo, Credito Rotativo) = SEMPRE "pending" (nunca paid). pix, dinheiro, débito, ticket = "paid".
 
