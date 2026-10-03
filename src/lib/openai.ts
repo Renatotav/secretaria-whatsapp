@@ -169,10 +169,11 @@ export async function generateVisionResponse(
 }
 
 /**
- * Transcreve áudio (base64). Prioridade: Groq (whisper-large-v3) > OpenAI
- * (whisper-1) > OpenRouter (openai/whisper-1). A OpenAI vem antes do
- * OpenRouter porque o OpenRouter não tem endpoint de transcrição — com as duas
- * chaves configuradas, o áudio falhava sempre. Sem nenhuma chave, lança erro.
+ * Transcreve áudio (base64). Ordem: Groq (whisper-large-v3) > OpenAI
+ * (whisper-1, só se a chave for mesmo da OpenAI — chave "sk-or-" é do
+ * OpenRouter colada no campo errado) > OpenRouter. O OpenRouter não tem
+ * endpoint de transcrição: o áudio vai como "input_audio" para um modelo que
+ * escuta (Gemini), pedindo só a transcrição. Sem nenhuma chave, lança erro.
  */
 export async function transcribeAudio(
   base64: string,
@@ -197,7 +198,7 @@ export async function transcribeAudio(
   }
 
   const apiKey = providerOpts.openaiApiKey || process.env.OPENAI_API_KEY || "";
-  if (apiKey) {
+  if (apiKey && !apiKey.startsWith("sk-or-")) {
     const openai = new OpenAI({ apiKey });
     const file = await toFile(buffer, filename);
     const result = await openai.audio.transcriptions.create({
@@ -208,18 +209,31 @@ export async function transcribeAudio(
     return result.text ?? "";
   }
 
-  if (providerOpts.openrouterApiKey) {
+  const openrouterKey = providerOpts.openrouterApiKey || (apiKey.startsWith("sk-or-") ? apiKey : "");
+  if (openrouterKey) {
     const openrouter = new OpenAI({
-      apiKey: providerOpts.openrouterApiKey,
+      apiKey: openrouterKey,
       baseURL: "https://openrouter.ai/api/v1",
     });
-    const file = await toFile(buffer, filename);
-    const result = await openrouter.audio.transcriptions.create({
-      file,
-      model: "openai/whisper-1",
-      language: "pt",
+    const response = await openrouter.chat.completions.create({
+      model: "google/gemini-2.5-flash",
+      temperature: 0,
+      max_tokens: 1000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Transcreva este áudio em português do Brasil, palavra por palavra. Responda APENAS com o texto falado, sem comentários, aspas ou explicações.",
+            },
+            // input_audio: formato aceito pelo OpenRouter para modelos que escutam áudio.
+            { type: "input_audio", input_audio: { data: base64, format: (format || "ogg") as "wav" | "mp3" } },
+          ],
+        },
+      ],
     });
-    return result.text ?? "";
+    return (response.choices[0]?.message?.content ?? "").trim();
   }
 
   throw new Error("Nenhuma chave configurada para transcrição de áudio (Groq, OpenAI ou OpenRouter)");
