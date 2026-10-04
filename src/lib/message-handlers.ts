@@ -614,6 +614,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
 💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
+🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 80%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa quando passar de 80%.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
@@ -654,6 +655,81 @@ Regras:
   } catch {
     return "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
   }
+}
+
+/** Tetos do mês (o do mês específico vale mais que o "default") e o gasto de cada categoria. */
+async function budgetStatus(year: number, monthIndex: number) {
+  const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  const rows = await prisma.budget.findMany({ where: { subcategory: "", month: { in: [monthKey, "default"] } } });
+  const limits = new Map<string, number>();
+  for (const b of rows.filter((r) => r.month === "default")) limits.set(b.category, b.amount);
+  for (const b of rows.filter((r) => r.month === monthKey)) limits.set(b.category, b.amount);
+  const { byCategory } = await monthTotals(year, monthIndex);
+  const items = [...limits.entries()]
+    .map(([category, limit]) => ({ category, limit, spent: byCategory[category] ?? 0 }))
+    .sort((a, b) => b.spent / b.limit - a.spent / a.limit);
+  const withoutLimit = Object.entries(byCategory).filter(([c, v]) => !limits.has(c) && v > 0);
+  return { items, withoutLimit };
+}
+
+const budgetIcon = (pct: number) => (pct >= 100 ? "🔴" : pct >= 80 ? "🟡" : "🟢");
+
+/** "Como está meu orçamento?": cada teto com 🟢 <80% · 🟡 80–100% · 🔴 estourou. */
+async function buildBudgetResponse(): Promise<string> {
+  const today = todayBRT();
+  const { items, withoutLimit } = await budgetStatus(today.getFullYear(), today.getMonth());
+  if (items.length === 0) return "🎯 Você ainda não tem tetos por categoria. Cadastre no painel (Financeiro › Orçamento) ou me peça uma sugestão.";
+  const planned = items.reduce((s, i) => s + i.limit, 0);
+  const spent = items.reduce((s, i) => s + i.spent, 0);
+  const lines = items.map((i) => {
+    const pct = (i.spent / i.limit) * 100;
+    const rest = i.limit - i.spent;
+    return `${budgetIcon(pct)} ${i.category}: ${brl(i.spent)} de ${brl(i.limit)} (${pct.toFixed(0)}%) · ${rest >= 0 ? `sobram ${brl(rest)}` : `passou ${brl(-rest)}`}`;
+  });
+  const extra = withoutLimit.length
+    ? `\n⚪ Sem teto: ${withoutLimit.map(([c, v]) => `${c} ${brl(v)}`).join(" · ")}`
+    : "";
+  return `🎯 *Orçamento de ${MONTH_NAMES[today.getMonth()]}*: ${brl(spent)} de ${brl(planned)} (${((spent / planned) * 100).toFixed(0)}%)\n\n${lines.join("\n")}${extra}`;
+}
+
+/** Gráfico do orçamento: barra = gasto (verde/amarelo/vermelho), marca = teto. */
+async function sendBudgetChart(config: AgentConfig): Promise<void> {
+  if (!config.ownerPhone || !config.evolutionUrl) return;
+  try {
+    const today = todayBRT();
+    const { items } = await budgetStatus(today.getFullYear(), today.getMonth());
+    if (items.length === 0) return;
+    const bars = items.map((i) => {
+      const pct = (i.spent / i.limit) * 100;
+      return { label: i.category, value: i.spent, compare: i.limit, color: pct >= 100 ? "#e5606a" : pct >= 80 ? "#f2a541" : "#2fb380", valueLabel: `${brl(i.spent)} · ${pct.toFixed(0)}%` };
+    });
+    const png = await barChartPng(`Orçamento de ${MONTH_NAMES[today.getMonth()]}`, "barra = gasto · marca escura = teto", bars, "verde < 80% · amarelo 80–100% · vermelho estourou");
+    const evo = getEvoConfig(config);
+    await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), `🎯 Orçamento — ${MONTH_NAMES[today.getMonth()]}`);
+  } catch (err) {
+    console.error("[chart] falha ao gerar/enviar gráfico do orçamento", err);
+  }
+}
+
+/**
+ * Depois de importar fatura/extrato: categorias do mês que passaram de 80%
+ * do teto (o alerta por mensagem só existia no gasto lançado pelo WhatsApp).
+ */
+async function budgetAlertsAfterImport(entries: StatementEntry[]): Promise<string> {
+  const months = new Set(entries.filter((e) => e.type === "expense" && e.date).map((e) => (e.date as string).slice(0, 7)));
+  const lines: string[] = [];
+  for (const ym of months) {
+    const [y, m] = ym.split("-").map(Number);
+    const { items } = await budgetStatus(y, m - 1);
+    const touched = new Set(entries.filter((e) => (e.date as string)?.startsWith(ym)).map((e) => e.category));
+    for (const i of items) {
+      const pct = (i.spent / i.limit) * 100;
+      if (touched.has(i.category) && pct >= 80) {
+        lines.push(`${budgetIcon(pct)} ${i.category} (${MONTH_NAMES[m - 1]}): ${brl(i.spent)} de ${brl(i.limit)} (${pct.toFixed(0)}%)`);
+      }
+    }
+  }
+  return lines.length ? `\n\n🎯 *Tetos no limite:*\n${lines.join("\n")}` : "";
 }
 
 /**
@@ -713,6 +789,7 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
 
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
   if (intent === "bills_due") return buildBillsDue("query");
+  if (intent === "budget_status") return buildBudgetResponse();
   if (intent === "subscriptions") return buildSubscriptionsResponse();
   if (intent === "month_diagnosis") return buildMonthDiagnosis();
 
@@ -1446,6 +1523,9 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
   if (route.type === "agenda_query" && route.queryIntent === "savings_summary") {
     await sendGoalsChart(config);
   }
+  if (route.type === "agenda_query" && route.queryIntent === "budget_status") {
+    await sendBudgetChart(config);
+  }
   if (categorySummary) {
     await sendCategoryChart(config, categorySummary);
   }
@@ -1780,6 +1860,7 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
     const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — ${brl(e.amount)}`).join("\n");
     response += `\n✍️ ${matchedManual.length} você já tinha anotado — não dupliquei; atualizei com o nome e a data do cartão (sua categoria ficou):\n${list}${matchedManual.length > 15 ? "\n…" : ""}`;
   }
+  response += await budgetAlertsAfterImport([...toInsert, ...matchedManual].filter((e) => !e.description.includes("(previsto)")));
   await notifyOwner(config, response);
 }
 
