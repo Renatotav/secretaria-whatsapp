@@ -1570,13 +1570,13 @@ export default function FinancePage() {
                     return (
                       <tr key={e.id} className="entry-row" style={{ borderBottom: "1px solid var(--border-light)" }}>
                         <td className="c-date" style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
-                          <div><span className="only-mobile">{e.paymentMethod === "cartão" ? "Fatura " : ""}</span>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
+                          <div><span className="entry-extra">{e.paymentMethod === "cartão" ? "Fatura " : ""}</span>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
                           {e.purchaseDate && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Compra: {new Date(e.purchaseDate).toLocaleDateString("pt-BR")}</div>}
                         </td>
                         <td className="c-cat" style={{ padding: "8px 8px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {e.category || "—"}
-                            {e.subcategory && <span className="only-mobile" style={{ color: "var(--text-muted)" }}>› {e.subcategory}</span>}
+                            {e.subcategory && <span className="entry-extra" style={{ color: "var(--text-muted)" }}>› {e.subcategory}</span>}
                             {e.mood && e.mood !== "neutro" && MOOD_MAP.get(e.mood) && (
                               <span title={MOOD_MAP.get(e.mood)?.label} style={{ fontSize: 14 }}>
                                 {MOOD_MAP.get(e.mood)?.emoji}

@@ -192,32 +192,44 @@ button {
 }
 
 
-/* Lançamentos do financeiro: no celular cada linha vira um cartão (a tabela
-   de 10 colunas só cabia rolando para o lado e escondia valor e descrição). */
-.only-mobile { display: none; }
-@media (max-width: 700px) {
-  .entries-table thead { display: none; }
-  .entries-table, .entries-table tbody { display: block; }
-  .entries-table tr.entry-row {
+/* Lançamentos do financeiro: cada lançamento é um cartão (mesmo design no
+   celular e no computador). No celular, uma coluna; em tela larga, os cartões
+   ficam lado a lado. A tabela antiga de 10 colunas escondia valor e descrição. */
+.entries-table thead { display: none; }
+.entries-table, .entries-table tbody { display: block; }
+.entries-table tr.entry-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "desc val" "cat status" "date pay" "act act";
+  gap: 4px 10px;
+  padding: 12px 14px;
+}
+.entries-table tr.entry-row td { padding: 0 !important; max-width: none !important; }
+.entries-table td.c-desc { grid-area: desc; color: var(--text) !important; font-weight: 600; font-size: 14px; }
+.entries-table td.c-val { grid-area: val; font-size: 15px; }
+.entries-table td.c-cat { grid-area: cat; }
+.entries-table td.c-status { grid-area: status; text-align: right; }
+.entries-table td.c-date { grid-area: date; color: var(--text-muted); font-size: 12px; }
+.entries-table td.c-date > div { display: inline; }
+.entries-table td.c-date > div + div { margin-left: 6px; }
+.entries-table td.c-pay { grid-area: pay; text-align: right; font-size: 12px; }
+.entries-table td.c-act { grid-area: act; text-align: left !important; margin-top: 4px; }
+.entries-table td.c-sub, .entries-table td.c-acc, .entries-table td.c-src { display: none; }
+/* Edição: campos lado a lado, quebrando linha quando faltar espaço. */
+.entries-table tr.edit-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+.entries-table tr.edit-row td { padding: 0 !important; }
+
+@media (min-width: 701px) {
+  .entries-table tbody {
     display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "desc val" "cat status" "date pay" "act act";
-    gap: 4px 10px;
-    padding: 12px 14px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 10px;
+    padding: 10px;
   }
-  .entries-table tr.entry-row td { padding: 0 !important; max-width: none !important; }
-  .entries-table td.c-desc { grid-area: desc; color: var(--text) !important; font-weight: 600; font-size: 14px; }
-  .entries-table td.c-val { grid-area: val; font-size: 15px; }
-  .entries-table td.c-cat { grid-area: cat; }
-  .entries-table td.c-status { grid-area: status; text-align: right; }
-  .entries-table td.c-date { grid-area: date; color: var(--text-muted); font-size: 12px; }
-  .entries-table td.c-date > div { display: inline; }
-  .entries-table td.c-date > div + div { margin-left: 6px; }
-  .entries-table td.c-pay { grid-area: pay; text-align: right; font-size: 12px; }
-  .entries-table td.c-act { grid-area: act; text-align: left !important; margin-top: 4px; }
-  .entries-table td.c-sub, .entries-table td.c-acc, .entries-table td.c-src { display: none; }
-  .entries-table .only-mobile { display: inline; }
-  /* Edição: campos empilhados em vez de uma linha larga. */
-  .entries-table tr.edit-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
-  .entries-table tr.edit-row td { padding: 0 !important; }
+  .entries-table tr.entry-row {
+    border: 1px solid var(--border) !important;
+    border-radius: 10px;
+    background: var(--bg-hover);
+  }
+  .entries-table tr.edit-row { grid-column: 1 / -1; border-radius: 10px; }
 }
