@@ -16,7 +16,7 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
     "Alimentação": ["Supermercado", "Restaurantes", "Delivery", "Padaria/Lanche"],
     // Scooter (elétrica) separada de Transporte, para ver quanto ela custa por
     // mês sem misturar com Uber. Sem "Combustível": recarga entra na luz.
-    "Scooter": ["Parcela", "Seguro", "Manutenção/peças"],
+    "Scooter": ["Entrada", "Parcela", "Seguro", "Manutenção/peças"],
     "Transporte": ["Uber/Taxi", "Transporte público"],
     "Saúde": ["Farmácia", "Plano de saúde", "Consultas"],
     // "Assinaturas" = cobrança que se repete todo mês: o sistema projeta os
