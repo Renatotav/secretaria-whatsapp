@@ -620,6 +620,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
 📅 "Fechamento do mês" — como fechou o mês passado, com gráfico.
 📈 Gráfico quando pedir: "gráfico dos gastos" (mês por categoria), "gráfico de entradas e saídas" (6 meses), "gráfico do mercado" (uma categoria), "gráfico das metas".
+💳 Pagou a fatura do cartão? "paguei a fatura" (ou "paguei a fatura do Santander") dá baixa em todas as compras dela de uma vez; no painel tem o botão "Marcar como paga".
 ↩️ Corrigir o último lançamento: "desfazer" apaga; "na verdade foi 250" troca o valor. Gasto sem valor ("gastei com uber"): ela pergunta quanto foi.
 🔁 "Quanto gasto com assinaturas?" — contas fixas e assinaturas.
 ❓ Pergunta livre sobre os números: "quanto gastei com Uber em setembro?", "qual minha maior compra no cartão?", "quanto falta pagar do Samsung?".
@@ -1020,12 +1021,63 @@ async function lastSavedEntries() {
   });
 }
 
+// Última fatura paga por mensagem ("desfazer" volta as compras para "a pagar").
+let lastInvoicePayment: { ids: string[]; at: number } | null = null;
+const INVOICE_PAID_RE = /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\bfatura\b|\bfatura\b.*\b(paga|paguei|quitada|transferi)\b/i;
+
+/**
+ * "Paguei a fatura" / "transferi a fatura do Santander": dá baixa em todas as
+ * compras da fatura mais próxima daquele cartão. O cartão sai das palavras
+ * da mensagem (nome do cartão ou de uma compra dele, ex: "santander", "s25");
+ * sem pista, é o cartão do dono. Não cria lançamento nenhum.
+ */
+async function applyInvoicePayment(text: string): Promise<string | null> {
+  if (!INVOICE_PAID_RE.test(text) || text.includes("?")) return null;
+  const { listOpenInvoices, payInvoice, invoiceLabel } = await import("./invoices");
+  const open = await listOpenInvoices();
+  if (open.length === 0) return "✅ Não tem nenhuma fatura de cartão em aberto.";
+
+  const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const words = new Set(norm(text).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !["fatura", "paguei", "cartao", "transferi", "quitei", "mandei", "para", "pro", "pra", "dia"].includes(w)));
+  const otherCards = [...new Set(open.map((i) => i.card).filter(Boolean))];
+  let card = "";
+  // "C6" = o cartão do dono (a fatura do C6 também é paga ao irmão, então
+  // "fatura do Bruno" sozinho apontaria para o cartão "Santander do Bruno").
+  for (const c of /\bc6\b/.test(norm(text)) ? [] : otherCards) {
+    const sample = await prisma.financeEntry.findMany({ where: { card: c }, select: { description: true }, take: 20 });
+    const vocab = new Set(norm(`${c} ${sample.map((x) => x.description).join(" ")}`).split(/[^a-z0-9]+/));
+    if ([...words].some((w) => vocab.has(w))) card = c;
+  }
+  const target = open.find((i) => i.card === card);
+  if (!target) return `🤔 Não achei fatura em aberto de ${invoiceLabel(card)}.`;
+
+  const { ids, total } = await payInvoice(card, target.dueDate);
+  lastInvoicePayment = { ids, at: Date.now() };
+  lastSaved = null;
+  const others = open.filter((i) => i !== target);
+  const due = `${target.dueDate.slice(8, 10)}/${target.dueDate.slice(5, 7)}`;
+  return [
+    `✅ Fatura paga: *${invoiceLabel(card)}* de ${due}`,
+    `💳 ${ids.length} compras marcadas como pagas · ${brl(total)}`,
+    others.length ? `\nAinda em aberto:\n${others.slice(0, 4).map((i) => `• ${invoiceLabel(i.card)} — ${brl(i.total)} (vence ${i.dueDate.slice(8, 10)}/${i.dueDate.slice(5, 7)})`).join("\n")}` : "",
+    `↩️ Foi engano? Responda *desfazer*.`,
+  ].filter(Boolean).join("\n");
+}
+
 /** "desfazer" e "na verdade foi 250". Devolve a resposta, ou null se não for o caso. */
 async function applyUndoOrEdit(text: string): Promise<string | null> {
   const t = text.trim();
   const isUndo = UNDO_RE.test(t);
   const edit = isUndo ? null : t.match(EDIT_AMOUNT_RE);
   if (!isUndo && !edit) return null;
+
+  // "desfazer" logo depois de pagar uma fatura: volta as compras para "a pagar".
+  if (isUndo && lastInvoicePayment && Date.now() - lastInvoicePayment.at < 60 * 60 * 1000) {
+    const { ids } = lastInvoicePayment;
+    lastInvoicePayment = null;
+    await prisma.financeEntry.updateMany({ where: { id: { in: ids } }, data: { status: "pending" } });
+    return `↩️ Pronto, a fatura voltou para "a pagar" (${ids.length} compras).`;
+  }
 
   const entries = await lastSavedEntries();
   if (entries.length === 0) {
@@ -1136,7 +1188,10 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   });
 
   const paymentReply =
-    (await applyUndoOrEdit(joinedText)) ?? (await applySavingsReply(joinedText, conv?.messages)) ?? (await applyPaymentReply(joinedText, config));
+    (await applyUndoOrEdit(joinedText)) ??
+    (await applyInvoicePayment(joinedText)) ??
+    (await applySavingsReply(joinedText, conv?.messages)) ??
+    (await applyPaymentReply(joinedText, config));
   if (paymentReply) {
     if (!conv) {
       conv = await prisma.conversation.create({
@@ -1217,6 +1272,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         const today = cardPurchaseDate;
         const compraEm = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
         lastSaved = { since: new Date() };
+        lastInvoicePayment = null;
         await saveStatementEntries(
           config,
           [
@@ -1303,6 +1359,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           }
 
           lastSaved = { since: new Date() };
+          lastInvoicePayment = null;
           const created = await prisma.financeEntry.create({
             data: {
               type: route.financeType,

@@ -1027,7 +1027,7 @@ export default function FinancePage() {
         <GoalsSection />
 
         {/* Faturas de Cartão de Crédito */}
-        <CreditCardsSection />
+        <CreditCardsSection onPaid={load} />
 
         {/* Charts */}
         <div style={{ display: "grid", gap: 12, marginBottom: 12 }} className="grid-cols-1 lg:grid-cols-[1fr_1.4fr]">
