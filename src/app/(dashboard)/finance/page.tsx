@@ -88,6 +88,11 @@ const MOOD_MAP = new Map(MOODS.map(m => [m.key, m]));
 // Categoria/subcategoria padrão: a mesma lista usada pela IA (WhatsApp/fatura).
 const DEFAULT_TAXONOMY = FINANCE_TAXONOMY_DATA;
 
+/** Conta de vale (VR, ticket, vale-alimentação): gasto nela é forma "ticket", nunca cartão de crédito. */
+function isVoucherAccount(account: string): boolean {
+  return /ticket|\bvr\b|vale/i.test(account);
+}
+
 function categoriesForType(type: string): string[] {
   return Object.keys(DEFAULT_TAXONOMY[type === "income" ? "income" : "expense"]);
 }
@@ -684,7 +689,7 @@ function CategoryManager({
 
 export default function FinancePage() {
   const [month, setMonth] = useState(currentMonth());
-  const [selectedAccount, setSelectedAccount] = useState<string>("Principal");
+  const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<"income" | "expense" | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedCategoryMatch, setSelectedCategoryMatch] = useState<string[]>([]);
@@ -957,10 +962,11 @@ export default function FinancePage() {
               onChange={(e) => setSelectedAccount(e.target.value)}
               style={{ width: "auto", minWidth: 160, maxWidth: 220, padding: "6px 12px" }}
             >
+              <option value="all">📊 Todas as contas</option>
               <option value="Principal">🏦 Conta Principal</option>
               {allAccounts.filter(a => a !== "Principal" && a !== "all").map(acc => (
                 <option key={acc} value={acc}>
-                  {acc.toLowerCase().includes("ticket") ? "🍔 " : "🏦 "}{acc}
+                  {isVoucherAccount(acc) ? "🍔 " : "🏦 "}{acc}
                 </option>
               ))}
             </select>
@@ -1137,7 +1143,7 @@ export default function FinancePage() {
                       setForm((f) => ({
                         ...f,
                         account,
-                        paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                        paymentMethod: isVoucherAccount(account) ? "ticket" : f.paymentMethod
                       }));
                     }
                   }}
@@ -1157,7 +1163,7 @@ export default function FinancePage() {
                       setForm((f) => ({
                         ...f,
                         account,
-                        paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                        paymentMethod: isVoucherAccount(account) ? "ticket" : f.paymentMethod
                       }));
                     }}
                     placeholder="Nome da conta..."
@@ -1267,8 +1273,8 @@ export default function FinancePage() {
               <select 
                 value={form.paymentMethod} 
                 onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}
-                disabled={form.account.toLowerCase().includes("ticket")}
-                title={form.account.toLowerCase().includes("ticket") ? "Tickets só aceitam formato de Cartão" : undefined}
+                disabled={isVoucherAccount(form.account)}
+                title={isVoucherAccount(form.account) ? "Conta de vale (VR) só aceita a forma VR / Ticket" : undefined}
               >
                 <option value="pix">Pix</option>
                 <option value="cartão">Cartão</option>
@@ -1478,7 +1484,7 @@ export default function FinancePage() {
                                     setEditForm((f) => ({
                                       ...f,
                                       account,
-                                      paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                                      paymentMethod: isVoucherAccount(account) ? "ticket" : f.paymentMethod
                                     }));
                                   }
                                 }}
@@ -1498,7 +1504,7 @@ export default function FinancePage() {
                                     setEditForm((f) => ({
                                       ...f,
                                       account,
-                                      paymentMethod: account.toLowerCase().includes("ticket") ? "cartão" : f.paymentMethod
+                                      paymentMethod: isVoucherAccount(account) ? "ticket" : f.paymentMethod
                                     }));
                                   }}
                                   style={{ width: 80, padding: "8px 6px" }}
@@ -1516,14 +1522,15 @@ export default function FinancePage() {
                               value={editForm.paymentMethod} 
                               onChange={(ev) => setEditForm((f) => ({ ...f, paymentMethod: ev.target.value }))} 
                               style={{ width: 90, padding: "8px 6px" }}
-                              disabled={editForm.account.toLowerCase().includes("ticket")}
-                              title={editForm.account.toLowerCase().includes("ticket") ? "Tickets só aceitam formato de Cartão" : undefined}
+                              disabled={isVoucherAccount(editForm.account)}
+                              title={isVoucherAccount(editForm.account) ? "Conta de vale (VR) só aceita a forma VR / Ticket" : undefined}
                             >
                               <option value="pix">Pix</option>
                               <option value="cartão">Cartão</option>
                               <option value="débito">Débito</option>
                               <option value="boleto">Boleto</option>
                               <option value="dinheiro">Dinheiro</option>
+                              <option value="ticket">VR / Ticket</option>
                             </select>
                           </td>
                           <td style={{ padding: "6px 8px" }}>

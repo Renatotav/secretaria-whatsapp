@@ -4,7 +4,7 @@ import { taxonomyPrompt } from "./finance-taxonomy";
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
 const FINANCE_TAXONOMY = taxonomyPrompt();
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart" | "bills_due" | "budget_status";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart" | "bills_due" | "budget_status" | "vr_balance";
 
 export type PersonalRouteResult =
   | {
@@ -36,7 +36,7 @@ export type PersonalRouteResult =
       purchaseDate: string | null;
       /** Fatura/data de pagamento que ele disse EXPLICITAMENTE; passa por cima da regra do melhor dia. */
       billDate: string | null;
-      paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro";
+      paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro" | "ticket";
       account: string;
       status: "paid" | "pending";
       mood?: string;
@@ -116,6 +116,7 @@ Tipos:
    Ex: "O que tenho pendente hoje?" → pending_today
    Ex: "Quais chamados estão abertos?" → open_tickets
    Ex: "Quanto gastei esse mês?" → finance_summary
+   Ex: "Quanto tenho no VR?", "Saldo do vale?", "Quanto sobrou no ticket?" → vr_balance
    Ex: "Como está meu orçamento?", "Estou dentro do teto?", "Como estão meus limites?" → budget_status
    Ex: "O que falta pagar?", "Quais contas tenho pra pagar?", "O que vence essa semana?", "Tem conta atrasada?" → bills_due
        (contas/boletos/fatura a PAGAR; "o que tenho pendente hoje?" sem falar de conta continua pending_today)
@@ -155,6 +156,8 @@ Tipos:
      3) Lançamentos futuros/pendentes no Pix (ex: Aluguel a pagar) MANTÊM "pix", JAMAIS convertem para cartão.
      4) SOMENTE compras no Cartão de Crédito ou parceladas no cartão usam "cartão".
      4b) Cartão de débito / "no débito" = "débito" (sai na hora, status "paid", NÃO é cartão de crédito).
+     4c) Pago no VR / vale / vale-refeição / vale-alimentação / ticket / "Multi" = paymentMethod "ticket",
+         account "VR", status "paid" (é o cartão de benefício, NÃO é cartão de crédito).
      5) DATA DE COMPRA NO CARTÃO: a fatura vence todo dia ${creditCardDueDay}. Compra feita
         ANTES do dia ${creditCardBestDay} cai na fatura que vence no dia ${creditCardDueDay} do
         mesmo mês; compra a partir do dia ${creditCardBestDay} cai na fatura do mês seguinte.
@@ -202,7 +205,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart|bills_due|budget_status",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart|bills_due|budget_status|vr_balance",
   "chartKind": "categories|income_expense|category|goals",
   "financeType": "income|expense",
   "amount": 0,
@@ -214,8 +217,8 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "purchaseDate": "ISO8601 da data real em que a compra foi feita, ou null",
   "billDate": "YYYY-MM-DD da fatura/pagamento que ele disse explicitamente, ou null",
   "newPurchaseDate": "ISO8601 (YYYY-MM-DD) para finance_update_date",
-  "paymentMethod": "cartão|pix|débito|boleto|dinheiro",
-  "account": "Principal|Ticket Alimentação",
+  "paymentMethod": "cartão|pix|débito|boleto|dinheiro|ticket",
+  "account": "Principal|VR",
   "status": "paid|pending",
   "mood": "pessimo|ruim|neutro|bom|otimo",
   "diaryContent": "<texto>",
@@ -244,7 +247,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     if (parsed.type === "finance") {
       const installmentsNum = Number(parsed.installments);
       const status = parsed.status === "pending" ? "pending" : "paid";
-      let paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
+      let paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
 
       return {
         type: "finance",
@@ -258,8 +261,9 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         purchaseDate: (parsed.purchaseDate as string) || (parsed.financePurchaseDate as string) || null,
         billDate: typeof parsed.billDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(parsed.billDate) ? parsed.billDate.slice(0, 10) : null,
         paymentMethod,
-        account: (parsed.account as string) || "Principal",
-        status,
+        // VR/ticket: conta do vale, já sai na hora.
+        account: paymentMethod === "ticket" ? "VR" : (parsed.account as string) || "Principal",
+        status: paymentMethod === "ticket" ? "paid" : status,
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
       };
     }
@@ -334,6 +338,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "chart",
         "bills_due",
         "budget_status",
+        "vr_balance",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)
@@ -421,7 +426,7 @@ Para cada transação, identifique:
 - category e subcategory: ${FINANCE_TAXONOMY}
   Se não der pra inferir a subcategoria, deixe vazio.
 - paymentMethod: OBRIGATÓRIO. Se for extrato/fatura de cartão de crédito, retorne "cartão" para todas as linhas. Se for extrato de conta corrente, tente inferir ("pix", "boleto", "dinheiro" ou "cartão" se for compra no débito). Se não souber, retorne "pix".
-- account: OBRIGATÓRIO. Tente inferir a conta ("Principal" ou "Ticket Alimentação"). Faturas de cartão e extratos bancários normais são "Principal". Ticket, Vale, Sodexo, VR, VA são "Ticket Alimentação".
+- account: OBRIGATÓRIO. Tente inferir a conta ("Principal" ou "VR"). Faturas de cartão e extratos bancários normais são "Principal". Ticket, Vale, Sodexo, VR, VA são "VR".
 
 Ignore linhas que não são transações (cabeçalho, total, limite, juros, texto
 institucional). Se não conseguir identificar nenhuma transação real, retorne
@@ -596,7 +601,7 @@ Metadados:
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
 ${FINANCE_TAXONOMY}
 - paymentMethod: descubra a forma de pagamento ("cartão", "débito", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". "DEBITO", "Cartão de Débito", "TEF Débito" → use "débito". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". Se a nota NÃO mostrar a forma de pagamento, retorne "" (vazio) — não chute.
-- account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "Ticket Alimentação" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
+- account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "VR" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
 - status: REGRA ABSOLUTA: cartão de crédito ("cartão", TEF Rotativo, Credito Rotativo) = SEMPRE "pending" (nunca paid). pix, dinheiro, débito, ticket = "paid".
 
 Itens (produtos/serviços):

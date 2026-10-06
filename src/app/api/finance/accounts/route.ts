@@ -14,16 +14,15 @@ export const GET = withErrorHandling(async (request: Request) => {
     distinct: ["account"],
   });
 
-  const uniqueAccounts = new Set<string>();
+  // Mantém o nome como foi escrito ("VR" não vira "Vr"); repetidos que só
+  // mudam maiúscula/minúscula aparecem uma vez.
+  const byLower = new Map<string, string>();
   for (const a of accountsData) {
-    if (a.account) {
-      const trimmed = a.account.trim();
-      const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
-      uniqueAccounts.add(capitalized);
-    }
+    const trimmed = a.account?.trim();
+    if (trimmed && !byLower.has(trimmed.toLowerCase())) byLower.set(trimmed.toLowerCase(), trimmed);
   }
 
-  const accounts = Array.from(uniqueAccounts).sort();
+  const accounts = Array.from(byLower.values()).sort();
 
   return NextResponse.json(accounts);
 });

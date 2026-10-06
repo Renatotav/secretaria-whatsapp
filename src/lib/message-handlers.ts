@@ -615,6 +615,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
 🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 80%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa quando passar de 80%.
+🍔 VR (vale): "gastei 45 no almoço no VR" lança na conta do VR; "quanto tenho no VR?" mostra o saldo e quanto dá pra gastar por dia.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
@@ -656,6 +657,26 @@ Regras:
   } catch {
     return "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
   }
+}
+
+/**
+ * "Quanto tenho no VR?": créditos recebidos − gastos pagos na conta do vale
+ * (contas com "VR", "ticket" ou "vale" no nome), e o gasto diário possível
+ * até o próximo crédito previsto.
+ */
+async function buildVrBalance(): Promise<string> {
+  const isVoucher = { OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) };
+  const paid = await prisma.financeEntry.findMany({ where: { ...isVoucher, status: "paid" }, select: { type: true, amount: true } });
+  if (paid.length === 0) return "🍔 Ainda não tem nada lançado no VR. Quando o crédito cair, me diga \"caiu 715 no VR\".";
+  const balance = paid.reduce((s, e) => s + (e.type === "income" ? e.amount : -e.amount), 0);
+  const next = await prisma.financeEntry.findFirst({ where: { ...isVoucher, type: "income", status: "pending" }, orderBy: { date: "asc" } });
+  const lines = [`🍔 *Saldo do VR:* ${brl(balance)}`];
+  if (next) {
+    const days = Math.max(1, Math.ceil((next.date.getTime() - todayBRT().getTime()) / 86400000));
+    lines.push(`📅 Próximo crédito previsto: ${brl(next.amount)} em ${formatDayMonth(next.date)}`);
+    lines.push(`🍽️ Dá pra gastar até ${brl(Math.max(0, balance) / days)} por dia até lá.`);
+  }
+  return lines.join("\n");
 }
 
 /** Tetos do mês (o do mês específico vale mais que o "default") e o gasto de cada categoria. */
@@ -791,6 +812,7 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
   if (intent === "bills_due") return buildBillsDue("query");
   if (intent === "budget_status") return buildBudgetResponse();
+  if (intent === "vr_balance") return buildVrBalance();
   if (intent === "subscriptions") return buildSubscriptionsResponse();
   if (intent === "month_diagnosis") return buildMonthDiagnosis();
 
@@ -870,14 +892,14 @@ const PAYMENT_REPLY_WINDOW_MS = 60 * 60 * 1000;
 // A mensagem cita uma data, um mês ou a fatura? Só assim a fatura que a IA
 // extraiu ("billDate") passa por cima da regra do melhor dia.
 const BILL_STATED_RE = /\d{1,2}\/\d{1,2}|\bfatura\b|\bvencimento\b|\b(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i;
-const PAYMENT_STATED_RE = /\b(pix|d[ée]bito|dinheiro|esp[ée]cie|boleto|cart[ãa]o|cr[ée]dito|ticket|vale)\b/i;
+const PAYMENT_STATED_RE = /\b(pix|d[ée]bito|dinheiro|esp[ée]cie|boleto|cart[ãa]o|cr[ée]dito|ticket|vale|vr|va|multi)\b/i;
 
 function formatDayMonth(d: Date): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 const formatFullDate = (d: Date) => `${formatDayMonth(d)}/${d.getFullYear()}`;
-const PAYMENT_NAMES: Record<string, string> = { "cartão": "Cartão", pix: "Pix", "débito": "Débito", boleto: "Boleto", dinheiro: "Dinheiro", ticket: "Ticket" };
+const PAYMENT_NAMES: Record<string, string> = { "cartão": "Cartão", pix: "Pix", "débito": "Débito", boleto: "Boleto", dinheiro: "Dinheiro", ticket: "VR" };
 
 /**
  * Cartão padronizado de um lançamento, montado pelo código (não pela IA) —
@@ -2212,7 +2234,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
 
   if (readMethod === "ticket" || (invoice.account || "").toLowerCase().includes("ticket")) {
     paymentMethod = "ticket";
-    account = "Ticket Alimentação";
+    account = "VR";
   } else if (/d[ée]bito/.test(readMethod)) {
     paymentMethod = "débito";
   } else if (/pix|dinheiro|esp[ée]cie|boleto/.test(readMethod)) {
