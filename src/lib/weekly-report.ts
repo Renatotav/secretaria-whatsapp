@@ -33,8 +33,10 @@ export async function generateWeeklyReport(
   // inventava chamados/equipe/gastos). A IA só faz o comentário do fim.
   const { buildWeeklyDigest } = await import("./message-handlers");
   const { text: content } = await buildWeeklyDigest(providerOpts);
+  // Compras FEITAS na semana (pela data da compra — no cartão, "date" é a fatura).
+  const weekRange = { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") };
   const finances = await prisma.financeEntry.findMany({
-    where: { date: { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") } },
+    where: { OR: [{ purchaseDate: weekRange }, { purchaseDate: null, date: weekRange }] },
     orderBy: { date: "asc" },
   });
 
@@ -78,7 +80,7 @@ export async function generateWeeklyReport(
 
     if (badExpenses.length > 0 && badExpenses[0].amount >= 30) {
       const worst = badExpenses[0];
-      const dStr = worst.date.toLocaleDateString("pt-BR", { weekday: 'long' });
+      const dStr = (worst.purchaseDate ?? worst.date).toLocaleDateString("pt-BR", { weekday: 'long' });
       const regretMsg = `\n🤔 *PS (Reflexão):* ${/^(s[áa]bado|domingo)/i.test(dStr) ? "No" : "Na"} ${dStr}, você gastou R$ ${worst.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} com ${worst.category} (${worst.subcategory || worst.description}).\nHoje, de cabeça fria, valeu a pena ou bateu arrependimento? Responda a essa mensagem para eu guardar no seu Diário!`;
       
       await sendWhatsAppMessage(
