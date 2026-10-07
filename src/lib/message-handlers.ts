@@ -611,6 +611,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
 // conversa ("o que você faz?", "como vejo X?") — ao criar função nova, inclua aqui.
 const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gastei 45 no mercado", "recebi 3000 de salário", "comprei um celular de 291 em 17x".
   Depois do gasto ela pergunta o meio de pagamento: responder "2" pix, "3" débito, "4" dinheiro. Para mudar a data da compra, responder só o dia ("15/08").
+📸 Qualquer print (pedido do Mercado Livre, comprovante de Pix, recibo, estorno...): ela entende o que é, mostra o lançamento e pergunta "sim/não" antes de salvar. Nota fiscal e fatura ela reconhece sozinha.
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
 💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
@@ -1215,6 +1216,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   });
 
   const paymentReply =
+    (await applyImageDraftReply(joinedText, config)) ??
     (await applyUndoOrEdit(joinedText)) ??
     (await applyInvoicePayment(joinedText)) ??
     (await applySavingsReply(joinedText, conv?.messages)) ??
@@ -2143,6 +2145,104 @@ async function applyStatementChoice(text: string, config: AgentConfig): Promise<
  * — usado quando o PDF não tem texto extraível ou quando o usuário manda a
  * imagem direto.
  */
+// Print de compra/estorno esperando o "sim" dele para ser gravado.
+let pendingImageDraft: { reading: import("./personal-router").ImageReading; at: number } | null = null;
+const CONFIRM_YES_RE = /^(sim|s|isso|pode|pode sim|pode salvar|confirma|confirmo|ok|salva|lança|lanca)[.!]*$/i;
+const CONFIRM_NO_RE = /^(n[aã]o|nao|cancela|deixa|esquece)[.!]*$/i;
+
+/**
+ * Print sem legenda: a IA diz o que é. Nota fiscal e fatura vão para os
+ * leitores próprios; compra/comprovante e estorno viram um cartão com
+ * "Confirma?" (nada é gravado sem o "sim"); outra coisa é explicada.
+ */
+export async function handleSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config || !config.ownerPhone) return;
+  const { readImage } = await import("./personal-router");
+  const reading = await readImage(base64, mimetype, getProviderOpts(config), caption, todayBRT().toISOString().slice(0, 10));
+  console.log(`[image] print classificado como ${reading.kind}`);
+
+  if (reading.kind === "nota_fiscal") return handleInvoiceImage(base64, mimetype, caption);
+  if (reading.kind === "fatura") return handleStatementImage(base64, mimetype);
+
+  if ((reading.kind === "compra" || reading.kind === "estorno") && reading.amount > 0) {
+    pendingImageDraft = { reading, at: Date.now() };
+    const draft = imageDraftEntry(reading, config);
+    const parcels = reading.installments ? `\n🔢 ${reading.installments}× de ${brl(reading.amount / reading.installments)}` : "";
+    await notifyOwner(
+      config,
+      `📸 ${reading.summary || "Entendi o print."}\n\n${entryCard(draft, reading.kind === "estorno" ? "↩️ Lançar este estorno?" : "🧐 Lançar esta compra?")}${parcels}\n\nResponda *sim* para salvar ou *não* para descartar. Se algo estiver errado, salve e depois corrija (ex: "na verdade foi 230").`
+    );
+    return;
+  }
+
+  await notifyOwner(
+    config,
+    `📸 ${reading.summary || "Não consegui entender bem esse print."}${reading.suggestion ? `\n💡 ${reading.suggestion}` : ""}\n\nSe for uma compra, manda de novo com a legenda *compra*; se for fatura, com *fatura*.`
+  );
+}
+
+/** Lançamento que o print vira (sem gravar): data/fatura e status pelo meio de pagamento. */
+function imageDraftEntry(r: import("./personal-router").ImageReading, config: AgentConfig) {
+  const purchase = r.date ? parseLocalDate(r.date) : todayBRT();
+  const isCard = r.paymentMethod === "cartão";
+  const date = isCard ? creditCardBillDate(purchase, config.creditCardDueDay || 10, config.creditCardBestDay || 5) : purchase;
+  return {
+    description: r.description || (r.kind === "estorno" ? "Estorno" : "Compra"),
+    category: r.kind === "estorno" ? "Outros" : r.category,
+    subcategory: r.kind === "estorno" ? "Reembolso" : r.subcategory,
+    amount: r.amount,
+    type: r.kind === "estorno" ? "income" : "expense",
+    paymentMethod: r.paymentMethod,
+    status: isCard ? "pending" : "paid",
+    date,
+    purchaseDate: purchase,
+    account: r.paymentMethod === "ticket" ? "VR" : "Principal",
+  };
+}
+
+/** "sim"/"não" depois do cartão do print. Devolve a resposta, ou null se não for o caso. */
+async function applyImageDraftReply(text: string, config: AgentConfig): Promise<string | null> {
+  if (!pendingImageDraft) return null;
+  if (Date.now() - pendingImageDraft.at > 30 * 60 * 1000) {
+    pendingImageDraft = null;
+    return null;
+  }
+  const t = text.trim();
+  if (CONFIRM_NO_RE.test(t)) {
+    pendingImageDraft = null;
+    return "👍 Ok, não lancei o print.";
+  }
+  if (!CONFIRM_YES_RE.test(t)) return null;
+  const { reading } = pendingImageDraft;
+  pendingImageDraft = null;
+  const d = imageDraftEntry(reading, config);
+  lastSaved = { since: new Date() };
+  lastInvoicePayment = null;
+
+  if (reading.installments && d.type === "expense" && d.paymentMethod === "cartão") {
+    const compraEm = `${String(d.purchaseDate.getDate()).padStart(2, "0")}/${String(d.purchaseDate.getMonth() + 1).padStart(2, "0")}`;
+    await saveStatementEntries(config, [{
+      date: d.date.toISOString(),
+      purchaseDate: d.purchaseDate.toISOString(),
+      description: `${d.description} - Parcela 1/${reading.installments} (compra em ${compraEm})`,
+      amount: Math.round((d.amount / reading.installments) * 100) / 100,
+      type: "expense",
+      category: d.category,
+      subcategory: d.subcategory,
+      paymentMethod: "cartão",
+      account: d.account,
+      status: "pending",
+    }], "o print");
+    return `↩️ Se algo saiu errado, responda *desfazer*.`;
+  }
+
+  const created = await prisma.financeEntry.create({
+    data: { ...d, source: "whatsapp" },
+  });
+  return `${entryCard(created)}\n\n${UNDO_HINT}`;
+}
+
 export async function handleStatementImage(base64: string, mimetype: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;

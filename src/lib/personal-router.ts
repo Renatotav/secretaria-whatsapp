@@ -641,3 +641,70 @@ Formato esperado:
     return null;
   }
 }
+
+export interface ImageReading {
+  kind: "nota_fiscal" | "fatura" | "compra" | "estorno" | "outro";
+  /** O que é a imagem, em uma frase (ex: "Pedido do Mercado Livre: baú traseiro, pago no Pix"). */
+  summary: string;
+  description: string;
+  amount: number;
+  date: string | null;
+  paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro" | "ticket";
+  installments: number | null;
+  category: string;
+  subcategory: string;
+  /** Para "outro": o que ele pode fazer com isso (ou ""). */
+  suggestion: string;
+}
+
+/**
+ * Print qualquer mandado no WhatsApp: a IA olha e diz o que é. Nota fiscal e
+ * fatura seguem os leitores próprios; compra/comprovante e estorno viram um
+ * lançamento que só é gravado depois do "sim" dele; o resto é explicado.
+ */
+export async function readImage(
+  base64: string,
+  mimetype: string,
+  providerOpts: ProviderOptions,
+  caption: string,
+  today: string
+): Promise<ImageReading> {
+  const systemPrompt = `Você é a secretária financeira do dono. Ele mandou um PRINT/FOTO no WhatsApp${caption ? ` com a legenda "${caption}"` : ""}. Hoje é ${today}.
+Classifique a imagem em "kind":
+- "nota_fiscal": cupom/nota fiscal de supermercado ou loja com lista de itens.
+- "fatura": fatura de cartão de crédito ou extrato bancário com VÁRIAS transações.
+- "compra": UMA compra/pagamento — pedido de loja (Mercado Livre, Amazon, iFood...), comprovante de Pix, recibo, boleto pago.
+  Se o pedido tiver reembolso/cancelamento parcial, a compra é o TOTAL PAGO (o reembolso é outro lançamento).
+- "estorno": a imagem é principalmente sobre um reembolso/estorno/devolução de dinheiro.
+- "outro": qualquer outra coisa (saldo de app, tela de banco sem transação, conversa, propaganda...).
+Para "compra"/"estorno", extraia: description (curta: loja + o que foi, ex: "Mercado Livre — baú traseiro"), amount (valor TOTAL efetivamente pago, ou o valor do reembolso), date (YYYY-MM-DD do pagamento; null se não aparecer), paymentMethod ("cartão" = crédito, "pix", "débito", "boleto", "dinheiro", "ticket" = VR/vale), installments (nº de parcelas se parcelado no cartão, senão null), category e subcategory desta lista:
+${taxonomyPrompt()}
+(Estorno: category "Outros", subcategory "Reembolso".)
+"summary": uma frase em português simples dizendo o que você viu, com o valor.
+"suggestion": só para "outro" — o que ele pode fazer com isso na secretária (ou "" se nada).
+Não invente valores que não estão na imagem.
+Retorne APENAS JSON: { "kind": "...", "summary": "...", "description": "...", "amount": 0, "date": null, "paymentMethod": "pix", "installments": null, "category": "...", "subcategory": "...", "suggestion": "" }`;
+
+  const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
+  try {
+    const json = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] ?? content) as Record<string, unknown>;
+    const kinds = ["nota_fiscal", "fatura", "compra", "estorno", "outro"];
+    const methods = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"];
+    const installments = Number(json.installments);
+    return {
+      kind: kinds.includes(json.kind as string) ? (json.kind as ImageReading["kind"]) : "outro",
+      summary: typeof json.summary === "string" ? json.summary : "",
+      description: typeof json.description === "string" ? json.description.slice(0, 150) : "",
+      amount: Math.abs(Number(json.amount)) || 0,
+      date: typeof json.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(json.date) ? json.date.slice(0, 10) : null,
+      paymentMethod: methods.includes(json.paymentMethod as string) ? (json.paymentMethod as ImageReading["paymentMethod"]) : "pix",
+      installments: Number.isFinite(installments) && installments > 1 ? installments : null,
+      category: typeof json.category === "string" && json.category ? json.category : "Outros",
+      subcategory: typeof json.subcategory === "string" ? json.subcategory : "",
+      suggestion: typeof json.suggestion === "string" ? json.suggestion : "",
+    };
+  } catch {
+    console.error("[image] resposta da IA não é JSON:", content.slice(0, 300));
+    return { kind: "outro", summary: "", description: "", amount: 0, date: null, paymentMethod: "pix", installments: null, category: "Outros", subcategory: "", suggestion: "" };
+  }
+}

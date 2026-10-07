@@ -12,6 +12,7 @@ import {
   handleStatementDocument,
   askPdfPassword,
   handleStatementImage,
+  handleSmartImage,
   handleInvoiceImage,
   notifyOwner,
 } from "@/lib/message-handlers";
@@ -118,10 +119,14 @@ export async function POST(request: Request) {
       try {
         const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "imageMessage", "image/jpeg");
         if (base64) {
-          if (isInvoice) {
+          // Legenda manda; sem legenda, a IA olha o print e decide (antes
+          // tudo ia para o leitor de fatura e já era gravado).
+          if (isStatement) {
+            await handleStatementImage(base64, mimetype);
+          } else if (isInvoice) {
             await handleInvoiceImage(base64, mimetype, caption);
           } else {
-            await handleStatementImage(base64, mimetype);
+            await handleSmartImage(base64, mimetype, caption);
           }
         } else {
           console.log("[webhook] imagem sem base64 disponível, avisando");
