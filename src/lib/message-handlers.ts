@@ -1259,7 +1259,10 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           category: route.category,
           title: route.title,
           description: route.description,
-          dueDate: route.dueDate ? new Date(route.dueDate) : null,
+          // Data/hora sem fuso vinda da IA é horário de Brasília (o servidor roda em UTC).
+          dueDate: route.dueDate
+            ? new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(route.dueDate) || !route.dueDate.includes("T") ? route.dueDate : `${route.dueDate}-03:00`)
+            : null,
           rawMessage: joinedText,
         },
       });

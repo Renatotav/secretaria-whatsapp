@@ -1,7 +1,7 @@
 import { prisma } from "./prisma";
 import { generateDailySummary } from "./summarizer";
 import { generateWeeklyReport } from "./weekly-report";
-import { checkPendingReminders } from "./reminder";
+import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
 import { buildMonthClosing, sendMonthChart, buildBillsDue } from "./message-handlers";
@@ -123,6 +123,9 @@ export function startScheduler(): void {
           console.error("Erro ao enviar fechamento do mês:", err);
         }
       }
+
+      // Lembretes pessoais com data/hora: confere a cada ciclo.
+      await checkDueReminders(config.ownerPhone, evolutionConfig);
 
       // Hourly reminders
       if (currentHour !== lastReminderHour) {
