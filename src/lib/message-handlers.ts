@@ -565,7 +565,9 @@ async function buildMonthDiagnosis(): Promise<string> {
   const dailyByCat = daily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount), acc), {});
   const prevDaily = prevEntries.filter((e) => !isInstallment(e.description) && !isRecurring({ description: e.description, category: e.category }));
   const monthsWithData = new Set(prevEntries.map((e) => `${e.date.getFullYear()}-${e.date.getMonth()}`)).size;
-  const prevAvg = monthsWithData === 0 ? {} : prevDaily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount / monthsWithData), acc), {});
+  // Só compara com média de pelo menos 2 meses: com 1 mês só (ex: o primeiro
+  // mês de uso) qualquer gasto normal parecia "fora do normal".
+  const prevAvg = monthsWithData < 2 ? {} : prevDaily.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount / monthsWithData), acc), {});
   const anomalies = Object.entries(dailyByCat)
     .filter(([cat, v]) => (prevAvg[cat] || 0) > 0 && v > prevAvg[cat] * 1.5 && v - prevAvg[cat] > 100)
     .map(([cat, v]) => `• ${cat}: ${brl(v)} (média ${brl(prevAvg[cat])})`);
@@ -2047,7 +2049,9 @@ export async function projectAndInsertFinanceEntries(
 
   for (const e of entries) {
     const baseDate = parseLocalDate(e.date);
-    const info = parseInstallmentInfo(e.description, baseDate);
+    // Sem "(compra em ..)" na descrição (fatura), usa a data real da compra —
+    // antes caía no vencimento e as parcelas futuras saíam "(compra em 10/10)".
+    const info = parseInstallmentInfo(e.description, e.purchaseDate ? parseLocalDate(e.purchaseDate) : baseDate);
 
     if (info) {
       candidates.push({
