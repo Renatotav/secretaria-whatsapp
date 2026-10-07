@@ -744,10 +744,30 @@ const budgetIcon = (pct: number) => (pct >= 100 ? "🔴" : pct >= 70 ? "🟡" : 
  * planejado); gasto fora do teto derruba — é o aviso "antes de dar ruim".
  */
 async function monthForecast(year: number, monthIndex: number) {
-  const t = await monthTotals(year, monthIndex);
+  // Conta corrente (é ela que vira a Reserva no dia 1º): o VR fica de fora,
+  // exceto para pagar a comida que ainda vem pelo teto de Alimentação.
+  const isVoucher = (account: string) => /vr|ticket|vale/i.test(account);
+  const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+  const entries = await prisma.financeEntry.findMany({
+    where: { date: { gte: new Date(year, monthIndex, 1), lte: monthEnd } },
+    select: { type: true, amount: true, account: true },
+  });
+  let checking = 0;
+  for (const e of entries) if (!isVoucher(e.account)) checking += e.type === "income" ? e.amount : -e.amount;
+  const vrEntries = await prisma.financeEntry.findMany({
+    where: { date: { lte: monthEnd }, OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
+    select: { type: true, amount: true },
+  });
+  const vrAvailable = Math.max(0, vrEntries.reduce((sum, e) => sum + (e.type === "income" ? e.amount : -e.amount), 0));
   const { items } = await budgetStatus(year, monthIndex);
-  const stillPlanned = items.reduce((sum, b) => sum + Math.max(0, b.limit - b.spent), 0);
-  return t.income - t.expense - stillPlanned;
+  let stillFood = 0;
+  let stillOther = 0;
+  for (const b of items) {
+    const rest = Math.max(0, b.limit - b.spent);
+    if (b.category === "Alimentação") stillFood += rest;
+    else stillOther += rest;
+  }
+  return checking - stillOther - Math.max(0, stillFood - vrAvailable);
 }
 
 // ── Lista de desejos ────────────────────────────────────────────────────
