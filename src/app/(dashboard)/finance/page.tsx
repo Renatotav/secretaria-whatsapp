@@ -8,6 +8,7 @@ import { CreditCardsSection } from "./CreditCardsSection";
 import { InsightsModal } from "./InsightsModal";
 import { InvoiceDrawer } from "./InvoiceDrawer";
 import { FINANCE_TAXONOMY_DATA } from "@/lib/finance-taxonomy";
+import { autoEntryDates } from "@/lib/dates";
 
 interface FinanceEntry {
   id: string;
@@ -87,6 +88,13 @@ const MOOD_MAP = new Map(MOODS.map(m => [m.key, m]));
 
 // Categoria/subcategoria padrão: a mesma lista usada pela IA (WhatsApp/fatura).
 const DEFAULT_TAXONOMY = FINANCE_TAXONOMY_DATA;
+
+/** Título do lançamento: previsto sem nome mostra a subcategoria ("Aluguel (previsto)"), não só "(previsto)". */
+function entryTitle(e: { description: string; subcategory: string; category: string }): string {
+  const isPrevisto = /\(previsto\)/i.test(e.description);
+  const name = e.description.replace(/\s*\(previsto\)/gi, "").trim() || e.subcategory || e.category || "—";
+  return isPrevisto ? `${name} (previsto)` : name;
+}
 
 /** Conta de vale (VR, ticket, vale-alimentação): gasto nela é forma "ticket", nunca cartão de crédito. */
 function isVoucherAccount(account: string): boolean {
@@ -702,6 +710,47 @@ export default function FinancePage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>(EMPTY_FORM);
+  // Fatura e pago/pendente são calculados sozinhos (mesma regra da API); o
+  // status só fica "na mão" se o dono mexer nele.
+  const [cardDays, setCardDays] = useState({ due: 10, best: 5 });
+  const [statusTouched, setStatusTouched] = useState(false);
+  const [editStatusTouched, setEditStatusTouched] = useState(false);
+  const [editOriginal, setEditOriginal] = useState<{ paymentMethod: string; purchaseDate: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => c && setCardDays({ due: c.creditCardDueDay || 10, best: c.creditCardBestDay || 5 }))
+      .catch(() => {});
+  }, []);
+  const isCardForm = form.type === "expense" && form.paymentMethod === "cartão";
+  const formAuto = autoEntryDates(
+    { type: form.type, paymentMethod: form.paymentMethod, date: form.date, purchaseDate: isCardForm ? form.purchaseDate || form.date : form.purchaseDate },
+    cardDays.due,
+    cardDays.best
+  );
+  useEffect(() => {
+    if (!statusTouched && form.status !== formAuto.status) setForm((f) => ({ ...f, status: formAuto.status }));
+  }, [formAuto.status, statusTouched, form.status]);
+  useEffect(() => {
+    // Edição: só recalcula fatura/status quando a forma de pagamento ou a data
+    // da compra mudam (uma fatura ajustada à mão continua como está).
+    if (!editingId || !editOriginal) return;
+    const changed = editForm.paymentMethod !== editOriginal.paymentMethod || editForm.purchaseDate !== editOriginal.purchaseDate;
+    if (!changed) return;
+    const auto = autoEntryDates(
+      { type: editForm.type, paymentMethod: editForm.paymentMethod, date: editForm.date, purchaseDate: editForm.purchaseDate || editForm.date, description: editForm.description },
+      cardDays.due,
+      cardDays.best
+    );
+    const iso = auto.date.toISOString().slice(0, 10);
+    const isCard = editForm.type === "expense" && editForm.paymentMethod === "cartão";
+    setEditForm((f) => ({
+      ...f,
+      ...(isCard && f.date !== iso ? { date: iso } : {}),
+      ...(!editStatusTouched && f.status !== auto.status ? { status: auto.status } : {}),
+    }));
+    setEditOriginal({ paymentMethod: editForm.paymentMethod, purchaseDate: editForm.purchaseDate });
+  }, [editForm.paymentMethod, editForm.purchaseDate, editingId, editOriginal, editStatusTouched, cardDays, editForm.type, editForm.date, editForm.description]);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customSubcategories, setCustomSubcategories] = useState<Record<string, string[]>>({});
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -864,14 +913,18 @@ export default function FinancePage() {
         subcategory: form.subcategory,
         description,
         date: form.date ? new Date(form.date).toISOString() : undefined,
-        purchaseDate: form.purchaseDate ? new Date(form.purchaseDate).toISOString() : undefined,
+        purchaseDate: isCardForm
+          ? new Date(form.purchaseDate || form.date).toISOString()
+          : form.purchaseDate ? new Date(form.purchaseDate).toISOString() : undefined,
         paymentMethod: form.paymentMethod,
         account: form.account,
         status: form.status,
+        statusManual: statusTouched,
         mood: form.mood,
       }),
     });
     setForm(EMPTY_FORM);
+    setStatusTouched(false);
     setSaving(false);
     load();
   }
@@ -898,6 +951,8 @@ export default function FinancePage() {
 
   function startEdit(entry: FinanceEntry) {
     setEditingId(entry.id);
+    setEditStatusTouched(false);
+    setEditOriginal({ paymentMethod: entry.paymentMethod || "pix", purchaseDate: entry.purchaseDate ? entry.purchaseDate.slice(0, 10) : "" });
     setEditForm({
       type: entry.type,
       amount: String(entry.amount),
@@ -929,6 +984,7 @@ export default function FinancePage() {
         paymentMethod: editForm.paymentMethod,
         account: editForm.account,
         status: editForm.status,
+        statusManual: editStatusTouched,
         mood: editForm.mood,
       }),
     });
@@ -1284,20 +1340,23 @@ export default function FinancePage() {
                 <option value="ticket">Ticket / Vale</option>
               </select>
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
-                {form.type === "income" ? "Data (Receb.)" : "Data (Venc.)"}
-              </label>
-              <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
-            </div>
-            {form.type !== "income" && (
+            {isCardForm ? (
               <div>
-                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data (Compra)</label>
-                <input type="date" value={form.purchaseDate} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))} title="Opcional: Data real da compra" />
+                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data da compra</label>
+                <input type="date" value={form.purchaseDate || form.date} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value, date: e.target.value }))} />
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>💳 Fatura: {formAuto.date.toLocaleDateString("pt-BR")}</div>
+              </div>
+            ) : (
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
+                  {form.type === "income" ? "Data (receb.)" : "Data"}
+                </label>
+                <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
               </div>
             )}
             <div>
-              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" }))}>
+              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Status {statusTouched ? "" : "(automático)"}</label>
+              <select value={form.status} onChange={(e) => { setStatusTouched(true); setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" })); }}>
                 <option value="paid">{form.type === "income" ? "Recebido" : "Pago"}</option>
                 <option value="pending">{form.type === "income" ? "A receber" : "Pendente"}</option>
               </select>
@@ -1396,7 +1455,7 @@ export default function FinancePage() {
                       return (
                         <tr key={e.id} className="edit-row" style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
                           <td style={{ padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
-                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Vencimento" />
+                            <input type="date" value={editForm.date} onChange={(ev) => setEditForm((f) => ({ ...f, date: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title={editForm.paymentMethod === "cartão" ? "Fatura (calculada pela data da compra; mude só se a fatura fechou diferente)" : "Data"} />
                             <input type="date" value={editForm.purchaseDate} onChange={(ev) => setEditForm((f) => ({ ...f, purchaseDate: ev.target.value }))} style={{ width: 130, padding: "8px 6px" }} title="Data da Compra" />
                           </td>
                           <td style={{ padding: "6px 8px" }}>
@@ -1534,7 +1593,7 @@ export default function FinancePage() {
                             </select>
                           </td>
                           <td style={{ padding: "6px 8px" }}>
-                            <select value={editForm.status} onChange={(ev) => setEditForm((f) => ({ ...f, status: ev.target.value as "paid" | "pending" }))} style={{ width: 90, padding: "8px 6px" }}>
+                            <select value={editForm.status} onChange={(ev) => { setEditStatusTouched(true); setEditForm((f) => ({ ...f, status: ev.target.value as "paid" | "pending" })); }} style={{ width: 90, padding: "8px 6px" }}>
                               <option value="paid">{editForm.type === "income" ? "Recebido" : "Pago"}</option>
                               <option value="pending">{editForm.type === "income" ? "A receber" : "Pendente"}</option>
                             </select>
@@ -1592,7 +1651,7 @@ export default function FinancePage() {
                           </div>
                         </td>
                         <td className="c-sub" style={{ padding: "8px 8px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{e.subcategory || "—"}</td>
-                        <td className="c-desc" style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 220, overflowWrap: "anywhere", whiteSpace: "normal" }}>{e.description || e.subcategory || e.category || "—"}</td>
+                        <td className="c-desc" style={{ padding: "8px 8px", color: "var(--text-muted)", maxWidth: 220, overflowWrap: "anywhere", whiteSpace: "normal" }}>{entryTitle(e)}</td>
                         <td className="c-acc" style={{ padding: "8px 8px", color: "var(--text-muted)", fontWeight: 500 }}>{e.account || "—"}</td>
                         <td className="c-pay" style={{ padding: "8px 8px", color: "var(--text-muted)", textTransform: "capitalize" }}>
                           {e.paymentMethod || "Pix"}

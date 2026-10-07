@@ -37,3 +37,32 @@ export function creditCardBillDate(purchase: Date, dueDay = 10, bestDay = 5): Da
   const lastDay = new Date(year, month + 1, 0).getDate();
   return new Date(year, month, Math.min(dueDay, lastDay), 12, 0, 0);
 }
+
+/**
+ * Datas e status que o lançamento deve ter, sem o dono escolher:
+ * - cartão de crédito: data = vencimento da fatura da compra (parcela X/Y cai
+ *   X−1 meses depois) e "pendente" até a fatura vencer;
+ * - pix, débito, dinheiro, VR, boleto: data = a informada (ou a da compra) e
+ *   "pago" se já passou, "pendente" se é no futuro (ex: boleto agendado).
+ * Usada pela API (vale para tudo) e pelo painel (mostra antes de salvar).
+ */
+export function autoEntryDates(
+  input: { type: string; paymentMethod: string; date?: string | null; purchaseDate?: string | null; description?: string },
+  dueDay = 10,
+  bestDay = 5
+): { date: Date; purchaseDate: Date | null; status: "paid" | "pending" } {
+  const today = todayBRT();
+  const purchaseStr = input.purchaseDate || input.date;
+  if (input.type === "expense" && input.paymentMethod === "cartão" && purchaseStr) {
+    const purchase = parseLocalDate(purchaseStr);
+    const first = creditCardBillDate(purchase, dueDay, bestDay);
+    const parcel = Number((input.description || "").match(/Parcela (\d+)\/\d+/)?.[1] || 1);
+    const month = first.getMonth() + parcel - 1;
+    const lastDay = new Date(first.getFullYear(), month + 1, 0).getDate();
+    const date = new Date(first.getFullYear(), month, Math.min(dueDay, lastDay), 12, 0, 0);
+    return { date, purchaseDate: purchase, status: date.getTime() >= today.getTime() ? "pending" : "paid" };
+  }
+  const date = parseLocalDate(input.date || purchaseStr);
+  const purchaseDate = input.purchaseDate ? parseLocalDate(input.purchaseDate) : input.type === "expense" ? date : null;
+  return { date, purchaseDate, status: date.getTime() <= today.getTime() ? "paid" : "pending" };
+}

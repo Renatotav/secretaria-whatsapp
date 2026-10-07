@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { parseLocalDate } from "@/lib/dates";
+import { parseLocalDate, autoEntryDates, todayBRT } from "@/lib/dates";
 import { projectAndInsertFinanceEntries } from "@/lib/message-handlers";
 import { autoMarkPaid } from "@/lib/auto-pay";
 
@@ -80,6 +80,15 @@ export const POST = withErrorHandling(async (request: Request) => {
   }
 
   const body = await request.json();
+  // Data da fatura e pago/pendente saem sozinhos (cartão = vencimento da
+  // fatura, "pendente"; pix/débito/etc. = "pago" se já passou). O status
+  // escolhido à mão só vale se o dono mexeu nele (statusManual).
+  const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
+  const auto = autoEntryDates(
+    { type: body.type, paymentMethod: body.paymentMethod || "pix", date: body.date, purchaseDate: body.purchaseDate, description: body.description },
+    config?.creditCardDueDay || 10,
+    config?.creditCardBestDay || 5
+  );
   const entry = await prisma.financeEntry.create({
     data: {
       type: body.type,
@@ -87,12 +96,12 @@ export const POST = withErrorHandling(async (request: Request) => {
       category: body.category?.trim() ?? "",
       subcategory: body.subcategory?.trim() ?? "",
       description: body.description?.trim() ?? "",
-      date: parseLocalDate(body.date),
-      purchaseDate: body.purchaseDate ? parseLocalDate(body.purchaseDate) : null,
+      date: auto.date,
+      purchaseDate: auto.purchaseDate,
       paymentMethod: body.paymentMethod || "pix",
       account: body.account?.trim() || "Principal",
       source: "dashboard",
-      status: body.status || "paid",
+      status: body.statusManual && body.status ? body.status : auto.status,
       mood: body.mood || "neutro",
     },
   });
@@ -131,7 +140,46 @@ export const PATCH = withErrorHandling(async (request: Request) => {
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 
   const body = await request.json();
-  const data: Record<string, unknown> = { ...body };
+  const { statusManual, ...rest } = body as Record<string, unknown>;
+  const data: Record<string, unknown> = { ...rest };
+  const beforeAuto = await prisma.financeEntry.findUnique({ where: { id } });
+
+  // Mudou a forma de pagamento ou a data da compra? Recalcula a fatura (se for
+  // cartão) e o pago/pendente. Mudar só a data da fatura à mão é respeitado
+  // (ex: fatura que fechou antes por feriado).
+  if (beforeAuto) {
+    const day = (v: unknown) => (typeof v === "string" ? v.slice(0, 10) : v instanceof Date ? v.toISOString().slice(0, 10) : "");
+    const method = (data.paymentMethod as string) ?? beforeAuto.paymentMethod;
+    const purchase = data.purchaseDate !== undefined ? (data.purchaseDate as string | null) : beforeAuto.purchaseDate?.toISOString() ?? null;
+    const methodChanged = data.paymentMethod !== undefined && data.paymentMethod !== beforeAuto.paymentMethod;
+    const purchaseChanged = data.purchaseDate !== undefined && day(data.purchaseDate) !== day(beforeAuto.purchaseDate);
+    const dateChanged = data.date !== undefined && day(data.date) !== day(beforeAuto.date);
+    if (methodChanged || purchaseChanged || dateChanged) {
+      const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
+      const type = (data.type as string) ?? beforeAuto.type;
+      const isCard = type === "expense" && method === "cartão";
+      const auto = autoEntryDates(
+        {
+          type,
+          paymentMethod: method,
+          // Cartão com só a data da fatura mudada: mantém a fatura escolhida.
+          date: isCard && !methodChanged && !purchaseChanged ? null : ((data.date as string) ?? beforeAuto.date.toISOString()),
+          purchaseDate: purchase,
+          description: (data.description as string) ?? beforeAuto.description,
+        },
+        config?.creditCardDueDay || 10,
+        config?.creditCardBestDay || 5
+      );
+      if (isCard && !methodChanged && !purchaseChanged) {
+        // Fatura escolhida à mão: pendente até ela vencer.
+        if (!statusManual) data.status = parseLocalDate(data.date as string).getTime() >= todayBRT().getTime() ? "pending" : "paid";
+      } else {
+        data.date = auto.date.toISOString();
+        if (auto.purchaseDate) data.purchaseDate = auto.purchaseDate.toISOString();
+        if (!statusManual) data.status = auto.status;
+      }
+    }
+  }
   if (data.date) data.date = parseLocalDate(data.date as string);
   if (data.purchaseDate) data.purchaseDate = parseLocalDate(data.purchaseDate as string);
   if (data.amount !== undefined) data.amount = Number(data.amount);
