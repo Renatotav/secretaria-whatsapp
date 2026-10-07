@@ -462,7 +462,7 @@ async function simulateFinance(
     if (b) {
       const afterSpent = b.spent + installmentValue;
       burstsBudget = afterSpent > b.limit;
-      budgetLine = `${burstsBudget ? "🔴" : afterSpent / b.limit >= 0.8 ? "🟡" : "🟢"} Teto de ${b.category} em ${MONTH_NAMES[firstBill.getMonth()]}: ${brl(b.spent)} → ${brl(afterSpent)} de ${brl(b.limit)}${burstsBudget ? ` (passa ${brl(afterSpent - b.limit)})` : ""}`;
+      budgetLine = `${burstsBudget ? "🔴" : afterSpent / b.limit >= 0.7 ? "🟡" : "🟢"} Teto de ${b.category} em ${MONTH_NAMES[firstBill.getMonth()]}: ${brl(b.spent)} → ${brl(afterSpent)} de ${brl(b.limit)}${burstsBudget ? ` (passa ${brl(afterSpent - b.limit)})` : ""}`;
     }
   }
 
@@ -655,7 +655,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
 💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
-🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 80%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa quando passar de 80%.
+🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 70%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa a partir de 70% e mostra a previsão do mês (sobra ou falta, e se vai sair da Reserva).
 🍔 VR (vale): "gastei 45 no almoço no VR" lança na conta do VR; "quanto tenho no VR?" mostra o saldo e quanto dá pra gastar por dia.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -735,7 +735,28 @@ async function budgetStatus(year: number, monthIndex: number) {
   return { items, withoutLimit };
 }
 
-const budgetIcon = (pct: number) => (pct >= 100 ? "🔴" : pct >= 80 ? "🟡" : "🟢");
+const budgetIcon = (pct: number) => (pct >= 100 ? "🔴" : pct >= 70 ? "🟡" : "🟢");
+
+/**
+ * Previsão do mês: entra − sai lançado − o que ainda vem pelos tetos (dia a
+ * dia planejado). Gasto dentro do teto não muda a previsão (já estava
+ * planejado); gasto fora do teto derruba — é o aviso "antes de dar ruim".
+ */
+async function monthForecast(year: number, monthIndex: number) {
+  const t = await monthTotals(year, monthIndex);
+  const { items } = await budgetStatus(year, monthIndex);
+  const stillPlanned = items.reduce((sum, b) => sum + Math.max(0, b.limit - b.spent), 0);
+  return t.income - t.expense - stillPlanned;
+}
+
+async function monthForecastLine(year: number, monthIndex: number): Promise<string> {
+  const f = await monthForecast(year, monthIndex);
+  const month = MONTH_NAMES[monthIndex];
+  if (f >= 300) return `\n📊 Previsão de ${month}: sobra ${brl(f)}.`;
+  if (f >= 0) return `\n🟡 Previsão de ${month}: sobra só ${brl(f)} — segura os gastos.`;
+  const reserve = await findReserveGoal();
+  return `\n🔴 Previsão de ${month}: falta ${brl(-f)}${reserve ? ` → vai sair da ${reserve.name} (hoje ${brl(reserve.currentAmount)})` : ""}.`;
+}
 
 /** "Como está meu orçamento?": cada teto com 🟢 <80% · 🟡 80–100% · 🔴 estourou. */
 async function buildBudgetResponse(): Promise<string> {
@@ -764,9 +785,9 @@ async function sendBudgetChart(config: AgentConfig): Promise<void> {
     if (items.length === 0) return;
     const bars = items.map((i) => {
       const pct = (i.spent / i.limit) * 100;
-      return { label: i.category, value: i.spent, compare: i.limit, color: pct >= 100 ? "#e5606a" : pct >= 80 ? "#f2a541" : "#2fb380", valueLabel: `${brl(i.spent)} · ${pct.toFixed(0)}%` };
+      return { label: i.category, value: i.spent, compare: i.limit, color: pct >= 100 ? "#e5606a" : pct >= 70 ? "#f2a541" : "#2fb380", valueLabel: `${brl(i.spent)} · ${pct.toFixed(0)}%` };
     });
-    const png = await barChartPng(`Orçamento de ${MONTH_NAMES[today.getMonth()]}`, "barra = gasto · marca escura = teto", bars, "verde < 80% · amarelo 80–100% · vermelho estourou");
+    const png = await barChartPng(`Orçamento de ${MONTH_NAMES[today.getMonth()]}`, "barra = gasto · marca escura = teto", bars, "verde < 70% · amarelo 70–100% · vermelho estourou");
     const evo = getEvoConfig(config);
     await sendWhatsAppImage(evo.evolutionUrl, evo.evolutionApiKey, evo.instanceId, config.ownerPhone, png.toString("base64"), `🎯 Orçamento — ${MONTH_NAMES[today.getMonth()]}`);
   } catch (err) {
@@ -787,12 +808,12 @@ async function budgetAlertsAfterImport(entries: StatementEntry[]): Promise<strin
     const touched = new Set(entries.filter((e) => (e.date as string)?.startsWith(ym)).map((e) => e.category));
     for (const i of items) {
       const pct = (i.spent / i.limit) * 100;
-      if (touched.has(i.category) && pct >= 80) {
+      if (touched.has(i.category) && pct >= 70) {
         lines.push(`${budgetIcon(pct)} ${i.category} (${MONTH_NAMES[m - 1]}): ${brl(i.spent)} de ${brl(i.limit)} (${pct.toFixed(0)}%)`);
       }
     }
   }
-  return lines.length ? `\n\n🎯 *Tetos no limite:*\n${lines.join("\n")}` : "";
+  return lines.length ? `\n\n🎯 *Tetos chegando no limite:*\n${lines.join("\n")}` : "";
 }
 
 /**
@@ -1494,60 +1515,37 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           }
         }
 
-        // 🎯 Verificar alerta de orçamento se for uma despesa
-        if (route.financeType === "expense") {
-          const mDate = route.date ? parseLocalDate(route.date) : new Date();
-          const monthStr = `${mDate.getFullYear()}-${String(mDate.getMonth() + 1).padStart(2, "0")}`;
-          
-          const budget = await prisma.budget.findFirst({
-            where: {
-              category: route.category,
-              OR: [{ month: monthStr }, { month: "default" }],
-            },
-          });
-
-          if (budget) {
-            // Somar despesas daquele mês para a categoria
-            const startOfMonth = new Date(mDate.getFullYear(), mDate.getMonth(), 1);
-            const endOfMonth = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0, 23, 59, 59);
-            
-            const monthExpenses = await prisma.financeEntry.aggregate({
-              _sum: { amount: true },
-              where: {
-                type: "expense",
-                category: route.category,
-                date: { gte: startOfMonth, lte: endOfMonth }
-              }
-            });
-
-            const totalSpent = monthExpenses._sum.amount || 0;
-            const percent = (totalSpent / budget.amount) * 100;
-
-            const isSensitiveCategory = ["delivery", "ifood", "mercado", "supermercado", "bebida", "cerveja", "lanche", "besteira"]
-              .some(kw => route.category.toLowerCase().includes(kw) || route.subcategory.toLowerCase().includes(kw));
-
-            if ((percent >= 80 || isSensitiveCategory) && route.amount >= 30) {
-              const promptContext = `O usuário Renato registrou um gasto de ${brl(route.amount)} na categoria "${route.category}" (Subcategoria: "${route.subcategory}").
-Neste mês, ele já gastou ${brl(totalSpent)} de um orçamento de ${brl(budget.amount)} nesta categoria (${percent.toFixed(0)}%).
-Dê um "toque" inteligente, amigável e MUITO CURTO (máximo 2 linhas). 
-Se for delivery, besteira ou álcool e estiver alto, alerte sobre gastar muito com besteira e faça ele refletir se era necessário.
-Se for mercado e a compra for alta, lembre-o para focar no necessário para não estourar o mês.
-Não seja robótico. Chame-o de Renato.`;
+        // 🎯 Teto da categoria (aviso a partir de 70%) e previsão do mês: o
+        // dono quer ser avisado ANTES de dar ruim, não depois.
+        if (route.financeType === "expense" && response) {
+          const mDate = route.date ? parseLocalDate(route.date) : todayBRT();
+          const { items } = await budgetStatus(mDate.getFullYear(), mDate.getMonth());
+          const b = items.find((x) => x.category === route.category);
+          if (b) {
+            const percent = (b.spent / b.limit) * 100;
+            if (percent >= 100) {
+              response += `\n\n🔴 *Teto de ${b.category} estourado:* ${brl(b.spent)} de ${brl(b.limit)} (passou ${brl(b.spent - b.limit)}).`;
+            } else if (percent >= 70) {
+              response += `\n\n🟡 *Atenção:* ${percent.toFixed(0)}% do teto de ${b.category} (${brl(b.spent)} de ${brl(b.limit)}). Restam ${brl(b.limit - b.spent)} até o fim do mês.`;
+            }
+            const isSensitive = ["delivery", "ifood", "lanche", "bebida", "cerveja", "besteira"]
+              .some((kw) => route.category.toLowerCase().includes(kw) || route.subcategory.toLowerCase().includes(kw) || route.description.toLowerCase().includes(kw));
+            if (percent >= 70 && isSensitive && route.amount >= 30) {
               try {
-                const { content } = await generateResponse([{ role: "user", content: promptContext }], "Você é uma assistente financeira.", 0.7, 150, providerOpts);
-                response += `\n\n💬 *Dica da IA:* ${content}`;
-              } catch (e) {
-                if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${route.category}! (${brl(totalSpent)} de ${brl(budget.amount)})`;
-                else if (percent >= 80) response += `\n\n⚠️ *Aviso:* ${percent.toFixed(0)}% do limite de ${route.category} atingido!`;
-              }
-            } else {
-              if (percent >= 100) {
-                response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com esse gasto, você estourou o limite de ${route.category}! (Gastou ${brl(totalSpent)} de ${brl(budget.amount)})`;
-              } else if (percent >= 80) {
-                response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do seu limite de ${route.category} neste mês! (Restam ${brl((budget.amount - totalSpent))})`;
+                const { content } = await generateResponse(
+                  [{ role: "user", content: `O Renato gastou ${brl(route.amount)} em ${route.category} › ${route.subcategory} (${route.description}). No mês já foi ${brl(b.spent)} de um teto de ${brl(b.limit)} (${percent.toFixed(0)}%). Dê um toque amigável e MUITO CURTO (1 frase) para ele segurar esse tipo de gasto. Sem sermão.` }],
+                  "Você é uma assistente financeira.",
+                  0.7,
+                  80,
+                  providerOpts
+                );
+                response += `\n💬 ${content.trim()}`;
+              } catch {
+                // sem dica, o número acima já avisa
               }
             }
           }
+          response += await monthForecastLine(mDate.getFullYear(), mDate.getMonth());
         }
       }
       break;
@@ -2480,50 +2478,33 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
   }
 
-  const budget = await prisma.budget.findFirst({
-    where: {
-      category: invoice.category,
-      OR: [{ month: "default" }],
-    },
-  });
-
-  if (budget) {
-    const startOfMonth = new Date(entry.date.getFullYear(), entry.date.getMonth(), 1);
-    const endOfMonth = new Date(entry.date.getFullYear(), entry.date.getMonth() + 1, 0, 23, 59, 59);
-    
-    const monthExpenses = await prisma.financeEntry.aggregate({
-      _sum: { amount: true },
-      where: { type: "expense", category: invoice.category, date: { gte: startOfMonth, lte: endOfMonth } }
-    });
-
-    const totalSpent = monthExpenses._sum.amount || 0;
-    const percent = (totalSpent / budget.amount) * 100;
-
-    const isSensitiveCategory = ["delivery", "ifood", "mercado", "supermercado", "bebida", "cerveja", "lanche", "besteira"]
-      .some(kw => invoice.category?.toLowerCase().includes(kw) || invoice.subcategory?.toLowerCase().includes(kw));
-
-    if ((percent >= 80 || isSensitiveCategory) && invoice.total >= 50) {
-      const promptContext = `O usuário Renato registrou uma Nota Fiscal de ${brl(invoice.total)} na categoria "${invoice.category}" (Subcategoria: "${invoice.subcategory}").
-Neste mês, ele já gastou ${brl(totalSpent)} de um orçamento de ${brl(budget.amount)} nesta categoria (${percent.toFixed(0)}%).
-Dê um "toque" inteligente, amigável e MUITO CURTO (máximo 2 linhas). 
-Se for mercado e a compra for alta, lembre-o para focar no necessário e cuidado com bebidas/besteiras para não estourar o limite.
-Se for delivery ou lanche, alerte sobre o excesso.
-Não seja robótico. Chame-o de Renato.`;
+  // Teto da categoria (aviso a partir de 70%) e previsão do mês — mesma regra
+  // do gasto lançado por mensagem.
+  const { items } = await budgetStatus(entry.date.getFullYear(), entry.date.getMonth());
+  const b = items.find((x) => x.category === invoice.category);
+  if (b) {
+    const percent = (b.spent / b.limit) * 100;
+    if (percent >= 100) {
+      response += `\n\n🔴 *Teto de ${b.category} estourado:* ${brl(b.spent)} de ${brl(b.limit)} (passou ${brl(b.spent - b.limit)}).`;
+    } else if (percent >= 70) {
+      response += `\n\n🟡 *Atenção:* ${percent.toFixed(0)}% do teto de ${b.category} (${brl(b.spent)} de ${brl(b.limit)}). Restam ${brl(b.limit - b.spent)} até o fim do mês.`;
+    }
+    if (percent >= 70 && invoice.total >= 50) {
       try {
-        const { content } = await generateResponse([{ role: "user", content: promptContext }], "Você é uma assistente financeira.", 0.7, 150, providerOpts);
-        response += `\n\n💬 *Dica da IA:* ${content}`;
-      } catch (e) {
-        if (percent >= 100) response += `\n\n🚨 *ALERTA:* Você estourou o limite de ${invoice.category}! (${brl(totalSpent)} de ${brl(budget.amount)})`;
-        else if (percent >= 80) response += `\n\n⚠️ *Aviso:* ${percent.toFixed(0)}% do limite de ${invoice.category} atingido!`;
-      }
-    } else {
-      if (percent >= 100) {
-        response += `\n\n🚨 *ALERTA DE ORÇAMENTO:* Com essa nota, você estourou o limite de ${invoice.category}! (Gastou ${brl(totalSpent)} de ${brl(budget.amount)})`;
-      } else if (percent >= 80) {
-        response += `\n\n⚠️ *Aviso de Orçamento:* Você já usou ${percent.toFixed(0)}% do limite de ${invoice.category}! (Restam ${brl((budget.amount - totalSpent))})`;
+        const { content } = await generateResponse(
+          [{ role: "user", content: `O Renato registrou uma nota de ${brl(invoice.total)} em ${invoice.category} › ${invoice.subcategory}. No mês já foi ${brl(b.spent)} de um teto de ${brl(b.limit)} (${percent.toFixed(0)}%). Dê um toque amigável e MUITO CURTO (1 frase) para focar no necessário (cuidado com bebida/besteira). Sem sermão.` }],
+          "Você é uma assistente financeira.",
+          0.7,
+          80,
+          providerOpts
+        );
+        response += `\n💬 ${content.trim()}`;
+      } catch {
+        // sem dica, o número acima já avisa
       }
     }
   }
+  response += await monthForecastLine(entry.date.getFullYear(), entry.date.getMonth());
 
   await notifyOwner(config, response);
 }
