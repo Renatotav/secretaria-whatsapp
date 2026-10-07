@@ -5,6 +5,7 @@ interface Group {
   id: string;
   groupJid: string;
   groupName: string;
+  active: boolean;
 }
 
 interface DailySummary {
@@ -18,7 +19,8 @@ interface DailySummary {
 
 export default function DailySummaryPage() {
   const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState("");
+  // "self" = o resumo do dia dele (gastos, tetos, previsão), o padrão.
+  const [selectedGroup, setSelectedGroup] = useState("self");
   const [selectedDate, setSelectedDate] = useState("");
   const [summaries, setSummaries] = useState<DailySummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,15 +95,14 @@ export default function DailySummaryPage() {
             onChange={(e) => setSelectedGroup(e.target.value)}
             style={{ width: 220 }}
           >
-            <option value="">Selecione um Resumo...</option>
-            <optgroup label="📌 Meus Resumos">
-              <option value="personal">Fechamento Pessoal</option>
-            </optgroup>
-            <optgroup label="💬 Grupos do WhatsApp">
-              {groups.map((g) => (
-                <option key={g.id} value={g.groupJid}>{g.groupName || g.groupJid}</option>
-              ))}
-            </optgroup>
+            <option value="self">📋 Seu dia</option>
+            {groups.some((g) => g.active) && (
+              <optgroup label="💬 Grupos ativos">
+                {groups.filter((g) => g.active).map((g) => (
+                  <option key={g.id} value={g.groupJid}>{g.groupName || g.groupJid}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
           <input
             type="date"
@@ -156,7 +157,7 @@ export default function DailySummaryPage() {
           >
             <span style={{ fontSize: 40 }}>📋</span>
             <p>Nenhum resumo encontrado para os filtros selecionados</p>
-            <p style={{ fontSize: 12 }}>Os resumos são gerados automaticamente às 18h</p>
+            <p style={{ fontSize: 12 }}>O resumo do seu dia é gerado e enviado no WhatsApp todo dia às 21h</p>
           </div>
         )}
         {summaries.map((s) => (
