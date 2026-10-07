@@ -653,6 +653,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
 const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gastei 45 no mercado", "recebi 3000 de salário", "comprei um celular de 291 em 17x".
   Depois do gasto ela pergunta o meio de pagamento: responder "2" pix, "3" débito, "4" dinheiro. Para mudar a data da compra, responder só o dia ("15/08").
 📸 Qualquer print (pedido do Mercado Livre, comprovante de Pix, recibo, estorno...): ela entende o que é, mostra o lançamento e pergunta "sim/não" antes de salvar. Nota fiscal e fatura ela reconhece sozinha.
+🧐 Gasto a partir de R$ 500 (somando as parcelas): ela confere com você ("sim"/"não") antes de lançar.
 🧾 Foto de nota fiscal de mercado: lança o gasto, guarda cada item e avisa se algum produto ficou mais caro.
 💳 Print ou PDF de fatura/extrato: importa todos os lançamentos de uma vez (se a fatura tiver mais de um cartão — titular e adicionais — ela pergunta quais importar: número, nome ou "tudo"). PDF com senha: ela pede a senha e ele responde só com ela.
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
@@ -1504,12 +1505,33 @@ async function applyPdfPassword(text: string, config: AgentConfig): Promise<bool
   return true;
 }
 
+// Gasto alto (≥ R$ 500 no total) digitado: espera "sim" antes de gravar —
+// protege de erro de digitação ("2500" em vez de "250").
+const HIGH_VALUE = 500;
+let pendingHighValue: { text: string; at: number } | null = null;
+let confirmedHighValueText: string | null = null;
+
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
   // Resposta com o valor que faltava ("25") completa a frase anterior.
   joinedText = takeAmountReply(joinedText) ?? joinedText;
+
+  // "sim"/"não" para o gasto alto que estava esperando confirmação.
+  if (pendingHighValue) {
+    const pending = pendingHighValue;
+    pendingHighValue = null;
+    if (Date.now() - pending.at < 30 * 60 * 1000) {
+      if (CONFIRM_YES_RE.test(joinedText.trim())) {
+        joinedText = pending.text;
+        confirmedHighValueText = pending.text;
+      } else if (CONFIRM_NO_RE.test(joinedText.trim())) {
+        await notifyOwner(config, "👍 Ok, não lancei.");
+        return;
+      }
+    }
+  }
 
   // Senha de PDF não passa pela IA nem é gravada no histórico.
   if (await applyPdfPassword(joinedText, config)) return;
@@ -1583,6 +1605,23 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         response = `💬 Quanto foi ${route.description ? `*${route.description}*` : "esse gasto"}? Responda só o valor (ex: 25,90).`;
         break;
       }
+      // Gasto alto: confere antes de gravar (paguei/recebi = baixa de conta
+      // prevista, não precisa). Parcelado conta o total.
+      const totalValue = route.amount * (route.installments || 1);
+      if (
+        route.financeType === "expense" &&
+        totalValue >= HIGH_VALUE &&
+        confirmedHighValueText !== joinedText &&
+        !/\b(paguei|quitei|recebi|caiu|entrou)\b/i.test(joinedText)
+      ) {
+        pendingHighValue = { text: joinedText, at: Date.now() };
+        pendingImageDraft = null;
+        const how = route.installments ? `${route.installments}× de ${brl(route.amount)} (total ${brl(totalValue)})` : brl(route.amount);
+        response = `🧐 *Confere antes de eu lançar:*\n📝 ${route.description}\n💰 ${how}\n📂 ${route.category}${route.subcategory ? ` › ${route.subcategory}` : ""}\n\nResponda *sim* para lançar ou *não* para cancelar.`;
+        break;
+      }
+      confirmedHighValueText = null;
+
       // Gasto sem meio de pagamento dito na mensagem = cartão (o normal dele);
       // a confirmação pergunta se foi outro meio (ver applyPaymentReply).
       const askPayment = route.financeType === "expense" && !route.installments && !PAYMENT_STATED_RE.test(joinedText);
