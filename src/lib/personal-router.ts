@@ -49,6 +49,14 @@ export type PersonalRouteResult =
       confirmation: string;
     }
   | {
+      // "quero juntar 3000 pra viagem até julho" — cria a meta.
+      type: "goal_create";
+      goalName: string;
+      amount: number;
+      deadline: string | null;
+      confirmation: string;
+    }
+  | {
       type: "savings_add";
       goalName: string;
       amount: number;
@@ -178,6 +186,10 @@ Tipos:
 5. savings_add — guardar OU tirar dinheiro de uma Meta de Economia (SavingsGoal)
    Ex: "Guarda 100 reais pra viagem" → type "savings_add", amount: 100, goalName: "viagem"
    Ex: "Tirei 900 da reserva" → type "savings_add", amount: -900, goalName: "reserva"
+
+5b. goal_create — criar uma META NOVA de economia: "quero juntar 3000 pra viagem até julho",
+   "nova meta: notebook 4000 até dezembro de 2027". amount = valor da meta, goalName = nome curto,
+   goalDeadline = YYYY-MM-DD (último dia do mês citado; null se não disser prazo).
    (retirada = amount NEGATIVO)
 
 6. finance_update_date — o usuário está corrigindo ou fornecendo a data de compra de um gasto recém-lançado.
@@ -210,7 +222,7 @@ IMPORTANTE:
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation|wish_add|finance_question|chat",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add|goal_create|finance_update_date|finance_simulation|wish_add|finance_question|chat",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
@@ -233,6 +245,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "mood": "pessimo|ruim|neutro|bom|otimo",
   "diaryContent": "<texto>",
   "goalName": "<nome da meta>",
+  "goalDeadline": "YYYY-MM-DD ou null",
   "simIncome": "renda mensal hipotética ou null",
   "simPurchaseAmount": "valor total da compra hipotética ou null",
   "simInstallments": "número de parcelas da compra hipotética ou null",
@@ -276,6 +289,17 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         account: paymentMethod === "ticket" ? "VR" : (parsed.account as string) || "Principal",
         status: paymentMethod === "ticket" ? "paid" : status,
         confirmation: (parsed.confirmation as string) || "✅ Lançamento registrado!",
+      };
+    }
+
+    if (parsed.type === "goal_create") {
+      const deadline = typeof parsed.goalDeadline === "string" && /^\d{4}-\d{2}-\d{2}/.test(parsed.goalDeadline) ? parsed.goalDeadline.slice(0, 10) : null;
+      return {
+        type: "goal_create",
+        goalName: (parsed.goalName as string) || "Meta",
+        amount: Math.abs(Number(parsed.amount)) || 0,
+        deadline,
+        confirmation: "",
       };
     }
 

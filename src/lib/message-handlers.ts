@@ -670,7 +670,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🔁 "Quanto gasto com assinaturas?" — contas fixas e assinaturas.
 ❓ Pergunta livre sobre os números: "quanto gastei com Uber em setembro?", "qual minha maior compra no cartão?", "quanto falta pagar do Samsung?".
 🛒 Simulador: "posso comprar um tênis de 200 em 3x?", "e se meu salário for 3300?".
-🏆 Metas: "como estão minhas metas?" (com gráfico), "guarda 100 na reserva", "tirei 900 da reserva". Depois do salário ela sugere quanto guardar — responder "guarda".
+🏆 Metas: "quero juntar 3000 pra viagem até julho" cria a meta e diz quanto guardar por mês; "como estão minhas metas?" (com gráfico e se cabem na sobra), "guarda 100 na reserva", "tirei 900 da reserva". Depois do salário ela sugere quanto guardar — responder "guarda".
 🗓️ Agenda e lembretes: "reunião amanhã às 14h", "lembrar de pagar o cartão sexta", "o que tenho pendente?".
 🎫 Chamados e grupos: "quais chamados estão abertos?", "resumo do grupo PJe".
 📔 Diário: contar como foi o dia ("hoje foi puxado, fiquei cansado...") — ela guarda com o humor.
@@ -1091,6 +1091,27 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   return `${title}\n${items.map(line).join("\n")}\n\nTotal: ${brl(total)}${footer}`;
 }
 
+/** Quanto guardar por mês para bater a meta no prazo (null sem prazo ou já batida). */
+function goalMonthlyNeed(g: { targetAmount: number; currentAmount: number; deadline: Date | null }) {
+  if (!g.deadline || g.currentAmount >= g.targetAmount) return null;
+  const today = todayBRT();
+  const months = Math.max(1, (g.deadline.getFullYear() - today.getFullYear()) * 12 + g.deadline.getMonth() - today.getMonth());
+  return { perMonth: (g.targetAmount - g.currentAmount) / months, until: `${String(g.deadline.getMonth() + 1).padStart(2, "0")}/${String(g.deadline.getFullYear()).slice(2)}` };
+}
+
+/** As metas cabem na sobra prevista do mês que vem? */
+async function goalsViabilityLine(goals: { targetAmount: number; currentAmount: number; deadline: Date | null; name: string }[]): Promise<string> {
+  const total = goals.reduce((sum, g) => sum + (goalMonthlyNeed(g)?.perMonth ?? 0), 0);
+  if (total <= 0) return "";
+  const today = todayBRT();
+  const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+  const forecast = await monthForecast(next.getFullYear(), next.getMonth());
+  const month = MONTH_NAMES[next.getMonth()];
+  return forecast >= total
+    ? `\n\n🟢 As metas pedem ${brl(total)}/mês e cabem na sobra prevista de ${month} (${brl(forecast)}).`
+    : `\n\n🔴 As metas pedem ${brl(total)}/mês, mas a sobra prevista de ${month} é ${brl(Math.max(0, forecast))}. Estique o prazo ou reduza o valor.`;
+}
+
 async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
   if (intent === "bills_due") return buildBillsDue("query");
   if (intent === "budget_status") return buildBudgetResponse();
@@ -1146,11 +1167,13 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
   if (intent === "savings_summary") {
     const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
     if (goals.length === 0) return "Nenhuma meta de economia encontrada.";
-    return `🎯 *Metas de Economia:*\n${goals.map((g) => {
+    const lines = goals.map((g) => {
       const pct = (g.currentAmount / g.targetAmount) * 100;
       if (g.currentAmount >= g.targetAmount) return `• 🏆 ${g.name}: ${brl(g.targetAmount)} — *Conquistada!*`;
-      return `• ${g.name}: ${brl(g.currentAmount)} de ${brl(g.targetAmount)} (${pct.toFixed(0)}%)`;
-    }).join("\n")}`;
+      const need = goalMonthlyNeed(g);
+      return `• ${g.name}: ${brl(g.currentAmount)} de ${brl(g.targetAmount)} (${pct.toFixed(0)}%)${need ? ` · guardar ${brl(need.perMonth)}/mês até ${need.until}` : ""}`;
+    });
+    return `🎯 *Metas de Economia:*\n${lines.join("\n")}${await goalsViabilityLine(goals)}`;
   }
 
   const summary = await prisma.dailySummary.findFirst({ orderBy: { createdAt: "desc" } });
@@ -1867,6 +1890,18 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     case "finance_simulation":
       response = await simulateFinance(route, config);
       break;
+    case "goal_create": {
+      if (!(route.amount > 0)) {
+        response = "🤔 Qual o valor da meta? Ex: \"quero juntar 3000 pra viagem até julho\".";
+        break;
+      }
+      const goal = await prisma.savingsGoal.create({
+        data: { name: route.goalName.charAt(0).toUpperCase() + route.goalName.slice(1), targetAmount: route.amount, deadline: route.deadline ? parseLocalDate(route.deadline) : null },
+      });
+      const need = goalMonthlyNeed(goal);
+      response = `🎯 Meta criada: *${goal.name}* — ${brl(goal.targetAmount)}${need ? `\n💰 Guardar ${brl(need.perMonth)}/mês até ${need.until}` : "\nSem prazo: me diga até quando para eu calcular quanto guardar por mês."}${await goalsViabilityLine([goal])}\nPara guardar: "guarda 200 na ${goal.name.toLowerCase()}".`;
+      break;
+    }
     case "wish_add": {
       const wish = await prisma.wishItem.create({
         data: {

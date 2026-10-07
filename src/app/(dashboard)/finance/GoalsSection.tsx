@@ -125,9 +125,21 @@ export function GoalsSection() {
                 <span>R$ {g.currentAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                 <span>R$ {g.targetAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
               </div>
-              <div style={{ height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
+              <div style={{ height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden", marginBottom: g.deadline && !conquered ? 6 : 12 }}>
                 <div style={{ height: "100%", background: g.color, width: `${percent}%`, transition: "width 0.3s" }} />
               </div>
+              {g.deadline && !conquered && (() => {
+                // Quanto guardar por mês até o prazo.
+                const d = new Date(g.deadline);
+                const now = new Date();
+                const months = Math.max(1, (d.getFullYear() - now.getFullYear()) * 12 + d.getMonth() - now.getMonth());
+                const perMonth = (g.targetAmount - g.currentAmount) / months;
+                return (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+                    💰 Guardar {perMonth.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês até {d.toLocaleDateString("pt-BR", { month: "2-digit", year: "2-digit" })}
+                  </div>
+                );
+              })()}
               {!conquered && <div style={{ display: "flex", gap: 6 }}>
                 <input
                   type="number"
