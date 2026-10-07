@@ -77,8 +77,10 @@ export type PersonalRouteResult =
       simIncome: number | null;
       simPurchaseAmount: number | null;
       simInstallments: number | null;
-      simPaymentMethod: "cartão" | "pix" | "débito" | "dinheiro";
+      simPaymentMethod: "cartão" | "pix" | "débito" | "dinheiro" | "ticket";
       simDescription: string;
+      /** Categoria da compra (lista padrão), para conferir o teto. */
+      simCategory: string;
       confirmation: string;
     };
 
@@ -184,7 +186,8 @@ Tipos:
    Ex: "Posso comprar um capacete de 350 em 3x?" → simPurchaseAmount: 350 (valor TOTAL), simInstallments: 3, simPaymentMethod: "cartão", simDescription: "capacete"
    Ex: "E se meu salário for 3300?" → simIncome: 3300
    Ex: "Dá pra comprar um tênis de 200 no pix?" → simPurchaseAmount: 200, simInstallments: 1, simPaymentMethod: "pix", simDescription: "tênis"
-   Sem meio de pagamento dito = "cartão". simIncome = renda MENSAL total hipotética (ou null).
+   Sem meio de pagamento dito = "cartão"; no VR/vale = "ticket". simIncome = renda MENSAL total hipotética (ou null).
+   simCategory = a categoria da compra, da mesma lista de categorias do item 3 (ex: tênis = "Pessoal", capacete = "Scooter", fone = "Compras").
 
 8. finance_question — PERGUNTA sobre números do próprio financeiro que não se encaixa nos atalhos de agenda_query.
    Ex: "Quanto gastei com Uber em setembro?", "Qual foi minha maior compra no cartão?", "Quantas vezes pedi delivery esse mês?", "Quanto falta pagar do Samsung?"
@@ -228,6 +231,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "simInstallments": "número de parcelas da compra hipotética ou null",
   "simPaymentMethod": "cartão|pix|débito|dinheiro",
   "simDescription": "<o que pensa em comprar>",
+  "simCategory": "<categoria da compra>",
   "question": "<pergunta do usuário, para finance_question>",
   "confirmation": "Sua resposta curta"
 }`;
@@ -302,8 +306,8 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 
     if (parsed.type === "finance_simulation") {
       const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-      const method = ["cartão", "pix", "débito", "dinheiro"].includes(parsed.simPaymentMethod as string)
-        ? (parsed.simPaymentMethod as "cartão" | "pix" | "débito" | "dinheiro")
+      const method = ["cartão", "pix", "débito", "dinheiro", "ticket"].includes(parsed.simPaymentMethod as string)
+        ? (parsed.simPaymentMethod as "cartão" | "pix" | "débito" | "dinheiro" | "ticket")
         : "cartão";
       return {
         type: "finance_simulation",
@@ -312,6 +316,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         simInstallments: num(parsed.simInstallments),
         simPaymentMethod: method,
         simDescription: (parsed.simDescription as string) || "",
+        simCategory: (parsed.simCategory as string) || "",
         confirmation: (parsed.confirmation as string) || "",
       };
     }
