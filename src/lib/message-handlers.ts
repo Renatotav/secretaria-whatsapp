@@ -813,6 +813,135 @@ export async function notifyAffordableWishes(config: AgentConfig): Promise<void>
   }
 }
 
+// ── Resumo do dia e relatório da semana (números do código, não da IA) ──
+const WEEKDAYS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const dayRange = (d: Date) => ({ gte: new Date(d.getFullYear(), d.getMonth(), d.getDate()), lte: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59) });
+
+/** Gastos feitos num período: pela data da compra (no cartão a data é a fatura). */
+async function spentBetween(gte: Date, lte: Date) {
+  return prisma.financeEntry.findMany({
+    where: {
+      type: "expense",
+      NOT: { description: { contains: "(previsto)" } },
+      OR: [{ purchaseDate: { gte, lte } }, { purchaseDate: null, date: { gte, lte } }],
+    },
+    orderBy: { amount: "desc" },
+  });
+}
+
+/** O que vence entre duas datas: contas fora do cartão, faturas e agenda. */
+async function dueBetween(gte: Date, lte: Date): Promise<string[]> {
+  const { listOpenInvoices, invoiceLabel } = await import("./invoices");
+  const bills = await prisma.financeEntry.findMany({
+    where: { type: "expense", status: "pending", paymentMethod: { not: "cartão" }, date: { gte, lte } },
+    orderBy: { date: "asc" },
+  });
+  const invoices = (await listOpenInvoices()).filter((i) => {
+    const d = parseLocalDate(i.dueDate);
+    return d >= gte && d <= lte && i.total > 0;
+  });
+  const agenda = await prisma.agendaItem.findMany({ where: { source: { not: "group" }, done: false, dueDate: { gte, lte } }, orderBy: { dueDate: "asc" } });
+  return [
+    ...bills.map((b) => `• ${(b.description.replace(/\s*\(previsto\)/, "").trim() || b.subcategory || b.category)} — ${brl(b.amount)} (${formatDayMonth(b.date)})`),
+    ...invoices.map((i) => `• 💳 ${invoiceLabel(i.card)} — ${brl(i.total)} (${i.dueDate.slice(8, 10)}/${i.dueDate.slice(5, 7)})`),
+    ...agenda.map((a) => `• 📅 ${a.title}${a.dueDate ? ` (${formatDayMonth(a.dueDate)})` : ""}`),
+  ];
+}
+
+async function vrBalanceShort(): Promise<string> {
+  const isVoucher = { OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) };
+  const paid = await prisma.financeEntry.findMany({ where: { ...isVoucher, status: "paid" }, select: { type: true, amount: true } });
+  if (paid.length === 0) return "";
+  const balance = paid.reduce((sum, e) => sum + (e.type === "income" ? e.amount : -e.amount), 0);
+  const next = await prisma.financeEntry.findFirst({ where: { ...isVoucher, type: "income", status: "pending" }, orderBy: { date: "asc" } });
+  const days = next ? Math.max(1, Math.ceil((next.date.getTime() - todayBRT().getTime()) / 86400000)) : 0;
+  return `🍔 VR: ${brl(balance)}${next ? ` (${brl(Math.max(0, balance) / days)}/dia até ${formatDayMonth(next.date)})` : ""}`;
+}
+
+/** Resumo do dia (21h): o que gastou hoje, tetos, previsão do mês, VR e o que vence amanhã. */
+export async function buildDailyDigest(): Promise<string> {
+  const today = todayBRT();
+  const { gte, lte } = dayRange(today);
+  const spent = await spentBetween(gte, lte);
+  const total = spent.reduce((sum, e) => sum + e.amount, 0);
+  const lines = [`📋 *Seu dia — ${WEEKDAYS[today.getDay()]}, ${formatDayMonth(today)}*`];
+  if (spent.length === 0) {
+    lines.push("🙌 Dia sem gastos!");
+  } else {
+    const items = spent.slice(0, 6).map((e) => `${(e.description.replace(/\s*-?\s*Parcela.*$/, "").trim() || e.subcategory || e.category)} ${brl(e.amount)}`);
+    lines.push(`💸 Hoje: ${brl(total)} — ${items.join(" · ")}${spent.length > 6 ? " …" : ""}`);
+    const { items: budgets } = await budgetStatus(today.getFullYear(), today.getMonth());
+    const touched = budgets.filter((b) => spent.some((e) => e.category === b.category) || b.spent / b.limit >= 0.7);
+    if (touched.length) lines.push(`🎯 Tetos: ${touched.map((b) => `${budgetIcon((b.spent / b.limit) * 100)} ${b.category} ${((b.spent / b.limit) * 100).toFixed(0)}%`).join(" · ")}`);
+  }
+  lines.push((await monthForecastLine(today.getFullYear(), today.getMonth())).trim());
+  const vr = await vrBalanceShort();
+  if (vr) lines.push(vr);
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
+  const due = await dueBetween(dayRange(tomorrow).gte, dayRange(tomorrow).lte);
+  lines.push(due.length ? `📅 Amanhã:\n${due.join("\n")}` : "📅 Amanhã: nada vencendo.");
+  return lines.join("\n");
+}
+
+/**
+ * Relatório da semana (domingo): entrou/saiu, onde mais gastou, tetos,
+ * previsão/Reserva, o que vence e a agenda da próxima semana e desejos que já
+ * cabem — tudo calculado. A IA só escreve um comentário curto no fim,
+ * cruzando os gastos com o humor do diário, e só com os dados enviados.
+ */
+export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<{ text: string; weekStart: string; weekEnd: string }> {
+  const today = todayBRT();
+  const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7), 12);
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 12);
+  const gte = dayRange(monday).gte;
+  const lte = dayRange(sunday).lte;
+  const spent = await spentBetween(gte, lte);
+  const out = spent.reduce((sum, e) => sum + e.amount, 0);
+  const incomes = await prisma.financeEntry.findMany({ where: { type: "income", status: "paid", date: { gte, lte } } });
+  const income = incomes.reduce((sum, e) => sum + e.amount, 0);
+  const byCat = spent.reduce<Record<string, number>>((acc, e) => ((acc[e.category] = (acc[e.category] || 0) + e.amount), acc), {});
+  const top = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  const { items: budgets } = await budgetStatus(today.getFullYear(), today.getMonth());
+  const nextMon = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 1, 12);
+  const nextSun = new Date(nextMon.getFullYear(), nextMon.getMonth(), nextMon.getDate() + 6, 12);
+  const due = await dueBetween(dayRange(nextMon).gte, dayRange(nextSun).lte);
+  const wishes = await prisma.wishItem.findMany({ where: { status: "wish" } });
+  const fits: string[] = [];
+  for (const w of wishes) if ((await checkWish(w)).level === "green") fits.push(w.name);
+
+  const lines = [
+    `📊 *Sua semana — ${formatDayMonth(monday)} a ${formatDayMonth(sunday)}*`,
+    `💰 Entrou ${brl(income)} · 💸 gastou ${brl(out)}`,
+    top.length ? `🏷️ Onde mais gastou: ${top.map(([c, v]) => `${c} ${brl(v)}`).join(" · ")}` : "🙌 Nenhum gasto na semana.",
+    budgets.length ? `\n🎯 *Tetos de ${MONTH_NAMES[today.getMonth()]}:*\n${budgets.map((b) => `${budgetIcon((b.spent / b.limit) * 100)} ${b.category}: ${brl(b.spent)} de ${brl(b.limit)}`).join("\n")}` : "",
+    `\n${(await monthForecastLine(today.getFullYear(), today.getMonth())).trim()}`,
+    due.length ? `\n📅 *Próxima semana:*\n${due.join("\n")}` : "\n📅 Próxima semana: nada vencendo.",
+    fits.length ? `\n🛍️ Já cabe da lista de desejos: ${fits.join(", ")}` : "",
+  ].filter(Boolean);
+
+  // Comentário curto da IA: só com os números acima + humor do diário.
+  try {
+    const diaries = await prisma.diaryEntry.findMany({ where: { date: { gte, lte } }, orderBy: { date: "asc" } });
+    const facts = [
+      `Gastos da semana (dia · categoria · valor): ${spent.slice(0, 20).map((e) => `${WEEKDAYS[(e.purchaseDate ?? e.date).getDay()]} · ${e.category} › ${e.subcategory} · ${brl(e.amount)}`).join("; ") || "nenhum"}`,
+      `Humor no diário: ${diaries.map((d) => `${WEEKDAYS[d.date.getDay()]}: ${d.mood || "?"}`).join("; ") || "sem registros"}`,
+    ].join("\n");
+    const { content } = await generateResponse(
+      [{ role: "user", content: facts }],
+      "Você é a secretária financeira do Renato. Em NO MÁXIMO 2 frases, faça um comentário amigável sobre a semana: se houver relação entre os dias de mais gasto (principalmente delivery/lanche/bar) e o humor do diário, aponte; senão, dê um incentivo prático para a próxima semana. Use SÓ os dados recebidos, não invente números nem fatos.",
+      0.5,
+      150,
+      providerOpts
+    );
+    if (content.trim()) lines.push(`\n💬 ${content.trim()}`);
+  } catch {
+    // o relatório vale sem o comentário
+  }
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { text: lines.join("\n"), weekStart: iso(monday), weekEnd: iso(sunday) };
+}
+
 async function monthForecastLine(year: number, monthIndex: number): Promise<string> {
   const f = await monthForecast(year, monthIndex);
   const month = MONTH_NAMES[monthIndex];

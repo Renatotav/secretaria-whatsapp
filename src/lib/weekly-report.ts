@@ -29,79 +29,14 @@ export async function generateWeeklyReport(
   const existing = await prisma.weeklyReport.findFirst({ where: { weekStart } });
   if (existing) return;
 
-  const [summaries, agendaItems, tickets, briefings, finances, diaries] = await Promise.all([
-    prisma.dailySummary.findMany({
-      where: { date: { gte: weekStart, lte: weekEnd } },
-      orderBy: { date: "asc" },
-    }),
-    prisma.agendaItem.findMany({
-      where: { createdAt: { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") } },
-    }),
-    prisma.ticket.findMany({
-      where: { updatedAt: { gte: new Date(weekStart) } },
-    }),
-    prisma.briefing.findMany({
-      where: { receivedAt: { gte: new Date(weekStart) } },
-    }),
-    prisma.financeEntry.findMany({
-      where: { date: { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") } },
-      orderBy: { date: "asc" },
-    }),
-    prisma.diaryEntry.findMany({
-      where: { date: { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") } },
-      orderBy: { date: "asc" },
-    }),
-  ]);
-
-  const dataText = [
-    "=== RESUMOS DIÁRIOS ===",
-    summaries.map((s) => `[${s.date}] ${s.groupName}:\n${s.summary}`).join("\n\n"),
-    "=== AGENDA ===",
-    agendaItems.map((a) => `[${a.category}] ${a.title} — ${a.done ? "CONCLUÍDO" : "PENDENTE"}`).join("\n"),
-    "=== CHAMADOS ===",
-    tickets.map((t) => `${t.ticketId} [${t.status}] ${t.groupName}`).join("\n"),
-    "=== CONTATOS PRIVADOS ===",
-    briefings.map((b) => `${b.contactName} [${b.urgency}]: ${b.subject}`).join("\n"),
-    "=== FINANÇAS DA SEMANA ===",
-    finances.map((f) => `[${f.date.toISOString().split("T")[0]}] [${f.type === "income" ? "RECEITA" : "DESPESA"}] ${f.category}${f.subcategory ? ` (${f.subcategory})` : ""} - R$ ${f.amount.toFixed(2)} (Humor: ${f.mood})`).join("\n"),
-    "=== DIÁRIO DA SEMANA ===",
-    diaries.map((d) => `[${d.date.toISOString().split("T")[0]}] Humor: ${d.mood}\nResumo: ${d.content}`).join("\n\n"),
-  ].join("\n\n");
-
-  const startFormatted = new Date(weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-  const endFormatted = new Date(weekEnd).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-
-const systemPrompt = `Você é assistente pessoal de ${ownerName}, ${ownerRole}.
-Analise a semana completa (resumos diários, agenda, chamados, contatos, finanças e diário).
-
-Inclua:
-1. Visão geral da semana
-2. Chamados: abertos, resolvidos, escalados, recorrentes
-3. Tarefas: concluídas vs pendentes
-4. Finanças Emocionais: Análise rápida de entradas vs saídas e os maiores gastos. OBRIGATÓRIO: Relacione os dias de pico de gastos (especialmente besteiras/delivery) com o humor relatado no "DIÁRIO DA SEMANA" naqueles mesmos dias.
-5. Equipe: padrões (ausências, quem mais aciona você)
-6. Alertas para a próxima semana
-7. Uma sugestão de prioridade para segunda-feira
-
-Formato para WhatsApp:
-📊 *Relatório Semanal*
-_semana de ${startFormatted} a ${endFormatted}_
-
-*📈 Visão Geral:* [resumo executivo]
-*🎫 Chamados:* Abertos: X | Resolvidos: X | Escalados: X
-*✅ Tarefas:* Concluídas: X | Pendentes: X
-*💰 Finanças Emocionais:* Entrou: R$ X | Saiu: R$ X | Destaque: [maior despesa e o cruzamento com o humor do diário]
-*👥 Equipe:* [padrões observados]
-*⚠️ Atenção:* [alertas]
-*💡 Prioridade segunda:* [sugestão]`;
-
-  const { content } = await generateResponse(
-    [{ role: "user", content: dataText }],
-    systemPrompt,
-    0.5,
-    1500,
-    providerOpts
-  );
+  // Relatório com números calculados pelo código (antes a IA escrevia tudo e
+  // inventava chamados/equipe/gastos). A IA só faz o comentário do fim.
+  const { buildWeeklyDigest } = await import("./message-handlers");
+  const { text: content } = await buildWeeklyDigest(providerOpts);
+  const finances = await prisma.financeEntry.findMany({
+    where: { date: { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") } },
+    orderBy: { date: "asc" },
+  });
 
   const record = await prisma.weeklyReport.create({
     data: { weekStart, weekEnd, content },

@@ -4,7 +4,7 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes } from "./message-handlers";
+import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -63,6 +63,28 @@ export function startScheduler(): void {
           } catch (err) {
             console.error(`Erro ao gerar resumo para o grupo ${group.groupName}:`, err);
           }
+        }
+
+        // Resumo do SEU dia (gastos, tetos, previsão, VR, o que vence amanhã).
+        // Fica salvo na aba "Resumos Diários"; um por dia (confere no banco,
+        // então um reinício depois do horário não manda de novo).
+        try {
+          const already = await prisma.dailySummary.findFirst({ where: { groupJid: "self", date: todayDate } });
+          if (!already && config.ownerPhone) {
+            const text = await buildDailyDigest();
+            await prisma.dailySummary.create({ data: { groupJid: "self", groupName: "Seu dia", date: todayDate, summary: text, sentAt: new Date() } });
+            await sendTextWithTyping(
+              evolutionConfig.evolutionUrl,
+              evolutionConfig.evolutionApiKey,
+              evolutionConfig.instanceId,
+              config.ownerPhone,
+              text,
+              20,
+              5
+            );
+          }
+        } catch (err) {
+          console.error("Erro ao enviar o resumo do dia:", err);
         }
       }
 
