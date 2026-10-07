@@ -70,7 +70,8 @@ export default function AgendaPage() {
   }
 
   async function deleteAll() {
-    if (!confirm("Tem certeza que deseja apagar TODOS os itens da Agenda? Essa ação não pode ser desfeita.")) return;
+    const typed = prompt("Isso apaga TODOS os itens da Agenda (inclusive lembretes) e não tem volta.\nPara confirmar, digite APAGAR:");
+    if ((typed || "").trim().toUpperCase() !== "APAGAR") return;
     await fetch("/api/agenda?all=true", { method: "DELETE" });
     setItems([]);
     setSelected(null);

@@ -73,7 +73,8 @@ export default function ConversationsPage() {
 
   async function deleteAllConversations() {
     const label = filterSource === "group" ? "todas as conversas de GRUPOS" : "todas as conversas PRIVADAS";
-    if (!confirm(`Tem certeza que deseja apagar ${label}? Essa ação não pode ser desfeita.`)) return;
+    const typed = prompt(`Isso apaga ${label} e não tem volta.\nPara confirmar, digite APAGAR:`);
+    if ((typed || "").trim().toUpperCase() !== "APAGAR") return;
     await fetch(`/api/conversations?all=true&source=${filterSource}`, { method: "DELETE" });
     setConversations([]);
     setSelected(null);

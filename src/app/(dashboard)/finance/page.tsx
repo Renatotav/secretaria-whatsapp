@@ -938,13 +938,16 @@ export default function FinancePage() {
   async function deleteMonth() {
     const label = new Date(Number(month.split("-")[0]), Number(month.split("-")[1]) - 1, 1)
       .toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-    if (!confirm(`Tem certeza que deseja excluir todos os lançamentos de ${label}? Essa ação não pode ser desfeita.`)) return;
+    // Apagar em massa pede para DIGITAR a palavra — um clique sem querer não apaga nada.
+    const typed = prompt(`Isso apaga TODOS os lançamentos de ${label} e não tem volta.\nPara confirmar, digite APAGAR:`);
+    if ((typed || "").trim().toUpperCase() !== "APAGAR") return;
     await fetch(`/api/finance?month=${month}`, { method: "DELETE" });
     load();
   }
 
   async function deleteAll() {
-    if (!confirm("Tem certeza que deseja excluir TODOS os lançamentos financeiros? Essa ação não pode ser desfeita.")) return;
+    const typed = prompt("Isso apaga TODOS os lançamentos financeiros, de todos os meses, e não tem volta.\nPara confirmar, digite APAGAR TUDO:");
+    if ((typed || "").trim().toUpperCase() !== "APAGAR TUDO") return;
     await fetch(`/api/finance?all=true`, { method: "DELETE" });
     load();
   }
