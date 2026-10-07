@@ -898,7 +898,19 @@ export async function buildDailyDigest(): Promise<string> {
   }
   lines.push((await monthForecastLine(today.getFullYear(), today.getMonth())).trim());
   const vr = await vrBalanceShort();
-  if (vr) lines.push(vr);
+  if (vr) {
+    lines.push(vr);
+    // Sem gasto no VR há 5 dias: lembra de lançar (senão o saldo do sistema
+    // fica maior que o do app e a previsão acha que tem mais comida coberta).
+    const lastVrSpend = await prisma.financeEntry.findFirst({
+      where: { type: "expense", OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
+      orderBy: { date: "desc" },
+    });
+    const fiveDaysAgo = new Date(today.getTime() - 5 * 86400000);
+    if (!lastVrSpend || lastVrSpend.date < fiveDaysAgo) {
+      lines.push(`💡 Faz uns dias sem gasto no VR por aqui. Usou? Lança assim: "almoço 25 no VR" — e confere se o saldo bate com o app.`);
+    }
+  }
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
   const due = await dueBetween(dayRange(tomorrow).gte, dayRange(tomorrow).lte);
   lines.push(due.length ? `📅 Amanhã:\n${due.join("\n")}` : "📅 Amanhã: nada vencendo.");
