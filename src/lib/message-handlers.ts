@@ -220,10 +220,9 @@ export async function sendMonthChart(config: AgentConfig, year: number, monthInd
       .sort((a, b) => b[1] - a[1])
       .map(([label, value]) => ({ label, value, compare: prev.byCategory[label] }));
     if (bars.length === 0) return;
-    const balance = cur.income - cur.expense;
     const png = await barChartPng(
       `Gastos de ${MONTH_NAMES[monthIndex]}/${year}`,
-      `Saiu ${brl(cur.expense)} · ${balance >= 0 ? "sobra" : "faltam"} ${brl(Math.abs(balance))}`,
+      `Entrou ${brl(cur.income)} · saiu ${brl(cur.expense)}`,
       bars,
       `marca escura = ${MONTH_NAMES[prevDate.getMonth()]}`
     );

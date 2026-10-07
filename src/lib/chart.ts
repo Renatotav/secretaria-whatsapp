@@ -33,23 +33,33 @@ export function barChartSvg(title: string, subtitle: string, bars: ChartBar[], c
   // Espaço à direita para o texto do valor (~10px por caractere na fonte 17).
   const right = Math.max(170, ...items.map((b) => (b.valueLabel ?? "").length * 10 + 30));
   const height = top + items.length * (barHeight + gap) + (compareLabel ? 60 : 30);
-  const max = Math.max(1, ...items.map((b) => Math.max(b.value, b.compare ?? 0)));
-  const scale = (v: number) => (v / max) * (width - left - right);
+  // A escala segue os valores do mês; uma comparação muito maior (ex: a
+  // entrada de R$ 12 mil da scooter no mês anterior) é cortada na borda com o
+  // valor escrito, em vez de achatar todas as barras.
+  const maxValue = Math.max(1, ...items.map((b) => b.value));
+  const maxCompare = Math.max(0, ...items.map((b) => b.compare ?? 0));
+  const max = Math.max(maxValue, Math.min(maxCompare, maxValue * 1.5));
+  const scale = (v: number) => (Math.min(v, max) / max) * (width - left - right);
 
   const rows = items
     .map((b, i) => {
       const y = top + i * (barHeight + gap);
       const w = Math.max(2, scale(b.value));
       const label = b.label.length > 26 ? `${b.label.slice(0, 25)}…` : b.label;
+      const clipped = (b.compare ?? 0) > max;
       const compare =
         b.compare !== undefined && b.compare > 0
-          ? `<rect x="${left + scale(b.compare) - 2}" y="${y - 4}" width="4" height="${barHeight + 8}" rx="2" fill="#1f2430" opacity="0.55"/>`
+          ? `<rect x="${left + scale(b.compare) - 2}" y="${y - 4}" width="4" height="${barHeight + 8}" rx="2" fill="#1f2430" opacity="0.55"/>${
+              clipped
+                ? `<text x="${left + scale(b.compare) - 8}" y="${y - 8}" text-anchor="end" font-size="13" fill="#5b6270">${escapeXml(`${brl(b.compare)} ▸`)}</text>`
+                : ""
+            }`
           : "";
       return `
     <text x="${left - 14}" y="${y + barHeight / 2 + 6}" text-anchor="end" font-size="18" fill="#1f2430">${escapeXml(label)}</text>
     <rect x="${left}" y="${y}" width="${w}" height="${barHeight}" rx="6" fill="${b.color ?? COLORS[i % COLORS.length]}"/>
     ${compare}
-    <text x="${left + Math.max(w, b.compare ? scale(b.compare) : 0) + 12}" y="${y + barHeight / 2 + 6}" font-size="17" font-weight="bold" fill="#1f2430">${escapeXml(b.valueLabel ?? brl(b.value))}</text>`;
+    <text x="${left + Math.max(w, b.compare && !clipped ? scale(b.compare) : 0) + 12}" y="${y + barHeight / 2 + 6}" font-size="17" font-weight="bold" fill="#1f2430">${escapeXml(b.valueLabel ?? brl(b.value))}</text>`;
     })
     .join("");
 
