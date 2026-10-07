@@ -4,12 +4,13 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve } from "./message-handlers";
+import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
 let lastFinanceReminderDate = "";
 let lastMonthClosingDate = "";
+let lastWishCheckDate = "";
 let lastReminderHour = -1;
 
 export function startScheduler(): void {
@@ -123,6 +124,17 @@ export function startScheduler(): void {
           await sendMonthChart(config, last.getUTCFullYear(), last.getUTCMonth());
         } catch (err) {
           console.error("Erro ao enviar fechamento do mês:", err);
+        }
+      }
+
+      // Lista de desejos (09:10): avisa o desejo que passou a caber — no
+      // máximo um aviso por item por mês (gravado no próprio item).
+      if (hhmm >= "09:10" && lastWishCheckDate !== todayDate && config.ownerPhone) {
+        lastWishCheckDate = todayDate;
+        try {
+          await notifyAffordableWishes(config);
+        } catch (err) {
+          console.error("Erro ao conferir a lista de desejos:", err);
         }
       }
 

@@ -11,7 +11,7 @@ const NAV = [
   { href: "/diary", icon: "📓", label: "Diário" },
   { href: "/briefings", icon: "👤", label: "Contatos" },
   { href: "/groups", icon: "👥", label: "Grupos" },
-  { href: "/tickets", icon: "🎫", label: "Chamados" },
+  { href: "/wishlist", icon: "🛍️", label: "Desejos" },
   { href: "/daily-summary", icon: "📋", label: "Resumos Diários" },
   { href: "/weekly-report", icon: "📊", label: "Rel. Semanal" },
   { href: "/conversations", icon: "💬", label: "Conversas" },

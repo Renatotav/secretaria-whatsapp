@@ -398,7 +398,7 @@ async function sendCategoryChart(config: AgentConfig, summary: Awaited<ReturnTyp
  * e/ou somando a compra (no cartão, nas faturas certas). Não grava nada.
  */
 async function simulateFinance(
-  route: Extract<PersonalRouteResult, { type: "finance_simulation" }>,
+  route: Extract<PersonalRouteResult, { simDescription: string }>,
   config: AgentConfig
 ): Promise<string> {
   const MONTHS = 4;
@@ -657,6 +657,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 📊 "Quanto gastei esse mês?" — entradas, saídas e quanto sobra no mês.
 🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 70%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa a partir de 70% e mostra a previsão do mês (sobra ou falta, e se vai sair da Reserva).
 🍔 VR (vale): "gastei 45 no almoço no VR" lança na conta do VR; "quanto tenho no VR?" mostra o saldo e quanto dá pra gastar por dia.
+🛍️ Lista de desejos: "quero comprar um tênis de 300 em 3x" anota e diz se cabe; "minha lista de desejos" mostra tudo; ela avisa sozinha quando um desejo passar a caber.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
@@ -747,6 +748,69 @@ async function monthForecast(year: number, monthIndex: number) {
   const { items } = await budgetStatus(year, monthIndex);
   const stillPlanned = items.reduce((sum, b) => sum + Math.max(0, b.limit - b.spent), 0);
   return t.income - t.expense - stillPlanned;
+}
+
+// ── Lista de desejos ────────────────────────────────────────────────────
+export interface WishVerdict {
+  level: "green" | "yellow" | "red";
+  text: string;
+}
+
+/**
+ * Um desejo cabe agora? Mesma conta do "posso comprar?": previsão de cada mês
+ * em que cai uma parcela (entra − sai − o que ainda vem pelos tetos) e o teto
+ * da categoria no primeiro mês.
+ */
+export async function checkWish(w: { amount: number; installments: number; paymentMethod: string; category: string }): Promise<WishVerdict> {
+  const config = await prisma.agentConfig.findFirst();
+  const today = todayBRT();
+  const isCard = w.paymentMethod === "cartão";
+  const n = isCard ? Math.max(1, w.installments || 1) : 1;
+  const parcel = w.amount / n;
+  const first = isCard ? creditCardBillDate(today, config?.creditCardDueDay || 10, config?.creditCardBestDay || 5) : today;
+  let worst = Infinity;
+  let worstMonth = "";
+  for (let k = 0; k < n; k++) {
+    const d = new Date(first.getFullYear(), first.getMonth() + k, 1);
+    const after = (await monthForecast(d.getFullYear(), d.getMonth())) - parcel;
+    if (after < worst) { worst = after; worstMonth = MONTH_NAMES[d.getMonth()]; }
+  }
+  const { items } = await budgetStatus(first.getFullYear(), first.getMonth());
+  const b = items.find((x) => x.category === w.category);
+  const over = b ? b.spent + parcel - b.limit : -1;
+  if (worst < 0) return { level: "red", text: `ainda não: ${worstMonth} ficaria ${brl(-worst)} no vermelho` };
+  if (over > 0) return { level: "yellow", text: `cabe no mês, mas estoura o teto de ${b!.category} em ${brl(over)}` };
+  if (worst < 150) return { level: "yellow", text: `cabe, mas aperta ${worstMonth} (sobra só ${brl(worst)})` };
+  return { level: "green", text: `cabe! ${worstMonth} ainda sobra ${brl(worst)} depois da compra` };
+}
+
+const wishLabel = (w: { name: string; amount: number; installments: number; paymentMethod: string }) =>
+  `${w.name} — ${brl(w.amount)}${w.paymentMethod === "cartão" && w.installments > 1 ? ` (${w.installments}× de ${brl(w.amount / w.installments)})` : ` (${w.paymentMethod})`}`;
+const levelIcon = { green: "🟢", yellow: "🟡", red: "🔴" } as const;
+
+async function buildWishList(): Promise<string> {
+  const wishes = await prisma.wishItem.findMany({ where: { status: "wish" }, orderBy: { createdAt: "asc" } });
+  if (wishes.length === 0) return "🛍️ Sua lista de desejos está vazia. Ex: \"quero comprar um tênis de 300 em 3x\".";
+  const lines: string[] = [];
+  for (const w of wishes) {
+    const v = await checkWish(w);
+    lines.push(`${levelIcon[v.level]} ${wishLabel(w)}\n   ${v.text}`);
+  }
+  return `🛍️ *Lista de desejos*\n${lines.join("\n")}`;
+}
+
+/** Aviso do dia: desejo que passou a caber (🟢) — uma vez por mês por item. */
+export async function notifyAffordableWishes(config: AgentConfig): Promise<void> {
+  if (!config.ownerPhone) return;
+  const today = todayBRT();
+  const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const wishes = await prisma.wishItem.findMany({ where: { status: "wish", notifiedMonth: { not: monthKey } } });
+  for (const w of wishes) {
+    const v = await checkWish(w);
+    if (v.level !== "green") continue;
+    await prisma.wishItem.update({ where: { id: w.id }, data: { notifiedMonth: monthKey } });
+    await notifyOwner(config, `🛍️ *Boa notícia:* ${wishLabel(w)} — ${v.text}\nSe comprar, me conta ("comprei o ${w.name.toLowerCase()}...") que eu lanço e tiro da lista.`);
+  }
 }
 
 async function monthForecastLine(year: number, monthIndex: number): Promise<string> {
@@ -880,6 +944,7 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
   if (intent === "bills_due") return buildBillsDue("query");
   if (intent === "budget_status") return buildBudgetResponse();
   if (intent === "vr_balance") return buildVrBalance();
+  if (intent === "wish_list") return buildWishList();
   if (intent === "subscriptions") return buildSubscriptionsResponse();
   if (intent === "month_diagnosis") return buildMonthDiagnosis();
 
@@ -1546,6 +1611,16 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             }
           }
           response += await monthForecastLine(mDate.getFullYear(), mDate.getMonth());
+
+          // Comprou algo da lista de desejos? Tira da lista.
+          const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          const said = norm(`${joinedText} ${route.description}`);
+          const wishes = await prisma.wishItem.findMany({ where: { status: "wish" } });
+          const bought = wishes.find((w) => norm(w.name).split(/[^a-z0-9]+/).filter((x) => x.length >= 4).some((x) => said.includes(x)));
+          if (bought) {
+            await prisma.wishItem.update({ where: { id: bought.id }, data: { status: "bought" } });
+            response += `\n🛍️ Tirei *${bought.name}* da lista de desejos.`;
+          }
         }
       }
       break;
@@ -1603,6 +1678,20 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     case "finance_simulation":
       response = await simulateFinance(route, config);
       break;
+    case "wish_add": {
+      const wish = await prisma.wishItem.create({
+        data: {
+          name: route.simDescription ? route.simDescription.charAt(0).toUpperCase() + route.simDescription.slice(1) : "Desejo",
+          amount: route.simPurchaseAmount || 0,
+          installments: route.simPaymentMethod === "cartão" ? Math.max(1, Math.round(route.simInstallments || 1)) : 1,
+          paymentMethod: route.simPaymentMethod,
+          category: route.simCategory || "Compras",
+        },
+      });
+      const v = await checkWish(wish);
+      response = `🛍️ Anotei na lista de desejos: *${wishLabel(wish)}*\n${levelIcon[v.level]} ${v.text.charAt(0).toUpperCase() + v.text.slice(1)}.\n${v.level === "green" ? "Se for comprar, me conta que eu lanço." : "Quando couber, eu te aviso. 😉"}`;
+      break;
+    }
     case "finance_question":
       response = await answerFinanceQuestion(route.question, providerOpts);
       break;
@@ -2587,7 +2676,9 @@ export async function handleGroupMessage(joinedText: string, meta: GroupMessageM
       }
     }
     groupConfig = await prisma.groupConfig.create({
-      data: { groupJid, groupName: newGroupName, active: true },
+      // Grupo novo começa DESLIGADO: só é lido pela IA se o dono ativar no
+      // painel (antes todo grupo novo passava a ser monitorado sozinho).
+      data: { groupJid, groupName: newGroupName, active: false },
     });
   } else if (/^\d+$/.test(groupConfig.groupName)) {
     if (config.evolutionUrl && config.evolutionApiKey && config.instanceId) {

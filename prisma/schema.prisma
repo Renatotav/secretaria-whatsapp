@@ -219,3 +219,19 @@ model InvoiceItem {
   unitPrice      Float        @default(0)
   createdAt      DateTime     @default(now())
 }
+
+/// Lista de desejos: o que o dono quer comprar; a secretária avisa quando cabe no mês.
+model WishItem {
+  id            String   @id @default(cuid())
+  name          String
+  amount        Float
+  installments  Int      @default(1)
+  paymentMethod String   @default("cartão")
+  category      String   @default("Compras")
+  /// "wish" (na lista), "bought" (comprou) ou "dropped" (desistiu).
+  status        String   @default("wish")
+  /// Último mês ("AAAA-MM") em que avisou que cabia — um aviso por mês.
+  notifiedMonth String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

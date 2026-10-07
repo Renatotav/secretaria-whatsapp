@@ -4,7 +4,7 @@ import { taxonomyPrompt } from "./finance-taxonomy";
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
 const FINANCE_TAXONOMY = taxonomyPrompt();
 
-export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart" | "bills_due" | "budget_status" | "vr_balance";
+export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart" | "bills_due" | "budget_status" | "vr_balance" | "wish_list";
 
 export type PersonalRouteResult =
   | {
@@ -73,7 +73,8 @@ export type PersonalRouteResult =
     }
   | {
       // "E se meu salário for 3.300?" / "Posso comprar um capacete de 350 em 3x?"
-      type: "finance_simulation";
+      // wish_add: "quero comprar um tênis de 300" (anota na lista de desejos).
+      type: "finance_simulation" | "wish_add";
       simIncome: number | null;
       simPurchaseAmount: number | null;
       simInstallments: number | null;
@@ -118,6 +119,7 @@ Tipos:
    Ex: "O que tenho pendente hoje?" → pending_today
    Ex: "Quais chamados estão abertos?" → open_tickets
    Ex: "Quanto gastei esse mês?" → finance_summary
+   Ex: "Minha lista de desejos", "O que eu queria comprar?", "Já dá pra comprar algo da lista?" → wish_list
    Ex: "Quanto tenho no VR?", "Saldo do vale?", "Quanto sobrou no ticket?" → vr_balance
    Ex: "Como está meu orçamento?", "Estou dentro do teto?", "Como estão meus limites?" → budget_status
    Ex: "O que falta pagar?", "Quais contas tenho pra pagar?", "O que vence essa semana?", "Tem conta atrasada?" → bills_due
@@ -189,6 +191,11 @@ Tipos:
    Sem meio de pagamento dito = "cartão"; no VR/vale = "ticket". simIncome = renda MENSAL total hipotética (ou null).
    simCategory = a categoria da compra, da mesma lista de categorias do item 3 (ex: tênis = "Pessoal", capacete = "Scooter", fone = "Compras").
 
+7b. wish_add — ele QUER comprar algo e quer anotar para depois (não está perguntando se pode agora):
+   "quero comprar um tênis de 300", "anota na lista de desejos um fone de 150", "coloca o tênis de 300 em 3x na lista".
+   Use os MESMOS campos da simulação: simDescription, simPurchaseAmount (valor total), simInstallments, simPaymentMethod, simCategory.
+   ("posso comprar...?" / "dá pra comprar...?" continua sendo finance_simulation.)
+
 8. finance_question — PERGUNTA sobre números do próprio financeiro que não se encaixa nos atalhos de agenda_query.
    Ex: "Quanto gastei com Uber em setembro?", "Qual foi minha maior compra no cartão?", "Quantas vezes pedi delivery esse mês?", "Quanto falta pagar do Samsung?"
    Coloque a pergunta inteira em "question". NÃO é um gasto novo (nunca use "finance" para perguntas).
@@ -203,12 +210,12 @@ IMPORTANTE:
 
 Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 {
-  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation|finance_question|chat",
+  "type": "agenda_add|agenda_query|finance|diary|savings_add|finance_update_date|finance_simulation|wish_add|finance_question|chat",
   "category": "task|event|reminder|personal",
   "title": "<título real extraído da mensagem>",
   "description": "<descrição real extraída da mensagem>",
   "dueDate": "ISO 8601 ou null",
-  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart|bills_due|budget_status|vr_balance",
+  "queryIntent": "pending_today|open_tickets|finance_summary|group_summary|savings_summary|month_closing|subscriptions|month_diagnosis|category_summary|chart|bills_due|budget_status|vr_balance|wish_list",
   "chartKind": "categories|income_expense|category|goals",
   "financeType": "income|expense",
   "amount": 0,
@@ -304,13 +311,13 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       };
     }
 
-    if (parsed.type === "finance_simulation") {
+    if (parsed.type === "finance_simulation" || parsed.type === "wish_add") {
       const num = (v: unknown) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
       const method = ["cartão", "pix", "débito", "dinheiro", "ticket"].includes(parsed.simPaymentMethod as string)
         ? (parsed.simPaymentMethod as "cartão" | "pix" | "débito" | "dinheiro" | "ticket")
         : "cartão";
       return {
-        type: "finance_simulation",
+        type: parsed.type === "wish_add" ? "wish_add" : "finance_simulation",
         simIncome: num(parsed.simIncome),
         simPurchaseAmount: num(parsed.simPurchaseAmount),
         simInstallments: num(parsed.simInstallments),
@@ -344,6 +351,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
         "bills_due",
         "budget_status",
         "vr_balance",
+        "wish_list",
       ];
       const queryIntent = validIntents.includes(parsed.queryIntent as PersonalQueryIntent)
         ? (parsed.queryIntent as PersonalQueryIntent)
