@@ -990,7 +990,7 @@ async function buildBudgetResponse(): Promise<string> {
 }
 
 /** Gráfico do orçamento: barra = gasto (verde/amarelo/vermelho), marca = teto. */
-async function sendBudgetChart(config: AgentConfig): Promise<void> {
+export async function sendBudgetChart(config: AgentConfig): Promise<void> {
   if (!config.ownerPhone || !config.evolutionUrl) return;
   try {
     const today = todayBRT();

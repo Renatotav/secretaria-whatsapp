@@ -57,13 +57,14 @@ export const POST = withErrorHandling(async (request: Request) => {
   // Resumo do dia dele ("Seu dia"): o mesmo das 21h, gerado na hora. Troca
   // o de hoje, se já existir, e manda no WhatsApp.
   if (groupJid === "self" || groupJid === "personal") {
-    const { buildDailyDigest, notifyOwner } = await import("@/lib/message-handlers");
+    const { buildDailyDigest, notifyOwner, sendBudgetChart } = await import("@/lib/message-handlers");
     const brt = new Date(Date.now() - 3 * 60 * 60 * 1000);
     const date = brt.toISOString().slice(0, 10);
     const text = await buildDailyDigest();
     await prisma.dailySummary.deleteMany({ where: { groupJid: "self", date } });
     await prisma.dailySummary.create({ data: { groupJid: "self", groupName: "Seu dia", date, summary: text, sentAt: new Date() } });
     await notifyOwner(config, text);
+    await sendBudgetChart(config);
     return NextResponse.json({ ok: true });
   }
 

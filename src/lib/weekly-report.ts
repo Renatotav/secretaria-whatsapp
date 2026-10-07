@@ -55,6 +55,19 @@ export async function generateWeeklyReport(
       data: { sentAt: new Date() },
     });
 
+    // Gráficos da semana: tetos do mês e gastos por categoria (x mês passado).
+    try {
+      const { sendBudgetChart, sendMonthChart } = await import("./message-handlers");
+      const config = await prisma.agentConfig.findFirst();
+      if (config) {
+        const brtNow = new Date(Date.now() - 3 * 60 * 60 * 1000);
+        await sendBudgetChart(config);
+        await sendMonthChart(config, brtNow.getUTCFullYear(), brtNow.getUTCMonth());
+      }
+    } catch (err) {
+      console.error("[weekly] falha ao enviar gráficos", err);
+    }
+
     // Passo 2: O Diário de Arrependimentos
     // Localizar a pior despesa (não essencial)
     const badKeywords = ["delivery", "ifood", "bebida", "cerveja", "besteira", "lanche", "bar"];

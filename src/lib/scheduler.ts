@@ -4,7 +4,7 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest } from "./message-handlers";
+import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest, sendBudgetChart } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -82,6 +82,7 @@ export function startScheduler(): void {
               20,
               5
             );
+            await sendBudgetChart(config); // gráfico dos tetos
           }
         } catch (err) {
           console.error("Erro ao enviar o resumo do dia:", err);
