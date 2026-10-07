@@ -767,8 +767,9 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   const until = mode === "reminder"
     ? new Date(startToday.getTime() + 4 * DAY - 1)
     : new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+  // Despesas a pagar + estornos no cartão (crédito que abate da fatura).
   const pending = await prisma.financeEntry.findMany({
-    where: { type: "expense", status: "pending", date: { lte: until } },
+    where: { status: "pending", date: { lte: until }, OR: [{ type: "expense" }, { type: "income", paymentMethod: "cartão" }] },
     orderBy: { date: "asc" },
   });
 
@@ -780,8 +781,12 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
     if (e.paymentMethod === "cartão") {
       const key = `${e.card}|${e.date.toISOString().slice(0, 10)}`;
       const c = cards.get(key) ?? { amount: 0, date: e.date, count: 0, card: e.card };
-      c.amount += e.amount;
-      c.count++;
+      if (e.type === "income") {
+        c.amount -= e.amount;
+      } else {
+        c.amount += e.amount;
+        c.count++;
+      }
       cards.set(key, c);
     } else {
       const name = e.description.replace(/\s*\((previsto|recorrente)\)/gi, "").trim();
@@ -1813,16 +1818,15 @@ export async function projectAndInsertFinanceEntries(
   // valor (até R$ 0,10 de diferença) e data de compra até 5 dias de diferença
   // (ele às vezes anota uns dias depois). Cada lançamento existente só "absorve" uma linha da fatura —
   // se ele anotou 1 almoço de R$ 26 e a fatura tem 2, o segundo entra.
-  const realCard = candidates.filter((c) => c.entry.type === "expense" && c.entry.paymentMethod === "cartão" && !c.entry.description.includes("(previsto)"));
+  const realCard = candidates.filter((c) => c.entry.paymentMethod === "cartão" && !c.entry.description.includes("(previsto)"));
   const manualCard = realCard.length === 0 ? [] : await prisma.financeEntry.findMany({
     where: {
-      type: "expense",
       date: {
         gte: new Date(Math.min(...realCard.map((c) => c.date.getTime())) - 40 * 86400000),
         lte: new Date(Math.max(...realCard.map((c) => c.date.getTime())) + 40 * 86400000),
       },
     },
-    select: { id: true, amount: true, date: true, purchaseDate: true },
+    select: { id: true, amount: true, date: true, purchaseDate: true, type: true },
   });
   const usedManual = new Set<string>();
   const matchedManual: StatementEntry[] = [];
@@ -1861,10 +1865,12 @@ export async function projectAndInsertFinanceEntries(
         continue;
       }
     }
-    if (!isProjection && c.entry.type === "expense" && c.entry.paymentMethod === "cartão") {
+    // Estorno (crédito) também casa com o estorno que ele já anotou, pela data da fatura.
+    if (!isProjection && c.entry.paymentMethod === "cartão") {
       const bought = c.entry.purchaseDate ? parseLocalDate(c.entry.purchaseDate) : c.date;
       const match = manualCard.find((m) =>
         !usedManual.has(m.id) &&
+        m.type === c.entry.type &&
         Math.abs(m.amount - c.entry.amount) <= AMOUNT_TOLERANCE &&
         Math.abs((m.purchaseDate ?? m.date).getTime() - bought.getTime()) <= 5 * DAY_MS
       );

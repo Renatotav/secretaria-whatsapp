@@ -24,8 +24,8 @@ export async function autoMarkPaid() {
     );
 
     const result = await prisma.financeEntry.updateMany({
+      // Compras e estornos (crédito) da fatura vencida.
       where: {
-        type: "expense",
         paymentMethod: "cartão",
         status: "pending",
         date: {
