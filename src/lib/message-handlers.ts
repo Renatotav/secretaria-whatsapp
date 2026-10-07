@@ -758,7 +758,7 @@ async function monthForecastLine(year: number, monthIndex: number): Promise<stri
   return `\n🔴 Previsão de ${month}: falta ${brl(-f)}${reserve ? ` → vai sair da ${reserve.name} (hoje ${brl(reserve.currentAmount)})` : ""}.`;
 }
 
-/** "Como está meu orçamento?": cada teto com 🟢 <80% · 🟡 80–100% · 🔴 estourou. */
+/** "Como está meu orçamento?": cada teto com 🟢 <70% · 🟡 70–100% · 🔴 estourou. */
 async function buildBudgetResponse(): Promise<string> {
   const today = todayBRT();
   const { items, withoutLimit } = await budgetStatus(today.getFullYear(), today.getMonth());
@@ -796,7 +796,7 @@ async function sendBudgetChart(config: AgentConfig): Promise<void> {
 }
 
 /**
- * Depois de importar fatura/extrato: categorias do mês que passaram de 80%
+ * Depois de importar fatura/extrato: categorias do mês que passaram de 70%
  * do teto (o alerta por mensagem só existia no gasto lançado pelo WhatsApp).
  */
 async function budgetAlertsAfterImport(entries: StatementEntry[]): Promise<string> {
