@@ -985,6 +985,33 @@ async function findReserveGoal() {
 }
 
 /**
+ * Fechamento do mês na Reserva (o único dinheiro guardado do dono): mês que
+ * fechou no vermelho tirou essa diferença da Reserva — ela é descontada
+ * sozinha; mês que sobrou só é avisado (ele confirma com "guarda X"). Uma vez
+ * por mês: o mês aplicado fica gravado em AgentConfig.reserveSyncedMonth.
+ * Devolve a linha para a mensagem de fechamento ("" se não houver nada).
+ */
+export async function applyMonthResultToReserve(year: number, monthIndex: number): Promise<string> {
+  const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  const config = await prisma.agentConfig.findFirst({ select: { id: true, reserveSyncedMonth: true } });
+  if (!config || config.reserveSyncedMonth >= key) return "";
+  const reserve = await findReserveGoal();
+  const { income, expense } = await monthTotals(year, monthIndex);
+  const balance = Math.round((income - expense) * 100) / 100;
+  await prisma.agentConfig.update({ where: { id: config.id }, data: { reserveSyncedMonth: key } });
+  if (!reserve) return "";
+  if (balance < 0) {
+    const newAmount = Math.max(0, reserve.currentAmount + balance);
+    await prisma.savingsGoal.update({ where: { id: reserve.id }, data: { currentAmount: newAmount } });
+    return `\n\n🏦 *${reserve.name}:* ${MONTH_NAMES[monthIndex]} fechou −${brl(-balance)}, então tirei da ${reserve.name.toLowerCase()}. Agora: ${brl(newAmount)}${newAmount === 0 ? " (zerou!)" : ""}.`;
+  }
+  if (balance > 0) {
+    return `\n\n🏦 Sobrou ${brl(balance)} em ${MONTH_NAMES[monthIndex]}. Se guardou, me diga "guarda ${Math.floor(balance)} na ${reserve.name.toLowerCase()}".`;
+  }
+  return "";
+}
+
+/**
  * Depois de receber salário: quanto sobra no mês (entradas − saídas já
  * lançadas) e uma sugestão de quanto guardar na Reserva — 10% do que entrou,
  * limitado à metade da sobra, arredondado para dezena.

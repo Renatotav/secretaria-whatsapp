@@ -4,7 +4,7 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing, sendMonthChart, buildBillsDue } from "./message-handlers";
+import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -108,7 +108,9 @@ export function startScheduler(): void {
         lastMonthClosingDate = todayDate;
         try {
           const last = new Date(Date.UTC(brtDate.getUTCFullYear(), brtDate.getUTCMonth() - 1, 1));
-          const msg = await buildMonthClosing(last.getUTCFullYear(), last.getUTCMonth());
+          const msg =
+            (await buildMonthClosing(last.getUTCFullYear(), last.getUTCMonth())) +
+            (await applyMonthResultToReserve(last.getUTCFullYear(), last.getUTCMonth()));
           await sendTextWithTyping(
             evolutionConfig.evolutionUrl,
             evolutionConfig.evolutionApiKey,
