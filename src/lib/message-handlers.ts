@@ -985,10 +985,11 @@ async function findReserveGoal() {
 }
 
 /**
- * Fechamento do mês na Reserva (o único dinheiro guardado do dono): mês que
- * fechou no vermelho tirou essa diferença da Reserva — ela é descontada
- * sozinha; mês que sobrou só é avisado (ele confirma com "guarda X"). Uma vez
- * por mês: o mês aplicado fica gravado em AgentConfig.reserveSyncedMonth.
+ * Fechamento do mês na Reserva — a Reserva é o dinheiro da conta corrente do
+ * dono, então anda sozinha nos dois sentidos: mês negativo tira a diferença,
+ * mês positivo soma a sobra. Conta só a conta corrente: o VR (cartão de
+ * benefício) fica de fora — crédito e gasto do vale não passam pela conta.
+ * Uma vez por mês: o mês aplicado fica gravado em AgentConfig.reserveSyncedMonth.
  * Devolve a linha para a mensagem de fechamento ("" se não houver nada).
  */
 export async function applyMonthResultToReserve(year: number, monthIndex: number): Promise<string> {
@@ -996,19 +997,22 @@ export async function applyMonthResultToReserve(year: number, monthIndex: number
   const config = await prisma.agentConfig.findFirst({ select: { id: true, reserveSyncedMonth: true } });
   if (!config || config.reserveSyncedMonth >= key) return "";
   const reserve = await findReserveGoal();
-  const { income, expense } = await monthTotals(year, monthIndex);
-  const balance = Math.round((income - expense) * 100) / 100;
+  const entries = await prisma.financeEntry.findMany({
+    where: {
+      date: { gte: new Date(year, monthIndex, 1), lte: new Date(year, monthIndex + 1, 0, 23, 59, 59) },
+      NOT: { OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
+    },
+    select: { type: true, amount: true },
+  });
+  const balance = Math.round(entries.reduce((sum, e) => sum + (e.type === "income" ? e.amount : -e.amount), 0) * 100) / 100;
   await prisma.agentConfig.update({ where: { id: config.id }, data: { reserveSyncedMonth: key } });
-  if (!reserve) return "";
-  if (balance < 0) {
-    const newAmount = Math.max(0, reserve.currentAmount + balance);
-    await prisma.savingsGoal.update({ where: { id: reserve.id }, data: { currentAmount: newAmount } });
-    return `\n\n🏦 *${reserve.name}:* ${MONTH_NAMES[monthIndex]} fechou −${brl(-balance)}, então tirei da ${reserve.name.toLowerCase()}. Agora: ${brl(newAmount)}${newAmount === 0 ? " (zerou!)" : ""}.`;
-  }
-  if (balance > 0) {
-    return `\n\n🏦 Sobrou ${brl(balance)} em ${MONTH_NAMES[monthIndex]}. Se guardou, me diga "guarda ${Math.floor(balance)} na ${reserve.name.toLowerCase()}".`;
-  }
-  return "";
+  if (!reserve || balance === 0) return "";
+  const newAmount = Math.max(0, Math.round((reserve.currentAmount + balance) * 100) / 100);
+  await prisma.savingsGoal.update({ where: { id: reserve.id }, data: { currentAmount: newAmount } });
+  const name = reserve.name.toLowerCase();
+  return balance < 0
+    ? `\n\n🏦 *${reserve.name}:* na conta corrente, ${MONTH_NAMES[monthIndex]} fechou −${brl(-balance)}, então saiu da ${name}. Agora: ${brl(newAmount)}${newAmount === 0 ? " (zerou!)" : ""}.`
+    : `\n\n🏦 *${reserve.name}:* sobrou ${brl(balance)} na conta corrente em ${MONTH_NAMES[monthIndex]}, somei na ${name}. Agora: ${brl(newAmount)}.`;
 }
 
 /**
