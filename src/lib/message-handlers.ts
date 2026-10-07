@@ -2530,7 +2530,12 @@ async function applyStatementChoice(text: string, config: AgentConfig): Promise<
  * imagem direto.
  */
 // Print de compra/estorno esperando o "sim" dele para ser gravado.
-let pendingImageDraft: { reading: import("./personal-router").ImageReading; at: number } | null = null;
+let pendingImageDraft: {
+  reading: import("./personal-router").ImageReading;
+  at: number;
+  /** Pix que bate com uma fatura em aberto: o "sim" dá baixa na fatura em vez de lançar gasto. */
+  invoice?: { card: string; dueDate: string; total: number };
+} | null = null;
 const CONFIRM_YES_RE = /^(sim|s|isso|pode|pode sim|pode salvar|confirma|confirmo|ok|salva|lança|lanca)[.!]*$/i;
 const CONFIRM_NO_RE = /^(n[aã]o|nao|cancela|deixa|esquece)[.!]*$/i;
 
@@ -2548,6 +2553,21 @@ export async function handleSmartImage(base64: string, mimetype: string, caption
 
   if (reading.kind === "nota_fiscal") return handleInvoiceImage(base64, mimetype, caption);
   if (reading.kind === "fatura") return handleStatementImage(base64, mimetype);
+
+  // Comprovante de Pix com o valor de uma fatura em aberto (ex: o Pix para o
+  // irmão que paga o cartão): oferece dar baixa na fatura, sem lançar gasto.
+  if (reading.kind === "compra" && reading.paymentMethod !== "cartão" && reading.amount > 0) {
+    const { listOpenInvoices, invoiceLabel } = await import("./invoices");
+    const match = (await listOpenInvoices()).find((i) => Math.abs(i.total - reading.amount) <= 1);
+    if (match) {
+      pendingImageDraft = { reading, at: Date.now(), invoice: { card: match.card, dueDate: match.dueDate, total: match.total } };
+      await notifyOwner(
+        config,
+        `📸 ${reading.summary || "Comprovante de Pix."}\n\n💳 Esse valor bate com a fatura *${invoiceLabel(match.card)}* de ${match.dueDate.slice(8, 10)}/${match.dueDate.slice(5, 7)} (${brl(match.total)}).\nÉ o pagamento dela? Responda *sim* para dar baixa na fatura ou *não* para lançar como gasto normal.`
+      );
+      return;
+    }
+  }
 
   if ((reading.kind === "compra" || reading.kind === "estorno") && reading.amount > 0) {
     pendingImageDraft = { reading, at: Date.now() };
@@ -2593,13 +2613,26 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
     return null;
   }
   const t = text.trim();
+  const draft = pendingImageDraft;
   if (CONFIRM_NO_RE.test(t)) {
+    // "não" para a baixa da fatura: vira o cartão normal de gasto, perguntando de novo.
+    if (draft.invoice) {
+      pendingImageDraft = { reading: draft.reading, at: Date.now() };
+      return `Ok! Então lanço como gasto?\n\n${entryCard(imageDraftEntry(draft.reading, config), "🧐 Lançar esta compra?")}\n\nResponda *sim* para salvar ou *não* para descartar.`;
+    }
     pendingImageDraft = null;
     return "👍 Ok, não lancei o print.";
   }
   if (!CONFIRM_YES_RE.test(t)) return null;
-  const { reading } = pendingImageDraft;
+  const { reading } = draft;
   pendingImageDraft = null;
+  if (draft.invoice) {
+    const { payInvoice, invoiceLabel } = await import("./invoices");
+    const { ids, total } = await payInvoice(draft.invoice.card, draft.invoice.dueDate);
+    lastInvoicePayment = { ids, at: Date.now() };
+    lastSaved = null;
+    return `✅ Fatura paga: *${invoiceLabel(draft.invoice.card)}* de ${draft.invoice.dueDate.slice(8, 10)}/${draft.invoice.dueDate.slice(5, 7)}\n💳 ${ids.length} compras marcadas como pagas · ${brl(total)}\n↩️ Foi engano? Responda *desfazer*.`;
+  }
   const d = imageDraftEntry(reading, config);
   lastSaved = { since: new Date() };
   lastInvoicePayment = null;

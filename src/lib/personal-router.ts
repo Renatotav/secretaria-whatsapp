@@ -711,6 +711,7 @@ Classifique a imagem em "kind":
 - "nota_fiscal": cupom/nota fiscal de supermercado ou loja com lista de itens.
 - "fatura": fatura de cartão de crédito ou extrato bancário com VÁRIAS transações.
 - "compra": UMA compra/pagamento — pedido de loja (Mercado Livre, Amazon, iFood...), comprovante de Pix, recibo, boleto pago.
+  Pix/transferência para uma PESSOA também é "compra" (description "Pix para NOME", com o nome de quem recebeu).
   Se o pedido tiver reembolso/cancelamento parcial, a compra é o TOTAL PAGO (o reembolso é outro lançamento).
 - "estorno": a imagem é principalmente sobre um reembolso/estorno/devolução de dinheiro.
 - "outro": qualquer outra coisa (saldo de app, tela de banco sem transação, conversa, propaganda...).
