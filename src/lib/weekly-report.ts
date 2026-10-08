@@ -26,7 +26,11 @@ export async function generateWeeklyReport(
 ): Promise<void> {
   const { weekStart, weekEnd } = getWeekBounds();
 
-  const existing = await prisma.weeklyReport.findFirst({ where: { weekStart } });
+  // Só pula se já saiu um relatório desta semana HOJE: um gerado à mão no
+  // meio da semana não pode impedir o de domingo.
+  const brtToday = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const startOfTodayUtc = new Date(`${brtToday}T03:00:00Z`);
+  const existing = await prisma.weeklyReport.findFirst({ where: { weekStart, createdAt: { gte: startOfTodayUtc } } });
   if (existing) return;
 
   // Relatório com números calculados pelo código (antes a IA escrevia tudo e
