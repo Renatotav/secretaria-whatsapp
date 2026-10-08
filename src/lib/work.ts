@@ -70,6 +70,12 @@ function periodStarts() {
   return { day, week, month };
 }
 
+/** Chamados ainda abertos cujo Redmine já foi resolvido (vem do escala): dá para encerrar no Assyst. */
+export const CAN_CLOSE_WHERE = {
+  status: { in: ["aberto", "pendente"] },
+  redmineStatus: { startsWith: "Resolvid", mode: "insensitive" as const },
+};
+
 export async function workStats() {
   const starts = periodStarts();
   // "Registrados" pela data de ABERTURA do chamado (importado do escala ou da
@@ -95,14 +101,20 @@ export async function workStats() {
     emAberto: await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } }),
     tiposDoMes: tally("errorType"),
     origemDoMes: tally("origin"),
+    paraEncerrar: await prisma.workTicket.findMany({
+      where: CAN_CLOSE_WHERE,
+      orderBy: { openedAt: "asc" },
+      select: { ticketId: true, redmine: true, openedAt: true },
+    }),
   };
 }
 
 /** Linha do resumo das 21h (vazia se não houve chamado hoje). */
 export async function workDigestLine(): Promise<string> {
   const s = await workStats();
-  if (s.hoje.registrados + s.hoje.resolvidos + s.hoje.escalados === 0) return "";
-  return `💼 Trabalho: ${s.hoje.registrados} chamado(s) hoje · ${s.hoje.resolvidos} resolvido(s) · ${s.hoje.escalados} Redmine · ${s.emAberto} em aberto`;
+  const toClose = s.paraEncerrar.length ? ` · ✅ ${s.paraEncerrar.length} com Redmine resolvido para encerrar (${s.paraEncerrar.map((t) => t.ticketId).join(", ")})` : "";
+  if (s.hoje.registrados + s.hoje.resolvidos + s.hoje.escalados === 0 && !toClose) return "";
+  return `💼 Trabalho: ${s.hoje.registrados} chamado(s) hoje · ${s.hoje.resolvidos} resolvido(s) · ${s.hoje.escalados} Redmine · ${s.emAberto} em aberto${toClose}`;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { upsertWorkTicket, workStats } from "./work";
+import { CAN_CLOSE_WHERE, upsertWorkTicket, workStats } from "./work";
 import { normalizeTicketId } from "./work-privacy";
 
 // Comandos do trabalho pelo WhatsApp, por regra fixa (nada disso vai para a
@@ -9,7 +9,7 @@ import { normalizeTicketId } from "./work-privacy";
 //   "chamado 2154585 virou redmine 4321"  /  "chamado 2154585 pendente"
 //   "chamado 2154585"  /  "como está o chamado 2154585?"
 //   "quantos chamados fechei hoje?" (hoje / semana / mês)
-//   "chamados em aberto"
+//   "chamados em aberto"  /  "chamados para encerrar" (Redmine já resolvido)
 
 const TICKET = "([A-Za-z]?\\d{6,9})";
 const ACTION_RE = new RegExp(
@@ -21,6 +21,7 @@ const ACTION_RE = new RegExp(
 const RESOLVED_BY_ME_RE = new RegExp(`^\\s*(?:resolvi|fechei|encerrei|finalizei)\\s+(?:o\\s+)?chamado\\s+${TICKET}\\s*(?:[,:.\\-–]\\s*(.+))?$`, "is");
 const LOOKUP_RE = new RegExp(`^\\s*(?:(?:como\\s+(?:está|esta|tá|ta)|e\\s+o|status\\s+do|ver)\\s+)?(?:o\\s+)?chamado\\s+${TICKET}\\s*\\??\\s*$`, "i");
 const COUNT_RE = /^\s*quantos\s+chamados\b.*?\b(hoje|semana|m[eê]s)\b/i;
+const TO_CLOSE_RE = /^\s*(?:quais\s+(?:os\s+)?|meus\s+)?chamados?\s+(?:para|pra|p\/)\s+(?:encerrar|fechar)\s*\??\s*$/i;
 const OPEN_RE = /^\s*(?:quais\s+(?:os\s+)?|meus\s+|o\s+que\s+tenho\s+de\s+)?chamados?\s+(?:em\s+aberto|abertos|pendentes)\s*\??\s*$/i;
 
 const STATUS_LABEL: Record<string, string> = { aberto: "aberto", pendente: "pendente", resolvido: "resolvido ✅", escalado: "virou Redmine 🔁" };
@@ -49,6 +50,7 @@ async function describeTicket(rawId: string): Promise<string> {
   if (t.openedAt) lines.push(`Aberto em ${fmtDate(t.openedAt)}`);
   if (t.resolvedAt) lines.push(`${t.status === "escalado" ? "Escalado" : "Resolvido"} em ${fmtDate(t.resolvedAt)}`);
   if (t.redmine) lines.push(`Redmine: ${t.redmine}${t.redmineStatus ? ` (${t.redmineStatus})` : ""}`);
+  if ((t.status === "aberto" || t.status === "pendente") && /^resolvid/i.test(t.redmineStatus)) lines.push("✅ Redmine resolvido: pode encerrar no Assyst.");
   if (t.resolution) lines.push(`Resolução: ${t.resolution.length > 300 ? t.resolution.slice(0, 300) + "…" : t.resolution}`);
   return lines.join("\n");
 }
@@ -96,17 +98,27 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     return `💼 ${label}: *${p.resolvidos}* resolvido(s), *${p.escalados}* para o Redmine e ${p.registrados} chamado(s) aberto(s). Em aberto agora: ${s.emAberto}.`;
   }
 
+  if (TO_CLOSE_RE.test(msg)) {
+    const list = await prisma.workTicket.findMany({ where: CAN_CLOSE_WHERE, orderBy: { openedAt: "asc" }, select: { ticketId: true, redmine: true } });
+    if (!list.length) return "💼 Nenhum chamado com Redmine resolvido esperando encerramento. 👍";
+    return [
+      `💼 *${list.length} para encerrar no Assyst* (Redmine já resolvido):`,
+      ...list.map((t) => `• *${t.ticketId}* — Redmine #${t.redmine}`),
+      `Depois de encerrar: "chamado ${list[0].ticketId} resolvido".`,
+    ].join("\n");
+  }
+
   if (OPEN_RE.test(msg)) {
     const open = await prisma.workTicket.findMany({
       where: { status: { in: ["aberto", "pendente"] } },
       orderBy: [{ openedAt: "asc" }],
       take: 15,
-      select: { ticketId: true, status: true, errorType: true, openedAt: true },
+      select: { ticketId: true, status: true, errorType: true, openedAt: true, redmineStatus: true },
     });
     if (!open.length) return "💼 Nenhum chamado em aberto. 🎉";
     const total = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
     const lines = open.map(
-      (t) => `• *${t.ticketId}*${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}`
+      (t) => `• *${t.ticketId}*${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}${/^resolvid/i.test(t.redmineStatus) ? " · ✅ Redmine resolvido, pode encerrar" : ""}`
     );
     return [`💼 *${total} chamado(s) em aberto*${total > open.length ? ` (os ${open.length} mais antigos)` : ""}:`, ...lines].join("\n");
   }

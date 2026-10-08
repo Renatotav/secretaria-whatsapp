@@ -24,6 +24,7 @@ type Stats = {
   emAberto: number;
   tiposDoMes: { name: string; n: number }[];
   origemDoMes: { name: string; n: number }[];
+  paraEncerrar: { ticketId: string; redmine: string; openedAt: string | null }[];
 };
 
 const STATUS: Record<string, { label: string; color: string }> = {
@@ -132,6 +133,24 @@ export default function WorkPage() {
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Em aberto agora</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "var(--warning)" }}>{stats.emAberto}</div>
           </div>
+        </div>
+      )}
+
+      {stats && stats.paraEncerrar?.length > 0 && (
+        <div style={{ ...box, marginBottom: 16, borderColor: "var(--success)" }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>✅ Pode encerrar no Assyst — Redmine já resolvido</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+            Chamados seus ainda abertos cujo Redmine aparece como resolvido no escala. Depois de encerrar no Assyst, toque em &quot;Encerrei&quot;.
+          </div>
+          {stats.paraEncerrar.map((t) => (
+            <div key={t.ticketId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
+              <span>
+                <strong>{t.ticketId}</strong> · Redmine #{t.redmine}
+                {t.openedAt ? <span style={{ color: "var(--text-muted)" }}> · aberto em {new Date(t.openedAt).toLocaleDateString("pt-BR")}</span> : null}
+              </span>
+              <button className="btn-ghost" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => save({ ticketId: t.ticketId, status: "resolvido" })}>✅ Encerrei</button>
+            </div>
+          ))}
         </div>
       )}
 
