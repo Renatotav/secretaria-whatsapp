@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { maskPersonalData, normalizeTicketId } from "./work-privacy";
+import { alertsFor } from "./work-sla";
 
 // Central do Atendente PJe: chamados do trabalho do Renato. Tudo que entra
 // passa por maskPersonalData (CPF mascarado, sem telefone/e-mail) e nada
@@ -76,6 +77,16 @@ export const CAN_CLOSE_WHERE = {
   redmineStatus: { startsWith: "Resolvid", mode: "insensitive" as const },
 };
 
+/** Urgentes (última ação "Solicitação de Urgência") e atrasados (passou do prazo da fila). */
+async function openAlerts() {
+  const open = await prisma.workTicket.findMany({
+    where: { status: { in: ["aberto", "pendente"] } },
+    select: { status: true, openedAt: true, queue: true, errorType: true, lastAction: true, redmineStatus: true },
+  });
+  const a = open.map(alertsFor);
+  return { urgentes: a.filter((x) => x.urgent).length, atrasados: a.filter((x) => x.overdue).length };
+}
+
 export async function workStats() {
   const starts = periodStarts();
   // "Registrados" pela data de ABERTURA do chamado (importado do escala ou da
@@ -101,6 +112,7 @@ export async function workStats() {
     emAberto: await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } }),
     tiposDoMes: tally("errorType"),
     origemDoMes: tally("origin"),
+    ...(await openAlerts()),
     paraEncerrar: await prisma.workTicket.findMany({
       where: CAN_CLOSE_WHERE,
       orderBy: { openedAt: "asc" },

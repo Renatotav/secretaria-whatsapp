@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { CAN_CLOSE_WHERE, upsertWorkTicket, workStats } from "./work";
 import { normalizeTicketId } from "./work-privacy";
+import { alertsFor } from "./work-sla";
 
 // Comandos do trabalho pelo WhatsApp, por regra fixa (nada disso vai para a
 // IA nem fica no histórico da conversa — dado do Tribunal não passa por ela).
@@ -113,13 +114,19 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
       where: { status: { in: ["aberto", "pendente"] } },
       orderBy: [{ openedAt: "asc" }],
       take: 15,
-      select: { ticketId: true, status: true, errorType: true, openedAt: true, redmineStatus: true },
+      select: { ticketId: true, status: true, errorType: true, openedAt: true, redmineStatus: true, queue: true, lastAction: true },
     });
     if (!open.length) return "💼 Nenhum chamado em aberto. 🎉";
     const total = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
-    const lines = open.map(
-      (t) => `• *${t.ticketId}*${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}${/^resolvid/i.test(t.redmineStatus) ? " · ✅ Redmine resolvido, pode encerrar" : ""}`
-    );
+    // Mesma ordem e alertas do escala: urgente, Redmine resolvido, atrasado.
+    const rank = (a: ReturnType<typeof alertsFor>) => (a.urgent ? 0 : a.canClose ? 1 : a.overdue ? 2 : 3);
+    const lines = open
+      .map((t) => ({ t, a: alertsFor(t) }))
+      .sort((x, y) => rank(x.a) - rank(y.a))
+      .map(
+        ({ t, a }) =>
+          `• ${a.urgent ? "🚨 *URGENTE* " : ""}*${t.ticketId}*${a.overdue ? ` ⚠ ${a.days}d` : ""}${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}${a.canClose ? " · ⚡ Redmine resolvido, encerre" : ""}`
+      );
     return [`💼 *${total} chamado(s) em aberto*${total > open.length ? ` (os ${open.length} mais antigos)` : ""}:`, ...lines].join("\n");
   }
 

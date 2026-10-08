@@ -266,6 +266,10 @@ model WorkTicket {
   redmine     String    @default("")
   /// Situação do Redmine no escala (ex: "Nova", "Ag. Info.(Impl)", "Resolvida").
   redmineStatus String  @default("")
+  /// Fila/grupo do chamado no escala (ex: "3N SUPJUD PJE Erro ou Falha") — define o prazo.
+  queue       String    @default("")
+  /// Última ação no Assyst, vinda do escala (ex: "Solicitação de Urgência").
+  lastAction  String    @default("")
   description String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")

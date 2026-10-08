@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { alertsFor } from "@/lib/work-sla";
 
 type Ticket = {
   id: string;
@@ -12,6 +13,8 @@ type Ticket = {
   resolution: string;
   redmine: string;
   redmineStatus?: string;
+  queue?: string;
+  lastAction?: string;
   description: string;
   source: string;
   updatedAt: string;
@@ -22,6 +25,8 @@ type Stats = {
   semana: Count;
   mes: Count;
   emAberto: number;
+  urgentes: number;
+  atrasados: number;
   tiposDoMes: { name: string; n: number }[];
   origemDoMes: { name: string; n: number }[];
   paraEncerrar: { ticketId: string; redmine: string; openedAt: string | null }[];
@@ -70,20 +75,65 @@ function RedmineLinks({ value, links }: { value: string; links: Links }) {
   );
 }
 
-/** Badge de dias em aberto (igual ao escala): 🟢 até 2 dias · 🟡 3–4 · 🔴 5 ou mais. */
-function AgeBadge({ openedAt }: { openedAt: string | null }) {
-  if (!openedAt) return null;
-  const days = Math.floor((Date.now() - new Date(openedAt).getTime()) / 86400_000);
-  const color = days >= 5 ? "#dc2626" : days >= 3 ? "#f59e0b" : "#22c55e";
+// Alertas do chamado com a mesma ideia da tela "Meus chamados" do escala.
+const tag = { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, lineHeight: 1.2, whiteSpace: "nowrap" } as const;
+
+/** URGENTE e prazo estourado: vermelho pulsando. */
+function TicketBadges({ t }: { t: Ticket }) {
+  const a = alertsFor(t);
   return (
-    <span
-      title={`${days} dia(s) em aberto`}
-      className={days >= 5 ? "badge-alerta" : undefined}
-      style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: color, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}
-    >
-      {days >= 5 ? "⚠ " : ""}
-      {days}d
+    <>
+      {a.urgent && (
+        <span className="badge-alerta" style={{ ...tag, color: "#fff", background: "#dc2626" }}>
+          URGENTE
+        </span>
+      )}
+      {a.overdue && a.days !== null && (
+        <span className="badge-alerta" title={`Passou do prazo de ${a.sla} dias da fila`} style={{ ...tag, color: "#fff", background: "#dc2626" }}>
+          ⚠ {a.days}d
+        </span>
+      )}
+    </>
+  );
+}
+
+/** "⚡ Redmine resolvido — encerre" (laranja pulsando, como no escala). */
+function ClosePill() {
+  return (
+    <span className="pulsar" style={{ ...tag, fontSize: 11, borderRadius: 999, padding: "3px 9px", color: "#fdba74", background: "rgba(249,115,22,.18)", border: "1px solid rgba(249,115,22,.45)", width: "fit-content" }}>
+      ⚡ Redmine resolvido — encerre
     </span>
+  );
+}
+
+/** Ordem: urgente, Redmine resolvido, atrasado, aberto, o resto. */
+function priority(t: Ticket) {
+  const a = alertsFor(t);
+  return a.urgent ? 0 : a.canClose ? 1 : a.overdue ? 2 : t.status === "aberto" || t.status === "pendente" ? 3 : 4;
+}
+
+/** Cartão-filtro (clique liga/desliga), igual aos do escala. */
+function FilterCard({ title, n, color, active, onClick }: { title: string; n: number; color: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={active ? "pulsar" : undefined}
+      style={{
+        flex: "1 1 160px",
+        textAlign: "left",
+        cursor: "pointer",
+        background: active ? `${color}22` : "var(--bg-card)",
+        border: `1px solid ${active ? color : n > 0 ? `${color}88` : "var(--border)"}`,
+        borderRadius: 12,
+        padding: 14,
+        color: "var(--text)",
+      }}
+    >
+      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 26, fontWeight: 700, color: n > 0 ? color : "var(--text-muted)" }}>{n}</div>
+      <div style={{ fontSize: 11, color: active ? color : "var(--text-muted)", marginTop: 2 }}>{active ? "✓ Filtro ativo" : "Clique para filtrar"}</div>
+    </button>
   );
 }
 
@@ -97,6 +147,7 @@ export default function WorkPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [q, setQ] = useState("");
+  const [f, setF] = useState("");
   const [token, setToken] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [guideUrl, setGuideUrl] = useState("");
@@ -105,7 +156,10 @@ export default function WorkPage() {
   const [importMsg, setImportMsg] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/work${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (f) params.set("f", f);
+    const res = await fetch(`/api/work${params.size ? `?${params}` : ""}`);
     if (res.ok) {
       const data = await res.json();
       setTickets(data.tickets);
@@ -113,7 +167,7 @@ export default function WorkPage() {
       setGuideUrl(data.guideUrl || "");
       if (data.links) setLinks(data.links);
     }
-  }, [q]);
+  }, [q, f]);
 
   useEffect(() => {
     load();
@@ -229,27 +283,11 @@ export default function WorkPage() {
         </div>
       )}
 
-      {stats && stats.paraEncerrar?.length > 0 && (
-        <div style={{ ...box, marginBottom: 16, borderColor: "var(--success)" }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>✅ Pode encerrar no Assyst — Redmine já resolvido</div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
-            Chamados seus ainda abertos cujo Redmine aparece como resolvido no escala. Depois de encerrar no Assyst, toque em &quot;Encerrei&quot;.
-          </div>
-          {stats.paraEncerrar.map((t) => (
-            <div key={t.ticketId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
-              <span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <TicketLink id={t.ticketId} links={links} size={13} />
-                  <AgeBadge openedAt={t.openedAt} />
-                </span>
-                <span style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                  Redmine resolvido: <RedmineLinks value={t.redmine} links={links} />
-                </span>
-                {t.openedAt ? <span style={{ color: "var(--text-muted)" }}> · aberto em {new Date(t.openedAt).toLocaleDateString("pt-BR")}</span> : null}
-              </span>
-              <button className="btn-ghost" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => save({ ticketId: t.ticketId, status: "resolvido" })}>✅ Encerrei</button>
-            </div>
-          ))}
+      {stats && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+          <FilterCard title="🚨 Solicitação de Urgência" n={stats.urgentes} color="#ef4444" active={f === "urgentes"} onClick={() => setF(f === "urgentes" ? "" : "urgentes")} />
+          <FilterCard title="⚠ Passou do prazo" n={stats.atrasados} color="#ef4444" active={f === "atrasados"} onClick={() => setF(f === "atrasados" ? "" : "atrasados")} />
+          <FilterCard title="⚡ Redmine resolvido" n={stats.paraEncerrar.length} color="#f97316" active={f === "encerrar"} onClick={() => setF(f === "encerrar" ? "" : "encerrar")} />
         </div>
       )}
 
@@ -295,12 +333,30 @@ export default function WorkPage() {
       <input placeholder="🔎 Buscar por número ou tipo de erro" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
-        {tickets.map((t) => (
-          <div key={t.id} style={{ ...box, display: "flex", flexDirection: "column", gap: 6 }}>
+        {[...tickets].sort((a, b) => priority(a) - priority(b)).map((t) => {
+          const al = alertsFor(t);
+          return (
+          <div
+            key={t.id}
+            style={{
+              ...box,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              ...(al.urgent
+                ? { borderLeft: "3px solid #ef4444", background: "rgba(127,29,29,.25)" }
+                : al.overdue
+                ? { borderLeft: "3px solid #f97316", background: "rgba(124,45,18,.18)" }
+                : {}),
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <TicketLink id={t.ticketId} links={links} />
-                {(t.status === "aberto" || t.status === "pendente") && <AgeBadge openedAt={t.openedAt} />}
+              <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <TicketLink id={t.ticketId} links={links} />
+                  <TicketBadges t={t} />
+                </span>
+                {al.canClose && <ClosePill />}
               </span>
               <span style={{ fontSize: 12, color: STATUS[t.status]?.color, textAlign: "right" }}>
                 {STATUS[t.status]?.label ?? t.status}
@@ -335,9 +391,10 @@ export default function WorkPage() {
               <button className="btn-ghost" style={{ fontSize: 12, padding: "4px 8px", marginLeft: "auto" }} onClick={() => remove(t.id)}>Apagar</button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
-      {tickets.length === 0 && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>Nenhum chamado ainda.</div>}
+      {tickets.length === 0 && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>{f ? "Nenhum chamado neste filtro." : "Nenhum chamado ainda."}</div>}
     </div>
     </div>
   );

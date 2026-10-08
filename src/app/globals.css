@@ -241,3 +241,8 @@ button {
 }
 .badge-alerta { animation: badge-pulsar 1.2s ease-in-out infinite; display: inline-block; }
 @media (prefers-reduced-motion: reduce) { .badge-alerta { animation: none; } }
+
+/* Pulsar suave (como o animate-pulse do escala): "Redmine resolvido — encerre" e filtro ativo. */
+@keyframes pulsar-suave { 50% { opacity: 0.55; } }
+.pulsar { animation: pulsar-suave 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+@media (prefers-reduced-motion: reduce) { .pulsar { animation: none; } }
