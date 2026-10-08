@@ -69,6 +69,21 @@ export async function POST(request: Request) {
 
     const evo = { evolutionUrl: config.evolutionUrl, evolutionApiKey: config.evolutionApiKey, instanceId: config.instanceId };
 
+    // Celular institucional (trabalho): vínculo por código e conversas
+    // encaminhadas para os chamados. Vem antes de tudo — nada daqui passa por
+    // IA, transcrição de áudio ou pelas conversas do CRM.
+    if (!isGroup && !isSelfChat) {
+      const { handleWorkPhoneMessage, tryPairWorkPhone } = await import("@/lib/work-phone");
+      if (config.workPhone && phone === config.workPhone) {
+        if (!fromMe) await handleWorkPhoneMessage(config, evo, key.id ?? "", rawMessage);
+        return NextResponse.json({ ok: true });
+      }
+      if (!fromMe && config.workPairCode) {
+        const ext = rawMessage.extendedTextMessage as { text?: string } | undefined;
+        if (await tryPairWorkPhone(config, phone, String(rawMessage.conversation || ext?.text || ""))) return NextResponse.json({ ok: true });
+      }
+    }
+
     // PDF de extrato: só processado no canal pessoal, vira vários lançamentos
     // de uma vez em vez de passar pela classificação normal de texto.
     const documentMessage = rawMessage.documentMessage as Record<string, unknown> | undefined;

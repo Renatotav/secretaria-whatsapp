@@ -55,6 +55,10 @@ model AgentConfig {
   workTicketUrl    String  @default("")
   /// Endereço para abrir um Redmine, com {n} no lugar do número.
   workRedmineUrl   String  @default("")
+  /// Identificador do WhatsApp do celular institucional (vinculado por código; vazio = nenhum).
+  workPhone        String  @default("")
+  /// Código de vínculo pendente: "1234|<expira em ms>".
+  workPairCode     String  @default("")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
@@ -270,10 +274,24 @@ model WorkTicket {
   queue       String    @default("")
   /// Última ação no Assyst, vinda do escala (ex: "Solicitação de Urgência").
   lastAction  String    @default("")
+  /// Conversas encaminhadas do celular institucional (texto, CPF mascarado), mais recentes no fim.
+  chatLog     String    @default("")
   description String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")
   resolvedAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+/// Imagens encaminhadas do celular institucional, anexadas ao chamado (sem IA).
+model WorkAttachment {
+  id        String   @id @default(cuid())
+  ticketId  String
+  mimetype  String
+  caption   String   @default("")
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
 }

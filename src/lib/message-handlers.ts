@@ -1595,7 +1595,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   // Comandos do trabalho ("chamado 2154585 resolvido"): regra fixa, sem IA e
   // fora do histórico da conversa (dado do Tribunal não passa pela IA).
   const { applyWorkCommand } = await import("./work-commands");
-  const workReply = await applyWorkCommand(joinedText);
+  const { attachPendingWorkChat } = await import("./work-phone");
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;

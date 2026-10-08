@@ -15,6 +15,8 @@ type Ticket = {
   redmineStatus?: string;
   queue?: string;
   lastAction?: string;
+  chatLog?: string;
+  attachments?: { id: string; caption: string }[];
   description: string;
   source: string;
   updatedAt: string;
@@ -150,6 +152,9 @@ export default function WorkPage() {
   const [f, setF] = useState("");
   const [token, setToken] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [showPhone, setShowPhone] = useState(false);
+  const [phoneLinked, setPhoneLinked] = useState(false);
+  const [pairCode, setPairCode] = useState("");
   const [guideUrl, setGuideUrl] = useState("");
   const [links, setLinks] = useState<Links>({ ticket: "", redmine: "" });
   const [error, setError] = useState("");
@@ -166,6 +171,7 @@ export default function WorkPage() {
       setStats(data.stats);
       setGuideUrl(data.guideUrl || "");
       if (data.links) setLinks(data.links);
+      setPhoneLinked(!!data.phoneLinked);
     }
   }, [q, f]);
 
@@ -207,6 +213,21 @@ export default function WorkPage() {
     load();
   }
 
+  async function pairPhone(action: "pair" | "unlink") {
+    if (action === "unlink" && !confirm("Desvincular o celular do trabalho? As conversas já salvas continuam nos chamados.")) return;
+    const res = await fetch("/api/work/phone", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    if (!res.ok) return;
+    const data = await res.json();
+    setPairCode(data.code || "");
+    load();
+  }
+
+  async function removeAttachment(id: string) {
+    if (!confirm("Apagar esta imagem do chamado?")) return;
+    await fetch("/api/work/attachment", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    load();
+  }
+
   async function newToken() {
     if (!confirm("Gerar uma chave nova? A extensão com a chave antiga para de funcionar até você colar a nova.")) return;
     const res = await fetch("/api/work/token", { method: "POST" });
@@ -230,6 +251,9 @@ export default function WorkPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>💼 Trabalho — Central do Atendente</h1>
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowKey((v) => !v)}>🔑 Chave da extensão</button>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowPhone((v) => !v)}>
+          📱 Celular do trabalho{phoneLinked ? " ✅" : ""}
+        </button>
       </div>
       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
         Chamados do PJe. A descrição é guardada com CPF mascarado (xxx.xxx.xxx-xx) e sem telefone/e-mail, e não passa pela IA.
@@ -249,6 +273,28 @@ export default function WorkPage() {
             </a>
           </p>
         )}
+      {showPhone && (
+        <div style={{ ...box, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>📱 Celular do trabalho → chamados</div>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+            Do WhatsApp do celular institucional, encaminhe (ou exporte, sem mídia) a conversa com o usuário para o seu número, com <b>chamado 2154585</b> numa das mensagens.
+            A secretária guarda o texto no chamado com CPF mascarado e sem telefone/e-mail, e as imagens como anexo. Nada passa por IA; áudio é ignorado.
+          </p>
+          {phoneLinked ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 13 }}>
+              ✅ Vinculado.
+              <button className="btn-ghost" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => pairPhone("unlink")}>Desvincular</button>
+            </div>
+          ) : pairCode ? (
+            <div style={{ fontSize: 13 }}>
+              Do celular institucional, mande para o seu número: <code style={{ fontSize: 15, padding: "2px 8px", background: "var(--bg-hover)", borderRadius: 6 }}>vincular {pairCode}</code>
+              <span style={{ color: "var(--text-muted)" }}> (vale 15 min). Depois atualize esta página.</span>
+            </div>
+          ) : (
+            <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => pairPhone("pair")}>Vincular celular</button>
+          )}
+        </div>
+      )}
         {token ? (
           <code style={{ display: "block", wordBreak: "break-all", fontSize: 12, padding: 8, background: "var(--bg-hover)", borderRadius: 6 }}>{token}</code>
         ) : (
@@ -375,6 +421,31 @@ export default function WorkPage() {
               atualizado {new Date(t.updatedAt).toLocaleDateString("pt-BR")} · via {t.source}
             </div>
             {t.resolution && <div style={{ fontSize: 12 }}>✅ {t.resolution}</div>}
+            {t.chatLog && (
+              <details style={{ fontSize: 12 }}>
+                <summary>💬 Conversa do WhatsApp</summary>
+                <div style={{ whiteSpace: "pre-wrap", marginTop: 4, maxHeight: 260, overflowY: "auto", padding: 8, background: "var(--bg-hover)", borderRadius: 6 }}>{t.chatLog}</div>
+              </details>
+            )}
+            {!!t.attachments?.length && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {t.attachments.map((a) => (
+                  <span key={a.id} style={{ position: "relative" }}>
+                    <a href={`/api/work/attachment?id=${a.id}`} target="_blank" rel="noopener noreferrer" title={a.caption || "Imagem do celular do trabalho"}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`/api/work/attachment?id=${a.id}`} alt={a.caption || "Imagem anexada"} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)" }} />
+                    </a>
+                    <button
+                      title="Apagar imagem"
+                      onClick={() => removeAttachment(a.id)}
+                      style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: 9, border: 0, fontSize: 10, cursor: "pointer", background: "var(--bg-card)", color: "var(--text-muted)" }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
             {t.description && (
               <details style={{ fontSize: 12, color: "var(--text-muted)" }}>
                 <summary>Descrição</summary>

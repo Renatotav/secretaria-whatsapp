@@ -20,9 +20,16 @@ export async function GET(request: Request) {
     take: f ? 500 : 100,
   });
   if (f === "atrasados") tickets = tickets.filter((t) => alertsFor(t).overdue);
-  const config = await prisma.agentConfig.findFirst({ select: { workGuideUrl: true, workTicketUrl: true, workRedmineUrl: true } });
+  // Imagens anexadas (só os dados para listar; o arquivo vem por /api/work/attachment).
+  const atts = await prisma.workAttachment.findMany({
+    where: { ticketId: { in: tickets.map((t) => t.ticketId) } },
+    select: { id: true, ticketId: true, caption: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const config = await prisma.agentConfig.findFirst({ select: { workGuideUrl: true, workTicketUrl: true, workRedmineUrl: true, workPhone: true } });
   return NextResponse.json({
-    tickets,
+    tickets: tickets.map((t) => ({ ...t, attachments: atts.filter((a) => a.ticketId === t.ticketId) })),
+    phoneLinked: !!config?.workPhone,
     stats: await workStats(),
     guideUrl: config?.workGuideUrl || "",
     links: { ticket: config?.workTicketUrl || "", redmine: config?.workRedmineUrl || "" },
