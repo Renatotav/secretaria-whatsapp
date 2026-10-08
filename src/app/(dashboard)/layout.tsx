@@ -5,17 +5,17 @@ import Link from "next/link";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
 
+// Só o que ele usa no dia a dia. Grupos e Instâncias (conexão do WhatsApp)
+// continuam acessíveis por links em Configurações; Contatos (resumos de
+// mensagens, desligados) segue no endereço /briefings.
 const NAV = [
   { href: "/agenda", icon: "📅", label: "Agenda" },
   { href: "/finance", icon: "💰", label: "Financeiro" },
-  { href: "/diary", icon: "📓", label: "Diário" },
-  { href: "/briefings", icon: "👤", label: "Contatos" },
-  { href: "/groups", icon: "👥", label: "Grupos" },
   { href: "/wishlist", icon: "🛍️", label: "Desejos" },
-  { href: "/daily-summary", icon: "📋", label: "Resumos Diários" },
+  { href: "/diary", icon: "📓", label: "Diário" },
+  { href: "/daily-summary", icon: "📋", label: "Resumo do dia" },
   { href: "/weekly-report", icon: "📊", label: "Rel. Semanal" },
   { href: "/conversations", icon: "💬", label: "Conversas" },
-  { href: "/instances", icon: "📡", label: "Instâncias" },
   { href: "/config", icon: "⚙️", label: "Configurações" },
 ];
 

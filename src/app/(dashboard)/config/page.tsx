@@ -300,6 +300,15 @@ export default function ConfigPage() {
         </Section>
 
         {/* Evolution API */}
+        {/* Telas que saíram do menu, mas continuam disponíveis */}
+        <Section title="🔗 Outras telas">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <a className="btn-ghost" href="/instances" style={{ fontSize: 13, padding: "6px 12px" }}>📡 Conexão do WhatsApp (instâncias)</a>
+            <a className="btn-ghost" href="/groups" style={{ fontSize: 13, padding: "6px 12px" }}>👥 Gerenciar grupos</a>
+            <a className="btn-ghost" href="/briefings" style={{ fontSize: 13, padding: "6px 12px" }}>👤 Resumos de contatos (antigos)</a>
+          </div>
+        </Section>
+
         <Section title="📱 Evolution API (WhatsApp)">
           <Field label="URL da Evolution API" hint="Ex: https://evolution.seudominio.com">
             <input
