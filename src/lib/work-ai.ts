@@ -31,7 +31,15 @@ export interface WorkAiResult {
   tokens: { input: number; output: number };
 }
 
-export async function runWorkSkill(key: string, text: string, ticketRaw?: string): Promise<WorkAiResult> {
+// Vale para todas as skills (pedido do dono): terminologia de trabalho é intocável.
+const PRESERVE =
+  "REGRA QUE VALE ACIMA DE TODAS: não invente nada e não tire nada. Preserve exatamente os termos de trabalho — " +
+  "nomes de sistemas e módulos (PJe, PJe 1º Grau/2º Grau, Assyst, Redmine, SAJ, SAJMP, SOAPUI, MongoDB), nomes de tarefas e " +
+  "fluxos (inclusive entre colchetes), siglas, códigos, números de processo, de chamado, de Redmine e de documento, datas, horários, " +
+  "nomes de pessoas e de órgãos. Ao corrigir o português (ortografia, acentuação, concordância, regência, crase, pontuação), " +
+  "não mude o sentido nem acrescente fatos. Na dúvida entre melhorar e preservar, preserve.";
+
+export async function runWorkSkill(key: string, text: string, ticketRaw?: string, plain = false): Promise<WorkAiResult> {
   if (!WORK_SKILLS[key]) throw new Error("Skill desconhecida");
   const input = (text || "").trim();
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
@@ -66,7 +74,11 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
       {
         role: "system",
         content:
-          `${instructions}\n\n---\nVocê está sendo usado por um botão da extensão do navegador (não há conversa: é um pedido só). ` +
+          `${PRESERVE}\n\n${instructions}\n\n---\n${
+            plain
+              ? "MODO SUBSTITUIR: responda APENAS com o texto final corrigido, exatamente como deve ficar na caixa — sem título, sem comparativo, sem tabela, sem aspas, sem comentários. Mantenha as quebras de linha e a formatação do WhatsApp (*negrito*, _itálico_). "
+              : ""
+          }Você está sendo usado por um botão da extensão do navegador (não há conversa: é um pedido só). ` +
           "Responda direto com o resultado final em português, pronto para copiar. Não faça perguntas; se faltar informação, indique entre colchetes no próprio texto. " +
           "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto." +
           (usesContext && ticketRaw ? `\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +

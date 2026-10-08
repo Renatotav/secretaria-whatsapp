@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const key = String(body?.skill || "");
   try {
-    const r = await runWorkSkill(key, String(body?.text || ""), body?.ticketId ? String(body.ticketId) : undefined);
+    const r = await runWorkSkill(key, String(body?.text || ""), body?.ticketId ? String(body.ticketId) : undefined, body?.plain === true);
     console.log(`[trabalho] IA ${key}: ${r.model} · ${r.tokens.input}+${r.tokens.output} tokens`);
     return NextResponse.json(r);
   } catch (err) {
