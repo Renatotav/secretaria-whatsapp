@@ -70,6 +70,7 @@ export default function WishlistPage() {
   const done = wishes.filter((w) => w.status !== "wish");
 
   return (
+    <div style={{ height: "100%", overflowY: "auto" }}>
     <div style={{ padding: 20, maxWidth: 1100 }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>🛍️ Lista de desejos</h1>
       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
@@ -141,6 +142,7 @@ export default function WishlistPage() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

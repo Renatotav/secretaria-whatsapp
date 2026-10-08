@@ -112,8 +112,12 @@ export default function WorkPage() {
   );
 
   return (
+    <div style={{ height: "100%", overflowY: "auto" }}>
     <div style={{ padding: 20, maxWidth: 1100 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>💼 Trabalho — Central do Atendente</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700 }}>💼 Trabalho — Central do Atendente</h1>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => document.getElementById("chave-extensao")?.scrollIntoView({ behavior: "smooth" })}>🔑 Chave da extensão</button>
+      </div>
       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
         Chamados do PJe. A descrição é guardada com CPF mascarado (xxx.xxx.xxx-xx) e sem telefone/e-mail, e não passa pela IA.
       </p>
@@ -218,7 +222,7 @@ export default function WorkPage() {
       </div>
       {tickets.length === 0 && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>Nenhum chamado ainda.</div>}
 
-      <div style={{ ...box, marginTop: 24 }}>
+      <div id="chave-extensao" style={{ ...box, marginTop: 24 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>🔑 Chave da extensão (Central do Atendente)</div>
         <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
           A extensão do Assyst manda os chamados para cá usando esta chave. Ela só aparece uma vez: copie e guarde na extensão. Gerar outra invalida a anterior.
@@ -229,6 +233,7 @@ export default function WorkPage() {
           <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={newToken}>Gerar chave</button>
         )}
       </div>
+    </div>
     </div>
   );
 }
