@@ -69,7 +69,12 @@ export function startScheduler(): void {
         // Fica salvo na aba "Resumos Diários"; um por dia (confere no banco,
         // então um reinício depois do horário não manda de novo).
         try {
-          const already = await prisma.dailySummary.findFirst({ where: { groupJid: "self", date: todayDate } });
+          // Só conta como "já enviado" o resumo feito a partir do horário
+          // agendado: um "Gerar Resumo Agora" no meio do dia não pula o da noite.
+          const [sh, sm] = config.summaryTime.split(":").map(Number);
+          const scheduledUtc = new Date(`${todayDate}T00:00:00Z`);
+          scheduledUtc.setUTCHours(sh + 3, sm, 0, 0);
+          const already = await prisma.dailySummary.findFirst({ where: { groupJid: "self", date: todayDate, createdAt: { gte: scheduledUtc } } });
           if (!already && config.ownerPhone) {
             const text = await buildDailyDigest();
             await prisma.dailySummary.create({ data: { groupJid: "self", groupName: "Seu dia", date: todayDate, summary: text, sentAt: new Date() } });
