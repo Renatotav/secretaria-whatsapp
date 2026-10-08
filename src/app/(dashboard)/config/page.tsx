@@ -29,6 +29,9 @@ interface Config {
   weeklyTime: string;
   reminderHours: number;
   audioEnabled: boolean;
+  privateBriefings: boolean;
+  detectCommitments: boolean;
+  mutedContacts: string;
   debounceSeconds: number;
   typingMsPerChar: number;
   typingMaxSeconds: number;
@@ -63,12 +66,34 @@ const DEFAULT: Config = {
   weeklyTime: "20:00",
   reminderHours: 3,
   audioEnabled: false,
+  privateBriefings: false,
+  detectCommitments: true,
+  mutedContacts: "",
   debounceSeconds: 8,
   typingMsPerChar: 35,
   typingMaxSeconds: 8,
   creditCardDueDay: 10,
   creditCardBestDay: 5,
 };
+
+/** Chave liga/desliga com o texto ao lado (mesmo visual da chave de áudio). */
+function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+      <button
+        type="button"
+        onClick={() => onChange(!on)}
+        style={{ flex: "0 0 44px", width: 44, height: 24, borderRadius: 12, background: on ? "var(--accent)" : "var(--border)", border: "none", cursor: "pointer", position: "relative", transition: "background 0.2s" }}
+      >
+        <span style={{ position: "absolute", top: 2, left: on ? 22 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+      </button>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{hint}</div>
+      </div>
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -103,6 +128,18 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 export default function ConfigPage() {
   const [config, setConfig] = useState<Config>(DEFAULT);
+  // Nome dos contatos (para mostrar os silenciados pelo nome, não pelo número).
+  const [contactNames, setContactNames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch("/api/conversations")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: { phone: string | null; contactName?: string }[]) => {
+        const map: Record<string, string> = {};
+        for (const c of list) if (c.phone && c.contactName) map[c.phone] = c.contactName;
+        setContactNames(map);
+      })
+      .catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -167,14 +204,14 @@ export default function ConfigPage() {
               placeholder="5585999999999"
             />
           </Field>
-          <Field label="Meu nome nos grupos" hint="Como você aparece nos grupos (para a IA reconhecer menções)">
+          <Field label="Meu nome" hint="Usado pela IA e para achar o SEU cartão na fatura (ex: separar do cartão do titular)">
             <input
               value={config.ownerName}
               onChange={(e) => set("ownerName", e.target.value)}
               placeholder="Renato"
             />
           </Field>
-          <Field label="Meu cargo" hint="Ex: Supervisor de Atendimento PJe">
+          <Field label="Meu cargo" hint="Ex: Operador de Atendimento PJe">
             <input
               value={config.ownerRole}
               onChange={(e) => set("ownerRole", e.target.value)}
@@ -207,31 +244,59 @@ export default function ConfigPage() {
 
         {/* Agendamento */}
         <Section title="⏰ Agendamento Automático">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <Field label="Horário do resumo diário" hint="Resumo enviado uma vez por dia">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Horário do resumo do dia" hint="Gastos, tetos, previsão e o que vence amanhã, com gráfico">
               <input
                 type="time"
                 value={config.summaryTime}
                 onChange={(e) => set("summaryTime", e.target.value)}
               />
             </Field>
-            <Field label="Horário do relatório semanal" hint="Todo domingo">
+            <Field label="Horário do relatório semanal" hint="Todo domingo, com gráficos">
               <input
                 type="time"
                 value={config.weeklyTime}
                 onChange={(e) => set("weeklyTime", e.target.value)}
               />
             </Field>
-            <Field label="Lembrar após (horas)" hint="Horas sem resposta para lembrar tarefa">
-              <input
-                type="number"
-                min={1}
-                max={24}
-                value={config.reminderHours}
-                onChange={(e) => set("reminderHours", Number(e.target.value))}
-              />
-            </Field>
           </div>
+        </Section>
+
+        {/* Conversas e privacidade */}
+        <Section title="💬 Conversas e privacidade">
+          <Toggle
+            on={config.detectCommitments}
+            onChange={(v) => set("detectCommitments", v)}
+            label="Compromissos das conversas → agenda"
+            hint="A IA lê as conversas privadas só para achar compromissos combinados e pergunta se coloca na agenda."
+          />
+          <Toggle
+            on={config.privateBriefings}
+            onChange={(v) => set("privateBriefings", v)}
+            label="Resumo de cada mensagem recebida"
+            hint="Avisa no WhatsApp um resumo de toda mensagem privada (desligado: era muito aviso sem utilidade)."
+          />
+          <Field label="Contatos silenciados" hint='Nunca passam pela IA. No WhatsApp: "silencia fulano" / "volta a ouvir fulano".'>
+            {config.mutedContacts.split(",").filter((p) => p.trim()).length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Nenhum.</div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {config.mutedContacts.split(",").map((p) => p.trim()).filter(Boolean).map((p) => (
+                  <span key={p} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 12, background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                    {contactNames[p] || p}
+                    <button
+                      type="button"
+                      onClick={() => set("mutedContacts", config.mutedContacts.split(",").map((x) => x.trim()).filter((x) => x && x !== p).join(","))}
+                      style={{ marginLeft: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+                      title="Voltar a ouvir"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </Field>
         </Section>
 
         {/* Evolution API */}
