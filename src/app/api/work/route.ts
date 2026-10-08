@@ -13,7 +13,8 @@ export async function GET(request: Request) {
     orderBy: { updatedAt: "desc" },
     take: 100,
   });
-  return NextResponse.json({ tickets, stats: await workStats() });
+  const config = await prisma.agentConfig.findFirst({ select: { workGuideUrl: true } });
+  return NextResponse.json({ tickets, stats: await workStats(), guideUrl: config?.workGuideUrl || "" });
 }
 
 export async function POST(request: Request) {

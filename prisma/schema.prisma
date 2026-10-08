@@ -49,6 +49,8 @@ model AgentConfig {
   mutedContacts    String  @default("")
   /// Chave que a extensão "Central do Atendente" usa para mandar chamados.
   workApiToken     String  @default("")
+  /// Link do guia/download da extensão (fica no banco, não no repositório público).
+  workGuideUrl     String  @default("")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())

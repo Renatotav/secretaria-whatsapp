@@ -47,6 +47,7 @@ export default function WorkPage() {
   const [q, setQ] = useState("");
   const [token, setToken] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [guideUrl, setGuideUrl] = useState("");
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
 
@@ -56,6 +57,7 @@ export default function WorkPage() {
       const data = await res.json();
       setTickets(data.tickets);
       setStats(data.stats);
+      setGuideUrl(data.guideUrl || "");
     }
   }, [q]);
 
@@ -131,6 +133,14 @@ export default function WorkPage() {
         <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
           A extensão do Assyst manda os chamados para cá usando esta chave. Ela só aparece uma vez: copie e guarde na extensão. Gerar outra invalida a anterior.
         </p>
+        {guideUrl && (
+          <p style={{ fontSize: 12, marginBottom: 8 }}>
+            📥{" "}
+            <a href={guideUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+              Baixar a extensão e ver o guia de instalação
+            </a>
+          </p>
+        )}
         {token ? (
           <code style={{ display: "block", wordBreak: "break-all", fontSize: 12, padding: 8, background: "var(--bg-hover)", borderRadius: 6 }}>{token}</code>
         ) : (
