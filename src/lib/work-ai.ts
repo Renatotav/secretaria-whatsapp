@@ -44,14 +44,16 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   if (!instructions) throw new Error(`A skill "${WORK_SKILLS[key]}" ainda não foi cadastrada.`);
 
   // Contexto do chamado (o que a secretária sabe dele), quando houver número.
+  // Só para quem usa o contexto; os corretores recebem o texto puro.
+  const usesContext = key === "resumo" || key === "redmine" || key === "whatsapp";
   let context = "";
-  if (ticketRaw) {
+  if (ticketRaw && usesContext) {
     const t = await prisma.workTicket.findUnique({
       where: { ticketId: normalizeTicketId(ticketRaw) },
       select: { ticketId: true, status: true, errorType: true, origin: true, redmine: true, redmineStatus: true, queue: true },
     });
     if (t)
-      context = `\n\n[Dados do chamado ${t.ticketId} na Central: status ${t.status}${t.errorType ? `, tipo ${t.errorType}` : ""}${t.origin ? `, usuário ${t.origin}` : ""}${t.queue ? `, fila ${t.queue}` : ""}${t.redmine ? `, Redmine ${t.redmine}${t.redmineStatus ? ` (${t.redmineStatus})` : ""}` : ""}]`;
+      context = `\n\nContexto (só para você entender; NÃO copie nem corrija isto na resposta) — dados do chamado ${t.ticketId} na Central: status ${t.status}${t.errorType ? `, tipo ${t.errorType}` : ""}${t.origin ? `, usuário ${t.origin}` : ""}${t.queue ? `, fila ${t.queue}` : ""}${t.redmine ? `, Redmine ${t.redmine}${t.redmineStatus ? ` (${t.redmineStatus})` : ""}` : ""}.`;
   }
 
   const model = config.workAiModel || "anthropic/claude-sonnet-5.5";
@@ -66,9 +68,11 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
         content:
           `${instructions}\n\n---\nVocê está sendo usado por um botão da extensão do navegador (não há conversa: é um pedido só). ` +
           "Responda direto com o resultado final em português, pronto para copiar. Não faça perguntas; se faltar informação, indique entre colchetes no próprio texto. " +
-          "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto.",
+          "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto." +
+          (usesContext && ticketRaw ? `\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +
+          context,
       },
-      { role: "user", content: `${ticketRaw ? `Chamado: ${normalizeTicketId(ticketRaw)}\n\n` : ""}${input}${context}` },
+      { role: "user", content: input },
     ],
   });
   const out = res.choices[0]?.message?.content?.trim() || "";
