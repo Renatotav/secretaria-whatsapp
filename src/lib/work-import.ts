@@ -16,7 +16,7 @@ const norm = (v: unknown) =>
 
 // Coluna da planilha → campo. Procura pelo começo do nome, sem acento.
 const COLUMNS: { field: string; test: (h: string) => boolean }[] = [
-  { field: "ticketId", test: (h) => /^N[Oº°]? ?CHAMADO|^NUMERO DO CHAMADO|^CHAMADO$/.test(h) },
+  { field: "ticketId", test: (h) => /^(NO? ?CHAMADO|NUMERO DO CHAMADO|CHAMADO)( |$)/.test(h) },
   { field: "openedAt", test: (h) => h.startsWith("DATA DA ABERTURA") || h.startsWith("DATA ABERTURA") },
   { field: "description", test: (h) => h.startsWith("DESCRICAO DO CHAMADO") },
   { field: "origin", test: (h) => h.startsWith("ORIGEM") },
@@ -50,7 +50,13 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
   // A aba certa é a que tem uma coluna de chamado no cabeçalho (ignora "Manual").
   for (const name of wb.SheetNames) {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: "" });
-    const headerIdx = rows.slice(0, 30).findIndex((r) => r.some((c) => COLUMNS[0].test(norm(c))));
+    // Cabeçalho = linha com a coluna do chamado E mais alguma coluna conhecida
+    // (assim um texto explicativo na aba "Manual" não é confundido com ele).
+    const isHeader = (r: unknown[]) => {
+      const h = r.map(norm);
+      return h.some(COLUMNS[0].test) && COLUMNS.slice(1).some(({ test }) => h.some(test));
+    };
+    const headerIdx = rows.slice(0, 30).findIndex(isHeader);
     if (headerIdx < 0) continue;
     const header = rows[headerIdx].map(norm);
     const col: Record<string, number> = {};

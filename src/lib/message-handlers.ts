@@ -958,6 +958,15 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
     fits.length ? `\n🛍️ Já cabe da lista de desejos: ${fits.join(", ")}` : "",
   ].filter(Boolean);
 
+  // Trabalho (Central do Atendente): só números, fora do comentário da IA.
+  try {
+    const { workWeekSection } = await import("./work");
+    const work = await workWeekSection(monday);
+    if (work) lines.push(work);
+  } catch (err) {
+    console.error("[weekly] trabalho:", err);
+  }
+
   // Comentário curto da IA: só com os números acima + humor do diário.
   try {
     const diaries = await prisma.diaryEntry.findMany({ where: { date: { gte, lte } }, orderBy: { date: "asc" } });
@@ -1582,6 +1591,15 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   // Senha de PDF não passa pela IA nem é gravada no histórico.
   if (await applyPdfPassword(joinedText, config)) return;
   if (await applyStatementChoice(joinedText, config)) return;
+
+  // Comandos do trabalho ("chamado 2154585 resolvido"): regra fixa, sem IA e
+  // fora do histórico da conversa (dado do Tribunal não passa pela IA).
+  const { applyWorkCommand } = await import("./work-commands");
+  const workReply = await applyWorkCommand(joinedText);
+  if (workReply) {
+    await notifyOwner(config, workReply);
+    return;
+  }
 
   const providerOpts = getProviderOpts(config);
 

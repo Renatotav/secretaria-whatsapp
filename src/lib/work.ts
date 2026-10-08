@@ -95,3 +95,51 @@ export async function workDigestLine(): Promise<string> {
   if (s.hoje.registrados + s.hoje.resolvidos + s.hoje.escalados === 0) return "";
   return `💼 Trabalho: ${s.hoje.registrados} chamado(s) hoje · ${s.hoje.resolvidos} resolvido(s) · ${s.hoje.escalados} Redmine · ${s.emAberto} em aberto`;
 }
+
+/**
+ * Bloco "💼 Trabalho" do relatório de domingo: resolvidos por dia da semana
+ * (barrinha), Redmines e tipos de erro mais comuns. Só números — nada daqui
+ * vai para a IA. `monday` = segunda da semana (data local, meio-dia).
+ */
+export async function workWeekSection(monday: Date): Promise<string> {
+  const start = new Date(Date.UTC(monday.getFullYear(), monday.getMonth(), monday.getDate(), 3)); // 00:00 BRT
+  const end = new Date(start.getTime() + 7 * 86400_000);
+  const closed = await prisma.workTicket.findMany({
+    where: { status: { in: ["resolvido", "escalado"] }, resolvedAt: { gte: start, lt: end } },
+    select: { status: true, resolvedAt: true, errorType: true },
+  });
+  const opened = await prisma.workTicket.count({
+    where: { OR: [{ openedAt: { gte: start, lt: end } }, { openedAt: null, createdAt: { gte: start, lt: end } }] },
+  });
+  const emAberto = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
+  if (closed.length === 0 && opened === 0) return "";
+
+  const days = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+  const perDay = new Array(7).fill(0);
+  for (const t of closed) perDay[Math.floor((t.resolvedAt!.getTime() - start.getTime()) / 86400_000)]++;
+  const max = Math.max(...perDay, 1);
+  const bars = days
+    .map((d, i) => ({ d, n: perDay[i] }))
+    .filter(({ n }, i) => n > 0 || i < 5) // fim de semana só aparece se teve chamado
+    .map(({ d, n }) => `${d} ${"▓".repeat(Math.round((n / max) * 8)) || "·"} ${n}`);
+
+  const resolvidos = closed.filter((t) => t.status === "resolvido").length;
+  const escalados = closed.length - resolvidos;
+  const types = Object.entries(
+    closed.reduce<Record<string, number>>((acc, t) => (t.errorType ? ((acc[t.errorType] = (acc[t.errorType] || 0) + 1), acc) : acc), {})
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+  const best = perDay.indexOf(Math.max(...perDay));
+
+  return [
+    `\n💼 *Trabalho na semana:* ${resolvidos} resolvido(s) · ${escalados} Redmine · ${opened} aberto(s) · ${emAberto} em aberto agora`,
+    "```",
+    ...bars,
+    "```",
+    closed.length ? `🏆 Melhor dia: ${days[best]} (${perDay[best]})` : "",
+    types.length ? `🔎 Erros mais comuns: ${types.map(([t, n]) => `${t} (${n})`).join(" · ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
