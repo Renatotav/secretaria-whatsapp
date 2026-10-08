@@ -12,6 +12,12 @@ export const GET = withErrorHandling(async (request: Request) => {
   const phone = searchParams.get("phone");
   const source = searchParams.get("source");
 
+  // light=1: só nome e número (ex: Configurações, para mostrar contatos silenciados).
+  if (searchParams.get("light")) {
+    const light = await prisma.conversation.findMany({ where: { source: "whatsapp" }, select: { phone: true, contactName: true } });
+    return NextResponse.json(light);
+  }
+
   const conversations = await prisma.conversation.findMany({
     where: {
       ...(phone ? { phone: { contains: phone } } : {}),

@@ -131,7 +131,7 @@ export default function ConfigPage() {
   // Nome dos contatos (para mostrar os silenciados pelo nome, não pelo número).
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
   useEffect(() => {
-    fetch("/api/conversations")
+    fetch("/api/conversations?light=1")
       .then((r) => (r.ok ? r.json() : []))
       .then((list: { phone: string | null; contactName?: string }[]) => {
         const map: Record<string, string> = {};
