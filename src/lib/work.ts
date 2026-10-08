@@ -17,6 +17,15 @@ export interface WorkTicketInput {
   resolution?: string;
   redmine?: string;
   description?: string;
+  /** Quando foi resolvido (importação de histórico). Sem isso, fechar agora = resolvido agora. */
+  resolvedAt?: string | null;
+}
+
+/** Data válida e não futura (para não inventar "resolvido hoje" ao importar histórico). */
+function pastDate(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) || d.getTime() > Date.now() + 60_000 ? null : d;
 }
 
 const clean = (v: unknown, max = 2000) => (typeof v === "string" ? maskPersonalData(v.trim()).slice(0, max) : undefined);
@@ -43,7 +52,7 @@ export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" 
     ...(clean(input.resolution) !== undefined ? { resolution: clean(input.resolution) } : {}),
     ...(clean(input.redmine, 50) !== undefined ? { redmine: clean(input.redmine, 50) } : {}),
     ...(clean(input.description, 8000) !== undefined ? { description: clean(input.description, 8000) } : {}),
-    ...(closing ? { resolvedAt: new Date() } : {}),
+    ...(closing ? { resolvedAt: pastDate(input.resolvedAt) ?? new Date() } : {}),
   };
   return prisma.workTicket.upsert({
     where: { ticketId },

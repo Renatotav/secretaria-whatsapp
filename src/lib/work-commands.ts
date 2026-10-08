@@ -39,7 +39,9 @@ async function describeTicket(rawId: string): Promise<string> {
   const digits = id.replace(/^[A-Z]/, "");
   const t =
     (await prisma.workTicket.findUnique({ where: { ticketId: id } })) ??
-    (/^[A-Z]/.test(id) ? null : await prisma.workTicket.findFirst({ where: { ticketId: { endsWith: digits } } }));
+    (/^[A-Z]/.test(id)
+      ? null
+      : (await prisma.workTicket.findMany({ where: { ticketId: { endsWith: digits } } })).find((r) => r.ticketId.replace(/^[A-Z]/, "") === digits) ?? null);
   if (!t) return `💼 O chamado *${id}* ainda não está na Central. Para registrar: "chamado ${id} resolvido".`;
   const lines = [`💼 *Chamado ${t.ticketId}* — ${STATUS_LABEL[t.status] ?? t.status}`];
   if (t.errorType) lines.push(`Tipo: ${t.errorType}`);

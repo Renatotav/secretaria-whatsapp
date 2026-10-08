@@ -27,7 +27,8 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  const { id } = await request.json();
-  await prisma.workTicket.delete({ where: { id } });
+  const { id } = await request.json().catch(() => ({}));
+  if (typeof id !== "string" || !id) return NextResponse.json({ error: "Informe o chamado" }, { status: 400 });
+  await prisma.workTicket.deleteMany({ where: { id } });
   return NextResponse.json({ ok: true });
 }

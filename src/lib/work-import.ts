@@ -70,18 +70,22 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
       if (!ticketId) continue;
       result.lidas++;
       const origin = norm(r[col.origin]);
+      const openedAt = col.openedAt !== undefined ? toISO(r[col.openedAt]) : null;
       const resolution = col.resolution !== undefined ? String(r[col.resolution] ?? "").trim() : "";
       try {
         await upsertWorkTicket(
           {
             ticketId,
-            openedAt: col.openedAt !== undefined ? toISO(r[col.openedAt]) : null,
+            openedAt,
             description: col.description !== undefined ? String(r[col.description] ?? "") : undefined,
             errorType: col.errorType !== undefined ? String(r[col.errorType] ?? "") : undefined,
             origin: origin.includes("EXTERNO") ? "externo" : origin.includes("INTERNO") ? "interno" : undefined,
             resolution: resolution || undefined,
             // Com resolução preenchida, o chamado está resolvido (o upsert nunca rebaixa um Redmine).
             status: resolution ? "resolvido" : undefined,
+            // A planilha não tem data de resolução: usa a de abertura (o atendimento é no
+            // mesmo dia ou no seguinte), para histórico não contar como "resolvido hoje".
+            resolvedAt: resolution ? openedAt : undefined,
           },
           "planilha"
         );
