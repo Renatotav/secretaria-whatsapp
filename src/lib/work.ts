@@ -196,8 +196,16 @@ export async function workAlertsNow() {
 const list = (ids: string[], max = 8) => ids.slice(0, max).join(", ") + (ids.length > max ? ` e mais ${ids.length - max}` : "");
 
 /** Briefing das 8h (dias úteis): vazio quando não há nada pedindo ação. */
-export async function buildWorkBriefing(): Promise<string> {
+const alertKeys = (a: Awaited<ReturnType<typeof workAlertsNow>>) => [
+  ...a.urgentes.map((id) => `U:${id}`),
+  ...a.atrasados.map((x) => `A:${x.id}`),
+  ...a.encerrar.map((x) => `E:${x.id}`),
+];
+
+export async function buildWorkBriefing(markAsSent = false): Promise<string> {
   const a = await workAlertsNow();
+  // O briefing das 8h conta como aviso: às 11h10 só vem o que mudou depois dele.
+  if (markAsSent) await prisma.agentConfig.updateMany({ data: { workAlerted: JSON.stringify(alertKeys(a)) } });
   if (!a.urgentes.length && !a.atrasados.length && !a.encerrar.length) return "";
   return [
     "💼 *Bom dia! Seu trabalho hoje:*",
@@ -213,7 +221,7 @@ export async function buildWorkBriefing(): Promise<string> {
 /** Depois da atualização do escala: avisa só o que é novo desde o último aviso. */
 export async function buildWorkNewAlerts(): Promise<string> {
   const a = await workAlertsNow();
-  const now = [...a.urgentes.map((id) => `U:${id}`), ...a.atrasados.map((x) => `A:${x.id}`), ...a.encerrar.map((x) => `E:${x.id}`)];
+  const now = alertKeys(a);
   const config = await prisma.agentConfig.findFirst({ select: { id: true, workAlerted: true } });
   if (!config) return "";
   let before: string[] = [];

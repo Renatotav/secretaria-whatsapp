@@ -119,7 +119,7 @@ export function startScheduler(): void {
         lastWorkBriefDate = todayDate;
         try {
           const { buildWorkBriefing } = await import("./work");
-          const msg = await buildWorkBriefing();
+          const msg = await buildWorkBriefing(true);
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
         } catch (err) {
           console.error("Erro no briefing do trabalho:", err);
