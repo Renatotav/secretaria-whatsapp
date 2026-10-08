@@ -2890,6 +2890,17 @@ export async function handlePrivateMessage(joinedText: string, meta: PrivateMess
   const providerOpts = getProviderOpts(config);
   const contactName = meta.pushName || meta.phone;
 
+  // Resumo das mensagens privadas desligado: só guarda a conversa, sem mandar
+  // para a IA e sem avisar (eram ~30 avisos/dia, 92% "nada importante").
+  if (!config.privateBriefings) {
+    let quietConv = await prisma.conversation.findFirst({ where: { phone: meta.phone, source: "whatsapp" } });
+    if (!quietConv) {
+      quietConv = await prisma.conversation.create({ data: { phone: meta.phone, source: "whatsapp", contactName } });
+    }
+    await prisma.message.create({ data: { conversationId: quietConv.id, role: "user", content: joinedText } });
+    return;
+  }
+
   const analysis = await analyzePrivateMessage(joinedText, contactName, config.ownerRole, providerOpts, config.systemPrompt);
 
   if (analysis.ticketIds.length > 0) {

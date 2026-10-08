@@ -41,6 +41,8 @@ model AgentConfig {
   typingMaxSeconds Int     @default(8)
   creditCardDueDay Int     @default(10)
   creditCardBestDay Int    @default(5)
+  /// Resumir com a IA cada mensagem privada recebida e avisar o dono (desligado desde 07/10/2026: virou barulho).
+  privateBriefings Boolean @default(false)
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
