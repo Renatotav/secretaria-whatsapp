@@ -107,9 +107,13 @@ export async function handleWorkPhoneMessage(config: AgentConfig, evo: Evo, mess
     console.error("[trabalho] celular institucional:", err instanceof Error ? err.message : err);
     s.skipped++;
   }
+  // Só tipos e contagens no log, nunca o conteúdo.
+  console.log("[trabalho] celular do trabalho:", Object.keys(message).filter((k) => k !== "messageContextInfo").join(","), `· ${s.lines.length} texto(s), ${s.images.length} imagem(ns), ${s.skipped} ignorado(s)`);
   // Espera parar de chegar mensagem (encaminhar várias leva alguns segundos).
   if (s.timer) clearTimeout(s.timer);
-  s.timer = setTimeout(() => void flush(config), IDLE_MS);
+  s.timer = setTimeout(() => {
+    flush(config).catch((err) => console.error("[trabalho] falha ao juntar a conversa:", err instanceof Error ? err.stack : err));
+  }, IDLE_MS);
 }
 
 async function flush(config: AgentConfig) {
@@ -141,6 +145,7 @@ async function flush(config: AgentConfig) {
       s.prints = [];
     }
   }
+  console.log(`[trabalho] juntando: ${s.lines.length} texto(s), ${s.images.length} imagem(ns) → ${ticket ? "chamado encontrado" : "sem número, perguntando"}`);
   if (ticket) return save(config, ticket);
   s.waitingUntil = Date.now() + WAIT_MS;
   await notifyOwner(
