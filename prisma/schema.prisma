@@ -51,6 +51,10 @@ model AgentConfig {
   workApiToken     String  @default("")
   /// Link do guia/download da extensão (fica no banco, não no repositório público).
   workGuideUrl     String  @default("")
+  /// Endereço para abrir um chamado no Assyst, com {n} no lugar do número (no banco, não no repositório).
+  workTicketUrl    String  @default("")
+  /// Endereço para abrir um Redmine, com {n} no lugar do número.
+  workRedmineUrl   String  @default("")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())

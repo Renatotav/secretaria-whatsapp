@@ -35,6 +35,55 @@ const STATUS: Record<string, { label: string; color: string }> = {
 };
 const EMPTY = { ticketId: "", status: "aberto", errorType: "", origin: "", redmine: "", resolution: "", description: "" };
 
+type Links = { ticket: string; redmine: string };
+
+const linkStyle = { color: "#60a5fa", textDecoration: "underline" } as const;
+const urlFor = (template: string, n: string) => template.replace("{n}", encodeURIComponent(n));
+
+/** Número do chamado como link azul para o Assyst (igual ao escala). */
+function TicketLink({ id, links, size = 15 }: { id: string; links: Links; size?: number }) {
+  if (!links.ticket) return <strong style={{ fontSize: size }}>{id}</strong>;
+  return (
+    <a href={urlFor(links.ticket, id)} target="_blank" rel="noopener noreferrer" style={{ ...linkStyle, fontSize: size, fontWeight: 700 }}>
+      {id}
+    </a>
+  );
+}
+
+/** "273231, 281479" → um link para cada Redmine. */
+function RedmineLinks({ value, links }: { value: string; links: Links }) {
+  const nums = value.split(/[,\s]+/).filter(Boolean);
+  return (
+    <>
+      {nums.map((n, i) => (
+        <span key={n}>
+          {i > 0 && ", "}
+          {links.redmine ? (
+            <a href={urlFor(links.redmine, n)} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+              #{n}
+            </a>
+          ) : (
+            `#${n}`
+          )}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** Badge de dias em aberto (igual ao escala): 🟢 até 2 dias · 🟡 3–4 · 🔴 5 ou mais. */
+function AgeBadge({ openedAt }: { openedAt: string | null }) {
+  if (!openedAt) return null;
+  const days = Math.floor((Date.now() - new Date(openedAt).getTime()) / 86400_000);
+  const color = days >= 5 ? "#ef4444" : days >= 3 ? "#f59e0b" : "#22c55e";
+  return (
+    <span title={`${days} dia(s) em aberto`} style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: color, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+      {days >= 5 ? "⚠ " : ""}
+      {days}d
+    </span>
+  );
+}
+
 /**
  * Central do Atendente PJe — chamados do trabalho. A descrição é gravada com
  * CPF mascarado e sem telefone/e-mail (feito no servidor), e nada daqui vai
@@ -48,6 +97,7 @@ export default function WorkPage() {
   const [token, setToken] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [guideUrl, setGuideUrl] = useState("");
+  const [links, setLinks] = useState<Links>({ ticket: "", redmine: "" });
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
 
@@ -58,6 +108,7 @@ export default function WorkPage() {
       setTickets(data.tickets);
       setStats(data.stats);
       setGuideUrl(data.guideUrl || "");
+      if (data.links) setLinks(data.links);
     }
   }, [q]);
 
@@ -149,6 +200,20 @@ export default function WorkPage() {
       </div>
       )}
 
+      <div style={{ ...box, marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: "1 1 260px" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>📥 Importar planilha de chamados (.xlsx)</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Baixe a &quot;Planilha Chamados Erro e Falha&quot; do Excel Online e envie aqui. Completa os chamados do escala com tipo do erro, origem e resolução. CPF é mascarado.
+          </div>
+        </div>
+        <label style={{ fontSize: 13, fontWeight: 700, padding: "8px 14px", cursor: "pointer", background: "#16a34a", color: "#fff", borderRadius: 8 }}>
+          📥 Importar planilha
+          <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={(e) => { importSheet(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+        {importMsg && <div style={{ flex: "1 1 100%", fontSize: 13 }}>{importMsg}</div>}
+      </div>
+
       {stats && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
           <Card title="Hoje" c={stats.hoje} />
@@ -170,7 +235,7 @@ export default function WorkPage() {
           {stats.paraEncerrar.map((t) => (
             <div key={t.ticketId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
               <span>
-                <strong>{t.ticketId}</strong> · Redmine #{t.redmine}
+                <TicketLink id={t.ticketId} links={links} size={13} /> · Redmine <RedmineLinks value={t.redmine} links={links} />
                 {t.openedAt ? <span style={{ color: "var(--text-muted)" }}> · aberto em {new Date(t.openedAt).toLocaleDateString("pt-BR")}</span> : null}
               </span>
               <button className="btn-ghost" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => save({ ticketId: t.ticketId, status: "resolvido" })}>✅ Encerrei</button>
@@ -217,19 +282,6 @@ export default function WorkPage() {
         {error && <div style={{ flex: "1 1 100%", color: "var(--danger)", fontSize: 13 }}>{error}</div>}
       </form>
 
-      <div style={{ ...box, marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-        <div style={{ flex: "1 1 260px" }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>📥 Importar planilha de chamados (.xlsx)</div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            Baixe a &quot;Planilha Chamados Erro e Falha&quot; do Excel Online e envie aqui. Completa os chamados do escala com tipo do erro, origem e resolução. CPF é mascarado.
-          </div>
-        </div>
-        <label className="btn-ghost" style={{ fontSize: 13, padding: "6px 12px", cursor: "pointer" }}>
-          Escolher arquivo
-          <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={(e) => { importSheet(e.target.files?.[0]); e.target.value = ""; }} />
-        </label>
-        {importMsg && <div style={{ flex: "1 1 100%", fontSize: 13 }}>{importMsg}</div>}
-      </div>
 
       <input placeholder="🔎 Buscar por número ou tipo de erro" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
 
@@ -237,8 +289,14 @@ export default function WorkPage() {
         {tickets.map((t) => (
           <div key={t.id} style={{ ...box, display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <strong style={{ fontSize: 15 }}>{t.ticketId}</strong>
-              <span style={{ fontSize: 12, color: STATUS[t.status]?.color }}>{STATUS[t.status]?.label ?? t.status}{t.redmine ? ` #${t.redmine}${t.redmineStatus ? ` · ${t.redmineStatus}` : ""}` : ""}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <TicketLink id={t.ticketId} links={links} />
+                {(t.status === "aberto" || t.status === "pendente") && <AgeBadge openedAt={t.openedAt} />}
+              </span>
+              <span style={{ fontSize: 12, color: STATUS[t.status]?.color, textAlign: "right" }}>
+                {STATUS[t.status]?.label ?? t.status}
+                {t.redmine ? <> <RedmineLinks value={t.redmine} links={links} />{t.redmineStatus ? ` · ${t.redmineStatus}` : ""}</> : null}
+              </span>
             </div>
             {t.errorType && <div style={{ fontSize: 13 }}>{t.errorType}</div>}
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>

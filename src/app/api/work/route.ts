@@ -13,8 +13,13 @@ export async function GET(request: Request) {
     orderBy: { updatedAt: "desc" },
     take: 100,
   });
-  const config = await prisma.agentConfig.findFirst({ select: { workGuideUrl: true } });
-  return NextResponse.json({ tickets, stats: await workStats(), guideUrl: config?.workGuideUrl || "" });
+  const config = await prisma.agentConfig.findFirst({ select: { workGuideUrl: true, workTicketUrl: true, workRedmineUrl: true } });
+  return NextResponse.json({
+    tickets,
+    stats: await workStats(),
+    guideUrl: config?.workGuideUrl || "",
+    links: { ticket: config?.workTicketUrl || "", redmine: config?.workRedmineUrl || "" },
+  });
 }
 
 export async function POST(request: Request) {
