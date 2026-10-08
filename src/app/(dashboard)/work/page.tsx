@@ -50,14 +50,13 @@ function TicketLink({ id, links, size = 15 }: { id: string; links: Links; size?:
   );
 }
 
-/** "273231, 281479" → um link para cada Redmine. */
+/** "273231, 281479" ou "273231 e 281479" → um link por linha (mesma regra do escala). */
 function RedmineLinks({ value, links }: { value: string; links: Links }) {
-  const nums = value.split(/[,\s]+/).filter(Boolean);
+  const nums = value.split(/[;/,|\\]|\s+e\s+|\s+/i).map((n) => n.trim()).filter(Boolean);
   return (
     <>
-      {nums.map((n, i) => (
-        <span key={n}>
-          {i > 0 && ", "}
+      {nums.map((n) => (
+        <span key={n} style={{ display: "block" }}>
           {links.redmine ? (
             <a href={urlFor(links.redmine, n)} target="_blank" rel="noopener noreferrer" style={linkStyle}>
               #{n}
@@ -75,9 +74,13 @@ function RedmineLinks({ value, links }: { value: string; links: Links }) {
 function AgeBadge({ openedAt }: { openedAt: string | null }) {
   if (!openedAt) return null;
   const days = Math.floor((Date.now() - new Date(openedAt).getTime()) / 86400_000);
-  const color = days >= 5 ? "#ef4444" : days >= 3 ? "#f59e0b" : "#22c55e";
+  const color = days >= 5 ? "#dc2626" : days >= 3 ? "#f59e0b" : "#22c55e";
   return (
-    <span title={`${days} dia(s) em aberto`} style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: color, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}>
+    <span
+      title={`${days} dia(s) em aberto`}
+      className={days >= 5 ? "badge-alerta" : undefined}
+      style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: color, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap" }}
+    >
       {days >= 5 ? "⚠ " : ""}
       {days}d
     </span>
@@ -235,7 +238,13 @@ export default function WorkPage() {
           {stats.paraEncerrar.map((t) => (
             <div key={t.ticketId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 13, padding: "6px 0", borderTop: "1px solid var(--border)" }}>
               <span>
-                <TicketLink id={t.ticketId} links={links} size={13} /> · Redmine <RedmineLinks value={t.redmine} links={links} />
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <TicketLink id={t.ticketId} links={links} size={13} />
+                  <AgeBadge openedAt={t.openedAt} />
+                </span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                  Redmine resolvido: <RedmineLinks value={t.redmine} links={links} />
+                </span>
                 {t.openedAt ? <span style={{ color: "var(--text-muted)" }}> · aberto em {new Date(t.openedAt).toLocaleDateString("pt-BR")}</span> : null}
               </span>
               <button className="btn-ghost" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => save({ ticketId: t.ticketId, status: "resolvido" })}>✅ Encerrei</button>
@@ -295,7 +304,12 @@ export default function WorkPage() {
               </span>
               <span style={{ fontSize: 12, color: STATUS[t.status]?.color, textAlign: "right" }}>
                 {STATUS[t.status]?.label ?? t.status}
-                {t.redmine ? <> <RedmineLinks value={t.redmine} links={links} />{t.redmineStatus ? ` · ${t.redmineStatus}` : ""}</> : null}
+                {t.redmine ? (
+                  <span style={{ display: "block", marginTop: 2, color: "var(--text-muted)" }}>
+                    Redmine{t.redmineStatus ? ` · ${t.redmineStatus}` : ""}
+                    <RedmineLinks value={t.redmine} links={links} />
+                  </span>
+                ) : null}
               </span>
             </div>
             {t.errorType && <div style={{ fontSize: 13 }}>{t.errorType}</div>}

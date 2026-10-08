@@ -233,3 +233,11 @@ button {
   }
   .entries-table tr.edit-row { grid-column: 1 / -1; border-radius: 10px; }
 }
+
+/* Badge de chamado com 5+ dias em aberto (aba Trabalho): vermelho pulsando. */
+@keyframes badge-pulsar {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.75); transform: scale(1); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); transform: scale(1.08); }
+}
+.badge-alerta { animation: badge-pulsar 1.2s ease-in-out infinite; display: inline-block; }
+@media (prefers-reduced-motion: reduce) { .badge-alerta { animation: none; } }
