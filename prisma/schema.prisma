@@ -59,6 +59,8 @@ model AgentConfig {
   workPhone        String  @default("")
   /// Código de vínculo pendente: "1234|<expira em ms>".
   workPairCode     String  @default("")
+  /// Modelo do OpenRouter usado pelos botões de IA da Central do Atendente.
+  workAiModel      String  @default("anthropic/claude-sonnet-5.5")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
@@ -294,4 +296,13 @@ model WorkAttachment {
   createdAt DateTime @default(now())
 
   @@index([ticketId])
+}
+
+/// Skills do trabalho usadas pelos botões de IA da extensão (texto no banco,
+/// não no repositório público). key = resumo | redmine | whatsapp | corrigir | corrigir-whatsapp.
+model WorkSkill {
+  key       String   @id
+  name      String
+  prompt    String
+  updatedAt DateTime @updatedAt
 }
