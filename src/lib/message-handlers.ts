@@ -1199,13 +1199,14 @@ export interface SelfMessageMeta {
 // Quase tudo do dono é no cartão de crédito (milhas): quando ele não diz como
 // pagou, o gasto entra como cartão e a confirmação pergunta se foi outro meio.
 // Ele responde só com o número (ou o nome) e corrigimos SÓ aquele lançamento.
-const PAYMENT_OPTIONS: Record<string, "cartão" | "pix" | "débito" | "dinheiro"> = {
+const PAYMENT_OPTIONS: Record<string, "cartão" | "pix" | "débito" | "dinheiro" | "ticket"> = {
   "1": "cartão", "cartão": "cartão", "cartao": "cartão", "crédito": "cartão", "credito": "cartão",
   "2": "pix", "pix": "pix",
   "3": "débito", "débito": "débito", "debito": "débito",
   "4": "dinheiro", "dinheiro": "dinheiro", "espécie": "dinheiro", "especie": "dinheiro",
+  "5": "ticket", "vr": "ticket", "vale": "ticket", "ticket": "ticket", "va": "ticket",
 };
-const PAYMENT_QUESTION = "Pagou de outro jeito? Responda *2* pix · *3* débito · *4* dinheiro";
+const PAYMENT_QUESTION = "Pagou de outro jeito? Responda *2* pix · *3* débito · *4* dinheiro · *5* VR";
 const PAYMENT_REPLY_WINDOW_MS = 60 * 60 * 1000;
 // A mensagem cita uma data, um mês ou a fatura? Só assim a fatura que a IA
 // extraiu ("billDate") passa por cima da regra do melhor dia.
@@ -1248,7 +1249,7 @@ const UNDO_HINT = "↩️ Errou? Responda *desfazer* ou *na verdade foi 25*.";
 function paymentLabel(paymentMethod: string, date: Date): string {
   return paymentMethod === "cartão"
     ? `💳 cartão, fatura de ${formatDayMonth(date)}`
-    : `${paymentMethod}, pago em ${formatDayMonth(date)}`;
+    : `${PAYMENT_NAMES[paymentMethod] ?? paymentMethod}, pago em ${formatDayMonth(date)}`;
 }
 
 /**
@@ -1283,7 +1284,13 @@ async function applyPaymentReply(text: string, config: AgentConfig): Promise<str
     : purchase;
   await prisma.financeEntry.update({
     where: { id: entry.id },
-    data: { paymentMethod: choice, date, status: isCard ? "pending" : "paid" },
+    // VR = conta do vale; trocar de VR para outro meio volta para a conta principal.
+    data: {
+      paymentMethod: choice,
+      date,
+      status: isCard ? "pending" : "paid",
+      account: choice === "ticket" ? "VR" : /vr|ticket|vale/i.test(entry.account) ? "Principal" : entry.account,
+    },
   });
   return `✅ Corrigido: "${label}" (${brl(entry.amount)}) agora é ${paymentLabel(choice, date)}.`;
 }
@@ -2770,7 +2777,8 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   let account = "Principal";
   let status: "paid" | "pending" = "paid";
 
-  if (readMethod === "ticket" || (invoice.account || "").toLowerCase().includes("ticket")) {
+  // Legenda "vr"/"vale" manda: na nota o cartão do VR aparece como "débito".
+  if (readMethod === "ticket" || (invoice.account || "").toLowerCase().includes("ticket") || /\b(vr|va|vale|ticket|multi)\b/i.test(caption)) {
     paymentMethod = "ticket";
     account = "VR";
   } else if (/d[ée]bito/.test(readMethod)) {
@@ -2832,7 +2840,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     return "";
   });
 
-  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : "Se foi no cartão, responda *1*."}${detective}`;
+  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : paymentMethod === "ticket" ? "Se não foi no VR, responda *1* cartão · *2* pix · *3* débito." : "Pagou de outro jeito? Responda *1* cartão · *2* pix · *5* VR"}${detective}`;
 
   if (finalMood === "neutro") {
     response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
