@@ -45,6 +45,7 @@ export default function WorkPage() {
   const [q, setQ] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
+  const [importMsg, setImportMsg] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/work${q ? `?q=${encodeURIComponent(q)}` : ""}`);
@@ -75,6 +76,21 @@ export default function WorkPage() {
   async function remove(id: string) {
     if (!confirm("Apagar este chamado da Central?")) return;
     await fetch("/api/work", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    load();
+  }
+
+  async function importSheet(file: File | undefined) {
+    if (!file) return;
+    setImportMsg("Importando…");
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch("/api/work/import", { method: "POST", body });
+    const r = await res.json();
+    setImportMsg(
+      res.ok
+        ? `✅ Aba "${r.aba}": ${r.salvas} de ${r.lidas} chamados importados${r.ignoradas ? ` · ${r.ignoradas} ignorados (${r.erros.join("; ")})` : ""}.`
+        : `⚠️ ${r.error || "Não consegui importar."}`
+    );
     load();
   }
 
@@ -151,6 +167,20 @@ export default function WorkPage() {
         <button className="btn-primary" style={{ flex: "1 1 140px" }}>Salvar chamado</button>
         {error && <div style={{ flex: "1 1 100%", color: "var(--danger)", fontSize: 13 }}>{error}</div>}
       </form>
+
+      <div style={{ ...box, marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: "1 1 260px" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>📥 Importar planilha de chamados (.xlsx)</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Baixe a &quot;Planilha Chamados Erro e Falha&quot; do Excel Online e envie aqui. Completa os chamados do escala com tipo do erro, origem e resolução. CPF é mascarado.
+          </div>
+        </div>
+        <label className="btn-ghost" style={{ fontSize: 13, padding: "6px 12px", cursor: "pointer" }}>
+          Escolher arquivo
+          <input type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={(e) => { importSheet(e.target.files?.[0]); e.target.value = ""; }} />
+        </label>
+        {importMsg && <div style={{ flex: "1 1 100%", fontSize: 13 }}>{importMsg}</div>}
+      </div>
 
       <input placeholder="🔎 Buscar por número ou tipo de erro" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
 

@@ -22,12 +22,18 @@ export interface WorkTicketInput {
 const clean = (v: unknown, max = 2000) => (typeof v === "string" ? maskPersonalData(v.trim()).slice(0, max) : undefined);
 
 /** Cria ou atualiza o chamado pelo número (chave comum de todo o ecossistema). */
-export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" | "extensao" | "whatsapp" | "escala") {
+export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" | "extensao" | "whatsapp" | "escala" | "planilha") {
   const ticketId = normalizeTicketId(input.ticketId);
   if (!/^[A-Z]?\d{6,9}$/.test(ticketId)) throw new Error("Número de chamado inválido");
-  const status = WORK_STATUSES.includes(input.status as WorkStatus) ? (input.status as WorkStatus) : undefined;
+  let status = WORK_STATUSES.includes(input.status as WorkStatus) ? (input.status as WorkStatus) : undefined;
   const origin = input.origin && ["externo", "interno"].includes(input.origin.toLowerCase()) ? input.origin.toLowerCase() : undefined;
   const before = await prisma.workTicket.findUnique({ where: { ticketId } });
+  // Status só anda para frente quando vem de importação: Redmine é o fim da
+  // linha; resolvido não volta para aberto. No painel, ele pode mudar à mão.
+  if (status && before && source !== "painel") {
+    const rank: Record<string, number> = { aberto: 0, pendente: 1, resolvido: 2, escalado: 3 };
+    if ((rank[status] ?? 0) < (rank[before.status] ?? 0)) status = undefined;
+  }
   const closing = status && (status === "resolvido" || status === "escalado") && before?.status !== status;
   const data = {
     ...(input.openedAt ? { openedAt: new Date(input.openedAt) } : {}),
