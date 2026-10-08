@@ -671,6 +671,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 ❓ Pergunta livre sobre os números: "quanto gastei com Uber em setembro?", "qual minha maior compra no cartão?", "quanto falta pagar do Samsung?".
 🛒 Simulador: "posso comprar um tênis de 200 em 3x?", "e se meu salário for 3300?".
 🏆 Metas: "quero juntar 3000 pra viagem até julho" cria a meta e diz quanto guardar por mês; "como estão minhas metas?" (com gráfico e se cabem na sobra), "guarda 100 na reserva", "tirei 900 da reserva". Depois do salário ela sugere quanto guardar — responder "guarda".
+📅 Compromissos das conversas: quando alguém combina algo com ele no privado ("treino amanhã às 7"), ela pergunta e "agenda" salva com lembrete; "silencia fulano" / "volta a ouvir fulano".
 🗓️ Agenda e lembretes: "reunião amanhã às 14h", "lembrar de pagar o cartão sexta", "o que tenho pendente?".
 🎫 Chamados e grupos: "quais chamados estão abertos?", "resumo do grupo PJe".
 📔 Diário: contar como foi o dia ("hoje foi puxado, fiquei cansado...") — ela guarda com o humor.
@@ -1587,6 +1588,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   });
 
   const paymentReply =
+    (await applyCommitmentCommands(joinedText, config)) ??
     (await applyImageDraftReply(joinedText, config)) ??
     (await applyUndoOrEdit(joinedText)) ??
     (await applyInvoicePayment(joinedText)) ??
@@ -2883,6 +2885,89 @@ export interface PrivateMessageMeta {
   messageTimestamp: number;
 }
 
+// ── Compromissos das conversas → agenda ──────────────────────────────────
+// Última sugestão esperando o "agenda" do dono, e sugestões recentes (para
+// não perguntar de novo o mesmo compromisso a cada "ok", "fechado"...).
+let pendingCommitment: { title: string; contactName: string; event: Date; hasTime: boolean; at: number } | null = null;
+const recentCommitments = new Map<string, number>();
+const brtDate = (date: string, time: string | null) => {
+  const [y, mo, d] = date.split("-").map(Number);
+  const [h, mi] = (time ?? "12:00").split(":").map(Number);
+  return new Date(Date.UTC(y, mo - 1, d, h + 3, mi)); // horário de Brasília → UTC
+};
+const fmtBRT = (d: Date, withTime: boolean) => {
+  const b = new Date(d.getTime() - 3 * 3600_000);
+  const dd = `${String(b.getUTCDate()).padStart(2, "0")}/${String(b.getUTCMonth() + 1).padStart(2, "0")}`;
+  return withTime ? `${dd} às ${String(b.getUTCHours()).padStart(2, "0")}:${String(b.getUTCMinutes()).padStart(2, "0")}` : dd;
+};
+
+/**
+ * Lê o fim da conversa privada (com a IA, interpretando linguagem livre) e,
+ * se ficou combinado um compromisso, pergunta ao dono se coloca na agenda.
+ * Contato silenciado não passa pela IA.
+ */
+async function checkCommitment(phone: string, contactName: string, conversationId: string, config: AgentConfig): Promise<void> {
+  if (!config.detectCommitments || !config.ownerPhone) return;
+  if (config.mutedContacts.split(",").map((p) => p.trim()).includes(phone)) return;
+  const recent = await prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: "desc" }, take: 8 });
+  const convo = recent.reverse().map((x) => `${x.role === "user" ? contactName : "Renato"}: ${x.content}`).join("\n");
+  const today = todayBRT();
+  const { detectCommitment } = await import("./analyzer");
+  const c = await detectCommitment(convo, contactName, today.toISOString().slice(0, 10), WEEKDAYS[today.getDay()], getProviderOpts(config));
+  if (!c.found || !c.date) return;
+  const event = brtDate(c.date, c.time);
+  if (event.getTime() < Date.now() - 3600_000) return; // já passou
+  const key = `${phone}|${c.date}|${c.time ?? ""}`;
+  if (Date.now() - (recentCommitments.get(key) ?? 0) < 24 * 3600_000) return;
+  recentCommitments.set(key, Date.now());
+  pendingCommitment = { title: c.title || "Compromisso", contactName, event, hasTime: !!c.time, at: Date.now() };
+  await notifyOwner(
+    config,
+    `📅 *${contactName}*: ${c.title || "compromisso"} — ${WEEKDAYS[new Date(event.getTime() - 3 * 3600_000).getUTCDay()]}, ${fmtBRT(event, !!c.time)}.\nColoco na agenda? Responda *agenda* para salvar (com lembrete). Se não, é só ignorar.`
+  );
+}
+
+/** "agenda" (salva o compromisso sugerido) e "silencia X" / "volta a ouvir X". */
+async function applyCommitmentCommands(text: string, config: AgentConfig): Promise<string | null> {
+  const t = text.trim();
+  if (/^agenda[.!]*$/i.test(t)) {
+    const p = pendingCommitment;
+    if (!p || Date.now() - p.at > 24 * 3600_000) return "🤔 Não tenho nenhum compromisso esperando para salvar.";
+    pendingCommitment = null;
+    // Lembrete: 1h antes; compromisso antes das 9h (ou sem hora) avisa às 21h da véspera.
+    const eventBRT = new Date(p.event.getTime() - 3 * 3600_000);
+    const early = !p.hasTime || eventBRT.getUTCHours() < 9;
+    const remind = early
+      ? new Date(Date.UTC(eventBRT.getUTCFullYear(), eventBRT.getUTCMonth(), eventBRT.getUTCDate() - 1, 21 + 3, 0))
+      : new Date(p.event.getTime() - 3600_000);
+    const when = fmtBRT(p.event, p.hasTime);
+    await prisma.agendaItem.create({
+      data: {
+        source: "self",
+        category: "event",
+        title: `${p.title} com ${p.contactName} — ${when}`,
+        description: `Combinado com ${p.contactName} pelo WhatsApp.`,
+        dueDate: remind,
+        rawMessage: `compromisso detectado na conversa com ${p.contactName}`,
+      },
+    });
+    return `✅ Na agenda: *${p.title} com ${p.contactName}* — ${when}.\n⏰ Lembrete ${early ? "na véspera às 21h" : "1h antes"}.`;
+  }
+  const mute = t.match(/^(silencia|silenciar|ignora|ignorar)\s+(o |a )?(.+?)[.!]*$/i);
+  const unmute = t.match(/^(volta a ouvir|ouvir de novo|dessilencia)\s+(o |a )?(.+?)[.!]*$/i);
+  if (!mute && !unmute) return null;
+  const name = (mute ?? unmute)![3];
+  const conv = await prisma.conversation.findFirst({ where: { source: "whatsapp", contactName: { contains: name, mode: "insensitive" } }, orderBy: { updatedAt: "desc" } });
+  if (!conv || !conv.phone) return `🤔 Não achei nenhuma conversa com "${name}".`;
+  const list = new Set(config.mutedContacts.split(",").map((p) => p.trim()).filter(Boolean));
+  if (mute) list.add(conv.phone);
+  else list.delete(conv.phone);
+  await prisma.agentConfig.update({ where: { id: config.id }, data: { mutedContacts: [...list].join(",") } });
+  return mute
+    ? `🔇 Pronto: as conversas com *${conv.contactName}* não passam mais pela IA. Para voltar: "volta a ouvir ${name}".`
+    : `🔊 Voltei a olhar as conversas com *${conv.contactName}* (só para achar compromissos).`;
+}
+
 export async function handlePrivateMessage(joinedText: string, meta: PrivateMessageMeta): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.enabled) return;
@@ -2898,6 +2983,7 @@ export async function handlePrivateMessage(joinedText: string, meta: PrivateMess
       quietConv = await prisma.conversation.create({ data: { phone: meta.phone, source: "whatsapp", contactName } });
     }
     await prisma.message.create({ data: { conversationId: quietConv.id, role: "user", content: joinedText } });
+    await checkCommitment(meta.phone, quietConv.contactName || contactName, quietConv.id, config);
     return;
   }
 
@@ -3087,4 +3173,7 @@ export async function handleOwnerReply(joinedText: string, meta: OwnerReplyMeta)
       createdAt: new Date(meta.messageTimestamp * 1000)
     }
   });
+
+  // O próprio dono às vezes é quem fecha o horário ("fechado, amanhã às 7").
+  if (!meta.isGroup) await checkCommitment(phone, conv.contactName || contactName, conv.id, config);
 }

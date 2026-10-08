@@ -43,6 +43,10 @@ model AgentConfig {
   creditCardBestDay Int    @default(5)
   /// Resumir com a IA cada mensagem privada recebida e avisar o dono (desligado desde 07/10/2026: virou barulho).
   privateBriefings Boolean @default(false)
+  /// Ler as conversas privadas só para achar compromissos e sugerir na agenda.
+  detectCommitments Boolean @default(true)
+  /// Telefones silenciados (separados por vírgula): nunca passam pela IA.
+  mutedContacts    String  @default("")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
