@@ -17,6 +17,8 @@ interface Session {
   lines: string[];
   images: { mimetype: string; data: Buffer; caption: string }[];
   skipped: number;
+  /** Resumo dos prints do Assyst (lidos aqui, sem IA). */
+  prints?: string[];
   timer?: ReturnType<typeof setTimeout>;
   /** Esperando o dono dizer o chamado (até quando). */
   waitingUntil?: number;
@@ -36,7 +38,7 @@ const CNJ = /\d{7}-?\d{2}\.?\d{4}\.?\d\.?\d{2}\.?\d{4}/g;
 /** Nº do chamado no texto: "chamado 2154585" (ou uma linha só com o número). */
 export function findTicketInText(text: string): string | null {
   const t = text.replace(CNJ, " ");
-  const m = t.match(/chamado\s*(?:n[ºo°]?\.?\s*|#\s*)?([A-Za-z]?\d{6,9})\b/i);
+  const m = t.match(/chamado\s*(?:n[\s.]*[ºo°]?\.?\s*|#\s*)?[*_]*([A-Za-z]?\d{6,9})\b/i);
   if (m) return normalizeTicketId(m[1]);
   const line = t.split("\n").map((l) => l.trim()).find((l) => /^[A-Za-z]?\d{6,9}$/.test(l));
   return line ? normalizeTicketId(line) : null;
@@ -113,7 +115,32 @@ export async function handleWorkPhoneMessage(config: AgentConfig, evo: Evo, mess
 async function flush(config: AgentConfig) {
   const s = session;
   if (!s || (!s.lines.length && !s.images.length)) return;
-  const ticket = findTicketInText(s.lines.join("\n"));
+  let ticket = findTicketInText(s.lines.join("\n"));
+  // Prints: leitura local (sem IA) para o resumo e, se faltar, o nº do chamado.
+  if (s.images.length && !s.prints) {
+    try {
+      const { readImageText, summarizeAssystPrint, ticketCandidates } = await import("./work-ocr");
+      const texts = await readImageText(s.images.slice(0, 4).map((i) => i.data));
+      s.prints = texts.map(summarizeAssystPrint).filter(Boolean);
+      for (const t of texts) {
+        if (ticket) break;
+        // "chamado n.º 2120102" no print da mensagem padrão: confiável.
+        ticket = findTicketInText(t);
+        // Número solto (ex: trilha do Assyst): só vale se o chamado já existe aqui.
+        if (!ticket) {
+          for (const c of ticketCandidates(t)) {
+            if (await prisma.workTicket.findUnique({ where: { ticketId: c }, select: { id: true } })) {
+              ticket = c;
+              break;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[trabalho] leitura do print:", err instanceof Error ? err.message : err);
+      s.prints = [];
+    }
+  }
   if (ticket) return save(config, ticket);
   s.waitingUntil = Date.now() + WAIT_MS;
   await notifyOwner(
@@ -144,7 +171,8 @@ async function save(config: AgentConfig, ticketId: string, notify = true): Promi
   const existing = await prisma.workTicket.findUnique({ where: { ticketId }, select: { chatLog: true } });
   if (!existing) await upsertWorkTicket({ ticketId }, "whatsapp");
   const stamp = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const block = s.lines.length ? `── ${stamp} · celular do trabalho ──\n${maskPersonalData(s.lines.join("\n")).trim()}` : "";
+  const body = [s.lines.length ? maskPersonalData(s.lines.join("\n")).trim() : "", ...(s.prints || []).map((p) => `🖼️ Print do chamado:\n${p}`)].filter(Boolean);
+  const block = body.length ? `── ${stamp} · celular do trabalho ──\n${body.join("\n\n")}` : "";
   if (block) {
     const log = [existing?.chatLog, block].filter(Boolean).join("\n\n");
     await prisma.workTicket.update({ where: { ticketId }, data: { chatLog: log.length > MAX_LOG ? log.slice(-MAX_LOG) : log } });
@@ -152,8 +180,17 @@ async function save(config: AgentConfig, ticketId: string, notify = true): Promi
   for (const img of s.images) {
     await prisma.workAttachment.create({ data: { ticketId, mimetype: img.mimetype, caption: img.caption, data: new Uint8Array(img.data) } });
   }
+  const t = await prisma.workTicket.findUnique({ where: { ticketId }, select: { status: true, resolution: true, redmine: true, redmineStatus: true } });
+  const statusLine =
+    t?.status === "resolvido"
+      ? `✅ Resolvido${t.resolution ? `: ${t.resolution.slice(0, 160)}` : ""}`
+      : t?.status === "escalado"
+      ? `🔁 Virou Redmine${t.redmine ? ` #${t.redmine}` : ""}`
+      : `🟡 Em aberto${t?.redmineStatus ? ` · Redmine ${t.redmineStatus}` : ""}`;
   const reply = [
-    `📱 Conversa salva no chamado *${ticketId}*${existing ? "" : " (novo)"}:`,
+    `📱 Chamado *${ticketId}*${existing ? "" : " (novo)"} — ${statusLine}`,
+    ...(s.prints || []).slice(0, 1).map((p) => `📝 ${p.replace(/\n/g, " · ")}`),
+    "Salvo:",
     s.lines.length ? `• ${s.lines.join("\n").split("\n").filter((l) => l.trim()).length} linha(s) de texto (CPF mascarado, sem telefone/e-mail)` : "",
     s.images.length ? `• ${s.images.length} imagem(ns) anexada(s)` : "",
     s.skipped ? `• ${s.skipped} item(ns) ignorado(s) (áudio/vídeo/figurinha)` : "",
