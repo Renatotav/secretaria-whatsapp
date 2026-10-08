@@ -962,7 +962,22 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
   try {
     const { workWeekSection } = await import("./work");
     const work = await workWeekSection(monday);
-    if (work) lines.push(work);
+    if (work) {
+      lines.push(work);
+      // Comentário curto sobre a semana de trabalho, só com os números acima.
+      try {
+        const { content } = await generateResponse(
+          [{ role: "user", content: work }],
+          "Você é a secretária do Renato, atendente do suporte do PJe. Em NO MÁXIMO 2 frases, comente a semana de trabalho dele usando SÓ estes números (resolvidos, Redmine, melhor dia, tipos de erro): um destaque positivo e uma sugestão prática (ex: um tutorial para o erro que mais se repetiu). Não invente números nem fatos. Mantenha os nomes dos tipos de erro exatamente como estão.",
+          0.4,
+          120,
+          providerOpts
+        );
+        if (content.trim()) lines.push(`💬 ${content.trim()}`);
+      } catch {
+        // o bloco vale sem o comentário
+      }
+    }
   } catch (err) {
     console.error("[weekly] trabalho:", err);
   }

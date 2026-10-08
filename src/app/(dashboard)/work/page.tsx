@@ -77,6 +77,44 @@ function RedmineLinks({ value, links }: { value: string; links: Links }) {
   );
 }
 
+type Prod = { dias: { dia: string; resolvidos: number; redmine: number }[]; total: number; tmrHoras: number | null };
+
+/** Barras dos últimos 30 dias (resolvidos + Redmine), com o tempo médio. */
+function ProductivityChart({ p }: { p: Prod }) {
+  const max = Math.max(1, ...p.dias.map((d) => d.resolvidos + d.redmine));
+  const W = 600, H = 120, bw = W / p.dias.length;
+  return (
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600 }}>📈 Sua produtividade — últimos 30 dias</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          {p.total} fechado(s){p.tmrHoras !== null ? ` · tempo médio ${p.tmrHoras < 48 ? `${p.tmrHoras}h` : `${Math.round(p.tmrHoras / 24)} dias`}` : ""}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H + 18}`} width="100%" role="img" aria-label="Chamados fechados por dia">
+        {p.dias.map((d, i) => {
+          const hr = (d.resolvidos / max) * H, hm = (d.redmine / max) * H;
+          return (
+            <g key={d.dia}>
+              <title>{`${d.dia.split("-").reverse().slice(0, 2).join("/")}: ${d.resolvidos} resolvido(s), ${d.redmine} Redmine`}</title>
+              <rect x={i * bw + 2} y={H - hr} width={bw - 4} height={hr} rx={2} fill="var(--success)" />
+              <rect x={i * bw + 2} y={H - hr - hm} width={bw - 4} height={hm} rx={2} fill="var(--accent)" />
+              {i % 5 === 0 && (
+                <text x={i * bw + bw / 2} y={H + 14} fontSize={10} textAnchor="middle" fill="var(--text-muted)">
+                  {d.dia.slice(8, 10)}/{d.dia.slice(5, 7)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ color: "var(--success)" }}>■</span> resolvidos · <span style={{ color: "var(--accent)" }}>■</span> viraram Redmine
+      </div>
+    </div>
+  );
+}
+
 // Alertas do chamado com a mesma ideia da tela "Meus chamados" do escala.
 const tag = { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, lineHeight: 1.2, whiteSpace: "nowrap" } as const;
 
@@ -157,6 +195,7 @@ export default function WorkPage() {
   const [pairCode, setPairCode] = useState("");
   const [guideUrl, setGuideUrl] = useState("");
   const [links, setLinks] = useState<Links>({ ticket: "", redmine: "" });
+  const [prod, setProd] = useState<Prod | null>(null);
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
 
@@ -172,6 +211,7 @@ export default function WorkPage() {
       setGuideUrl(data.guideUrl || "");
       if (data.links) setLinks(data.links);
       setPhoneLinked(!!data.phoneLinked);
+      if (data.produtividade) setProd(data.produtividade);
     }
   }, [q, f]);
 
@@ -336,6 +376,8 @@ export default function WorkPage() {
           <FilterCard title="⚡ Redmine resolvido" n={stats.paraEncerrar.length} color="#f97316" active={f === "encerrar"} onClick={() => setF(f === "encerrar" ? "" : "encerrar")} />
         </div>
       )}
+
+      {prod && <ProductivityChart p={prod} />}
 
       {stats && stats.tiposDoMes.length > 0 && (
         <div style={{ ...box, marginBottom: 16 }}>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
-import { CAN_CLOSE_WHERE, upsertWorkTicket, workStats } from "@/lib/work";
+import { CAN_CLOSE_WHERE, upsertWorkTicket, workProductivity, workStats } from "@/lib/work";
 import { alertsFor } from "@/lib/work-sla";
 
 // Painel "Trabalho" (protegido pelo login do painel).
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     tickets: tickets.map((t) => ({ ...t, attachments: atts.filter((a) => a.ticketId === t.ticketId) })),
     phoneLinked: !!config?.workPhone,
+    produtividade: await workProductivity(),
     stats: await workStats(),
     guideUrl: config?.workGuideUrl || "",
     links: { ticket: config?.workTicketUrl || "", redmine: config?.workRedmineUrl || "" },

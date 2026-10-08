@@ -61,6 +61,8 @@ model AgentConfig {
   workPairCode     String  @default("")
   /// Modelo do OpenRouter usado pelos botões de IA da Central do Atendente.
   workAiModel      String  @default("anthropic/claude-sonnet-5.5")
+  /// Alertas do trabalho já avisados no WhatsApp (JSON: ["U:2154585","A:2099736","E:2016229"]), para não repetir.
+  workAlerted      String  @default("[]")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())

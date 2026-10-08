@@ -59,6 +59,12 @@ async function describeTicket(rawId: string): Promise<string> {
 /** Responde ao comando do trabalho, ou null se a mensagem não é um deles. */
 export async function applyWorkCommand(text: string): Promise<string | null> {
   const msg = text.trim();
+  // "como está meu trabalho?" / "resumo do trabalho": o briefing das 8h na hora.
+  if (/^\s*(?:como\s+(?:est[aá]|t[aá])\s+(?:o\s+)?meu\s+trabalho|resumo\s+do\s+trabalho|briefing(?:\s+do\s+trabalho)?)\s*\??\s*$/i.test(msg)) {
+    const { buildWorkBriefing } = await import("./work");
+    const s = await workStats();
+    return (await buildWorkBriefing()) || `💼 Nada pedindo ação agora. ${s.emAberto} chamado(s) em aberto, nenhum urgente, atrasado ou com Redmine resolvido. 👍`;
+  }
   if (!/chamado/i.test(msg)) return null;
 
   let m = msg.match(ACTION_RE);

@@ -12,6 +12,8 @@ let lastFinanceReminderDate = "";
 let lastMonthClosingDate = "";
 let lastWishCheckDate = "";
 let lastReminderHour = -1;
+let lastWorkBriefDate = "";
+let lastWorkAlertSlot = "";
 
 export function startScheduler(): void {
   setInterval(async () => {
@@ -107,6 +109,31 @@ export function startScheduler(): void {
           );
         } catch (err) {
           console.error(`Erro ao gerar relatório semanal:`, err);
+        }
+      }
+
+      // Trabalho (Central do Atendente): briefing às 08:00 em dia útil e, logo
+      // depois de cada atualização do escala (11h e 16h), só as novidades.
+      const weekday = brtDate.getUTCDay() >= 1 && brtDate.getUTCDay() <= 5;
+      if (weekday && hhmm === "08:00" && lastWorkBriefDate !== todayDate && config.ownerPhone) {
+        lastWorkBriefDate = todayDate;
+        try {
+          const { buildWorkBriefing } = await import("./work");
+          const msg = await buildWorkBriefing();
+          if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
+        } catch (err) {
+          console.error("Erro no briefing do trabalho:", err);
+        }
+      }
+      const workSlot = hhmm === "11:10" || hhmm === "16:10" ? `${todayDate} ${hhmm}` : "";
+      if (workSlot && lastWorkAlertSlot !== workSlot && config.ownerPhone) {
+        lastWorkAlertSlot = workSlot;
+        try {
+          const { buildWorkNewAlerts } = await import("./work");
+          const msg = await buildWorkNewAlerts();
+          if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
+        } catch (err) {
+          console.error("Erro nos alertas do trabalho:", err);
         }
       }
 
