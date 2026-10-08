@@ -22,7 +22,7 @@ export interface WorkTicketInput {
 const clean = (v: unknown, max = 2000) => (typeof v === "string" ? maskPersonalData(v.trim()).slice(0, max) : undefined);
 
 /** Cria ou atualiza o chamado pelo número (chave comum de todo o ecossistema). */
-export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" | "extensao" | "whatsapp") {
+export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" | "extensao" | "whatsapp" | "escala") {
   const ticketId = normalizeTicketId(input.ticketId);
   if (!/^[A-Z]?\d{6,9}$/.test(ticketId)) throw new Error("Número de chamado inválido");
   const status = WORK_STATUSES.includes(input.status as WorkStatus) ? (input.status as WorkStatus) : undefined;
@@ -57,12 +57,17 @@ function periodStarts() {
 
 export async function workStats() {
   const starts = periodStarts();
+  // "Registrados" pela data de ABERTURA do chamado (importado do escala ou da
+  // extensão); sem data de abertura, pela data em que entrou aqui.
   const count = async (since: Date) => ({
-    registrados: await prisma.workTicket.count({ where: { createdAt: { gte: since } } }),
+    registrados: await prisma.workTicket.count({ where: { OR: [{ openedAt: { gte: since } }, { openedAt: null, createdAt: { gte: since } }] } }),
     resolvidos: await prisma.workTicket.count({ where: { status: "resolvido", resolvedAt: { gte: since } } }),
     escalados: await prisma.workTicket.count({ where: { status: "escalado", resolvedAt: { gte: since } } }),
   });
-  const monthTickets = await prisma.workTicket.findMany({ where: { createdAt: { gte: starts.month } }, select: { errorType: true, origin: true } });
+  const monthTickets = await prisma.workTicket.findMany({
+    where: { OR: [{ openedAt: { gte: starts.month } }, { openedAt: null, createdAt: { gte: starts.month } }, { resolvedAt: { gte: starts.month } }] },
+    select: { errorType: true, origin: true },
+  });
   const tally = (key: "errorType" | "origin") =>
     Object.entries(monthTickets.reduce<Record<string, number>>((acc, t) => ((acc[t[key] || "(sem)"] = (acc[t[key] || "(sem)"] || 0) + 1), acc), {}))
       .sort((a, b) => b[1] - a[1])
