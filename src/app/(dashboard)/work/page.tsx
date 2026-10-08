@@ -11,6 +11,7 @@ type Ticket = {
   origin: string;
   resolution: string;
   redmine: string;
+  redmineStatus?: string;
   description: string;
   source: string;
   updatedAt: string;
@@ -193,7 +194,7 @@ export default function WorkPage() {
           <div key={t.id} style={{ ...box, display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
               <strong style={{ fontSize: 15 }}>{t.ticketId}</strong>
-              <span style={{ fontSize: 12, color: STATUS[t.status]?.color }}>{STATUS[t.status]?.label ?? t.status}{t.redmine ? ` #${t.redmine}` : ""}</span>
+              <span style={{ fontSize: 12, color: STATUS[t.status]?.color }}>{STATUS[t.status]?.label ?? t.status}{t.redmine ? ` #${t.redmine}${t.redmineStatus ? ` · ${t.redmineStatus}` : ""}` : ""}</span>
             </div>
             {t.errorType && <div style={{ fontSize: 13 }}>{t.errorType}</div>}
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>

@@ -258,6 +258,8 @@ model WorkTicket {
   origin      String    @default("")
   resolution  String    @default("")
   redmine     String    @default("")
+  /// Situação do Redmine no escala (ex: "Nova", "Ag. Info.(Impl)", "Resolvida").
+  redmineStatus String  @default("")
   description String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")

@@ -48,7 +48,7 @@ async function describeTicket(rawId: string): Promise<string> {
   if (t.origin) lines.push(`Origem: usuário ${t.origin}`);
   if (t.openedAt) lines.push(`Aberto em ${fmtDate(t.openedAt)}`);
   if (t.resolvedAt) lines.push(`${t.status === "escalado" ? "Escalado" : "Resolvido"} em ${fmtDate(t.resolvedAt)}`);
-  if (t.redmine) lines.push(`Redmine: ${t.redmine}`);
+  if (t.redmine) lines.push(`Redmine: ${t.redmine}${t.redmineStatus ? ` (${t.redmineStatus})` : ""}`);
   if (t.resolution) lines.push(`Resolução: ${t.resolution.length > 300 ? t.resolution.slice(0, 300) + "…" : t.resolution}`);
   return lines.join("\n");
 }
