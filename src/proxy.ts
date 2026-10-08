@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook"];
+// /api/work/ingest: extensão do trabalho, protegida por chave própria (não pelo login).
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook", "/api/work/ingest"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

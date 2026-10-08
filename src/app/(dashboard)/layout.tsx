@@ -11,6 +11,7 @@ const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
 const NAV = [
   { href: "/agenda", icon: "📅", label: "Agenda" },
   { href: "/finance", icon: "💰", label: "Financeiro" },
+  { href: "/work", icon: "💼", label: "Trabalho" },
   { href: "/wishlist", icon: "🛍️", label: "Desejos" },
   { href: "/diary", icon: "📓", label: "Diário" },
   { href: "/daily-summary", icon: "📋", label: "Resumo do dia" },

@@ -915,6 +915,9 @@ export async function buildDailyDigest(): Promise<string> {
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
   const due = await dueBetween(dayRange(tomorrow).gte, dayRange(tomorrow).lte);
   lines.push(due.length ? `📅 Amanhã:\n${due.join("\n")}` : "📅 Amanhã: nada vencendo.");
+  const { workDigestLine } = await import("./work");
+  const work = await workDigestLine();
+  if (work) lines.push(work);
   return lines.join("\n");
 }
 

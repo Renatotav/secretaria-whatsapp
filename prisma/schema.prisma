@@ -47,6 +47,8 @@ model AgentConfig {
   detectCommitments Boolean @default(true)
   /// Telefones silenciados (separados por vírgula): nunca passam pela IA.
   mutedContacts    String  @default("")
+  /// Chave que a extensão "Central do Atendente" usa para mandar chamados.
+  workApiToken     String  @default("")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
@@ -240,4 +242,26 @@ model WishItem {
   notifiedMonth String   @default("")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+/// Chamado do trabalho (Central do Atendente PJe). A descrição é gravada com
+/// CPF mascarado (xxx.xxx.xxx-xx) e sem telefone/e-mail; nunca vai para a IA.
+model WorkTicket {
+  id          String    @id @default(cuid())
+  /// Número normalizado: maiúsculo, sem espaços (ex: 2154585, R2428333, S2444441).
+  ticketId    String    @unique
+  openedAt    DateTime?
+  /// "aberto", "pendente", "resolvido" ou "escalado" (virou Redmine).
+  status      String    @default("aberto")
+  errorType   String    @default("")
+  /// "externo", "interno" ou "".
+  origin      String    @default("")
+  resolution  String    @default("")
+  redmine     String    @default("")
+  description String    @default("")
+  /// "painel", "extensao" ou "whatsapp".
+  source      String    @default("painel")
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
