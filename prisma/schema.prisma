@@ -297,6 +297,10 @@ model WorkTicket {
   situationSince DateTime?
   /// Tempo acumulado com o relógio parado (ms), de situações que pausam.
   pausedMs    Float     @default(0)
+  /// TMR exclusivo do escala (horas que o chamado ficou com ele), dos resolvidos.
+  tmrHours    Float?
+  /// Equipe/fila em que ele fechou o chamado (escala, ex: "3N SUPJUD PJe APOF").
+  team        String    @default("")
   description String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")

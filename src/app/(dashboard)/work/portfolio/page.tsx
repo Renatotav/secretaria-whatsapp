@@ -13,13 +13,18 @@ type Data = {
     porSemana: number;
     tempoMedioDias: number | null;
     tempoMedianoDias: number | null;
+    ateUmDiaPct: number | null;
+    tempoFonte: "tmr" | "datas";
     semRedminePct: number | null;
     emAberto: number;
   };
   meses: { mes: string; direto: number; redmine: number; tempoMedio: number | null }[];
   heat: number[][];
   grupos: { nome: string; n: number }[];
+  gruposSem: number;
   origem: { nome: string; n: number }[];
+  origemSem: number;
+  equipes: { nome: string; n: number }[];
 };
 
 const card = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 } as const;
@@ -147,6 +152,13 @@ function Bars({ rows, color }: { rows: { nome: string; n: number }[]; color: str
   );
 }
 
+const Empty = () => <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Ainda sem dados.</div>;
+const Note = ({ n, what }: { n: number; what: string }) => (
+  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+    + {n} chamado(s) {what}
+  </div>
+);
+
 export default function PortfolioPage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
@@ -189,7 +201,11 @@ export default function PortfolioPage() {
           <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
               <Kpi label="Chamados fechados" value={String(data.kpis.fechados)} hint={`${String(data.kpis.porSemana).replace(".", ",")} por semana`} />
-              <Kpi label="Tempo médio" value={fmtDias(data.kpis.tempoMedioDias)} hint={`mediana ${fmtDias(data.kpis.tempoMedianoDias)}`} />
+              <Kpi
+                label={data.kpis.tempoFonte === "tmr" ? "Tempo médio com você" : "Tempo médio"}
+                value={fmtDias(data.kpis.tempoMedioDias)}
+                hint={data.kpis.ateUmDiaPct !== null ? `${data.kpis.ateUmDiaPct}% fechados em até 1 dia` : undefined}
+              />
               <Kpi label="Resolvidos sem Redmine" value={data.kpis.semRedminePct === null ? "—" : `${data.kpis.semRedminePct}%`} hint="sem precisar escalar" />
               <Kpi label="Dia mais produtivo" value={best && best.n ? DIAS[best.d] : "—"} hint={best && best.n ? `${best.n} fechados` : undefined} />
               <Kpi label="Em aberto agora" value={String(data.kpis.emAberto)} />
@@ -206,12 +222,18 @@ export default function PortfolioPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
               <div style={{ ...card, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Por equipe / fila</div>
+                {data.equipes.length ? <Bars rows={data.equipes} color="var(--warning)" /> : <Empty />}
+              </div>
+              <div style={{ ...card, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>O que mais aparece (grupos de erro)</div>
-                <Bars rows={data.grupos} color="var(--success)" />
+                {data.grupos.length ? <Bars rows={data.grupos} color="var(--success)" /> : <Empty />}
+                {data.gruposSem > 0 && <Note n={data.gruposSem} what="sem descrição para classificar" />}
               </div>
               <div style={{ ...card, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Quem pede</div>
-                <Bars rows={data.origem} color="var(--accent)" />
+                {data.origem.length ? <Bars rows={data.origem} color="var(--accent)" /> : <Empty />}
+                {data.origemSem > 0 && <Note n={data.origemSem} what="sem origem informada (vem da planilha)" />}
               </div>
             </div>
 
@@ -222,7 +244,7 @@ export default function PortfolioPage() {
 
             <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.6 }}>
               <b>Metodologia.</b> Dados do sistema de escala (chamados atribuídos e produtividade) e da planilha de controle, consolidados pela secretária.
-              Tempo = do recebimento do chamado (ou da abertura) até o fechamento. Grupos de erro classificados por um modelo de decisão (certeza mínima de 60%).
+              Tempo = TMR exclusivo do escala (horas em que o chamado ficou com o atendente); sem ele, do recebimento até o fechamento. Grupos de erro classificados por um modelo de decisão (certeza mínima de 60%).
               Só números agregados: sem nomes, CPF, descrições ou números de chamado. Gerado em {new Date(data.geradoEm).toLocaleString("pt-BR")}.
             </div>
           </>

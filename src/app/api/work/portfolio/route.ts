@@ -20,13 +20,17 @@ export async function GET(request: Request) {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const closed = await prisma.workTicket.findMany({
     where: { status: { in: ["resolvido", "escalado"] }, resolvedAt: { not: null } },
-    select: { status: true, redmine: true, openedAt: true, receivedAt: true, resolvedAt: true, errorGroup: true, origin: true },
+    select: { status: true, redmine: true, openedAt: true, receivedAt: true, resolvedAt: true, errorGroup: true, origin: true, tmrHours: true, team: true },
   });
   const openCount = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
 
+  // Tempo com ele: TMR exclusivo do escala (horas) quando houver; senão, do
+  // recebimento ao fechamento. Fechamento igual ao recebimento = planilha sem
+  // data de resolução (não entra na conta).
   const spanDays = (t: (typeof closed)[number]) => {
+    if (t.tmrHours !== null && t.tmrHours !== undefined) return t.tmrHours / 24;
     const start = t.receivedAt ?? t.openedAt;
-    return start && t.resolvedAt! > start ? (t.resolvedAt!.getTime() - start.getTime()) / DAY : null;
+    return start && t.resolvedAt! > start && t.resolvedAt!.getTime() !== (t.receivedAt?.getTime() ?? -1) ? (t.resolvedAt!.getTime() - start.getTime()) / DAY : null;
   };
   const withRedmine = (t: (typeof closed)[number]) => t.status === "escalado" || !!t.redmine;
 
@@ -59,6 +63,7 @@ export async function GET(request: Request) {
       .map(([nome, n]) => ({ nome, n }));
 
   const spans = closed.map(spanDays).filter((x): x is number => x !== null);
+  const fromTmr = closed.filter((t) => t.tmrHours !== null && t.tmrHours !== undefined).length;
   const first = closed.reduce<Date | null>((m, t) => (!m || t.resolvedAt! < m ? t.resolvedAt! : m), null);
   const weeks = first ? Math.max(1, (Date.now() - first.getTime()) / (7 * DAY)) : 1;
 
@@ -70,12 +75,18 @@ export async function GET(request: Request) {
       porSemana: Math.round((closed.length / weeks) * 10) / 10,
       tempoMedioDias: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : null,
       tempoMedianoDias: median(spans),
+      ateUmDiaPct: spans.length ? Math.round((spans.filter((d) => d <= 1).length / spans.length) * 100) : null,
+      tempoFonte: fromTmr >= spans.length / 2 ? "tmr" : "datas",
       semRedminePct: closed.length ? Math.round((closed.filter((t) => !withRedmine(t)).length / closed.length) * 100) : null,
       emAberto: openCount,
     },
     meses,
     heat,
-    grupos: tally((t) => (t.errorGroup && t.errorGroup !== "Sem grupo" ? t.errorGroup : "Não classificado")),
-    origem: tally((t) => (t.origin === "externo" ? "Usuário externo" : t.origin === "interno" ? "Usuário interno" : "Não informado")),
+    // "sem informação" sai das barras e vira só uma nota.
+    grupos: tally((t) => (t.errorGroup && t.errorGroup !== "Sem grupo" ? t.errorGroup : "")).filter((x) => x.nome),
+    gruposSem: closed.filter((t) => !t.errorGroup || t.errorGroup === "Sem grupo").length,
+    origem: tally((t) => (t.origin === "externo" ? "Usuário externo" : t.origin === "interno" ? "Usuário interno" : "")).filter((x) => x.nome),
+    origemSem: closed.filter((t) => t.origin !== "externo" && t.origin !== "interno").length,
+    equipes: tally((t) => t.team.replace(/^3N\s+SUPJUD\s+/i, "")).filter((x) => x.nome),
   });
 }
