@@ -120,7 +120,7 @@ function ProductivityChart({ p }: { p: Prod }) {
 // Alertas do chamado com a mesma ideia da tela "Meus chamados" do escala.
 const tag = { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, lineHeight: 1.2, whiteSpace: "nowrap" } as const;
 
-/** URGENTE e prazo estourado: vermelho pulsando. */
+/** URGENTE (vermelho pulsando) e dias em aberto: 🟢 no prazo · 🟡 perto · 🔴 passou (pulsando). */
 function TicketBadges({ t }: { t: Ticket }) {
   const a = alertsFor(t);
   return (
@@ -130,9 +130,14 @@ function TicketBadges({ t }: { t: Ticket }) {
           URGENTE
         </span>
       )}
-      {a.overdue && a.days !== null && (
-        <span className="badge-alerta" title={`Passou do prazo de ${a.sla} dias da fila`} style={{ ...tag, color: "#fff", background: "#dc2626" }}>
-          ⚠ {a.days}d
+      {a.days !== null && a.color && (
+        <span
+          className={a.color === "vermelho" ? "badge-alerta" : undefined}
+          title={a.color === "vermelho" ? `Passou do prazo de ${a.sla ?? 5} dias` : `${a.days} dia(s) em aberto · prazo ${a.sla ?? 5} dias`}
+          style={{ ...tag, color: a.color === "amarelo" ? "#111827" : "#fff", background: a.color === "vermelho" ? "#dc2626" : a.color === "amarelo" ? "#facc15" : "#16a34a" }}
+        >
+          {a.color === "vermelho" ? "⚠ " : ""}
+          {a.days}d
         </span>
       )}
     </>

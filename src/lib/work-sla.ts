@@ -42,12 +42,23 @@ export function daysOpen(t: Pick<SlaTicket, "status" | "openedAt">): number | nu
   return Math.floor((Date.now() - new Date(t.openedAt).getTime()) / 86400_000);
 }
 
+/** Prazo usado na cor do badge quando a fila não tem regra (erro/falha = 5). */
+export const DEFAULT_SLA = 5;
+
+/** 🟢 dentro do prazo · 🟡 faltam 2 dias ou menos · 🔴 passou do prazo. */
+export function ageColor(days: number | null, sla: number | null): "verde" | "amarelo" | "vermelho" | null {
+  if (days === null) return null;
+  const limit = sla ?? DEFAULT_SLA;
+  return days >= limit ? "vermelho" : days >= limit - 2 ? "amarelo" : "verde";
+}
+
 export function alertsFor(t: SlaTicket) {
   const days = daysOpen(t);
   const sla = slaDays(t);
   return {
     days,
     sla,
+    color: ageColor(days, sla),
     overdue: days !== null && sla !== null && days >= sla,
     urgent: isOpenStatus(t.status) && (t.lastAction || "") === "Solicitação de Urgência",
     canClose: isOpenStatus(t.status) && /^resolvid/i.test(t.redmineStatus || ""),
