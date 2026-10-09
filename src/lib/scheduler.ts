@@ -15,6 +15,7 @@ let lastReminderHour = -1;
 let lastWorkBriefDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
+let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai uma vez só)
 
 export function startScheduler(): void {
   setInterval(async () => {
@@ -124,8 +125,10 @@ export function startScheduler(): void {
       // Trabalho (Central do Atendente): briefing às 08:00 em dia útil e, logo
       // depois de cada atualização do escala (11h e 16h), só as novidades.
       const weekday = brtDate.getUTCDay() >= 1 && brtDate.getUTCDay() <= 5;
-      if (weekday && hhmm === "08:00" && lastWorkBriefDate !== todayDate && config.ownerPhone) {
+      // Janela 08:00–08:59 (se o minuto exato passar com o servidor ocupado, não perde o dia).
+      if (weekday && hhmm >= "08:00" && hhmm < "09:00" && lastWorkBriefDate !== todayDate && config.workBriefDate !== todayDate && config.ownerPhone) {
         lastWorkBriefDate = todayDate;
+        await prisma.agentConfig.update({ where: { id: config.id }, data: { workBriefDate: todayDate } });
         try {
           const { buildWorkBriefing } = await import("./work");
           const msg = await buildWorkBriefing(true);
@@ -138,7 +141,9 @@ export function startScheduler(): void {
       // pedida pelo botão "Atualizar do escala"). Na 1ª volta só memoriza.
       const syncedAt = config.workSyncedAt ? config.workSyncedAt.getTime() : 0;
       const justSynced = lastEscalaSync !== null && syncedAt > lastEscalaSync;
-      const askedByHim = justSynced && !!config.workSyncRequested && syncedAt - config.workSyncRequested.getTime() < 15 * 60_000 && syncedAt >= config.workSyncRequested.getTime();
+      const requestedAt = config.workSyncRequested ? config.workSyncRequested.getTime() : 0;
+      const askedByHim = justSynced && requestedAt > lastAnsweredRequest && syncedAt - requestedAt < 15 * 60_000 && syncedAt >= requestedAt;
+      if (askedByHim) lastAnsweredRequest = requestedAt;
       lastEscalaSync = syncedAt;
       const workSlot = justSynced ? `sync ${syncedAt}` : hhmm === "11:10" || hhmm === "16:10" ? `${todayDate} ${hhmm}` : "";
       if (workSlot && lastWorkAlertSlot !== workSlot && config.ownerPhone) {

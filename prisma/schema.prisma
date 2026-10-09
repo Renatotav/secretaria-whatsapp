@@ -69,6 +69,8 @@ model AgentConfig {
   workSyncRequested DateTime?
   /// Fim da última cópia do escala (agendada ou pedida).
   workSyncedAt     DateTime?
+  /// Dia (AAAA-MM-DD) do último briefing das 8h enviado (não repete após reinício).
+  workBriefDate    String  @default("")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())

@@ -23,7 +23,7 @@ export default function LoginPage() {
       router.push("/");
       router.refresh();
     } else {
-      setError("Senha incorreta");
+      setError(res.status === 429 ? "Muitas tentativas. Espere alguns minutos e tente de novo." : "Senha incorreta");
       setLoading(false);
     }
   }
