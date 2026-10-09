@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const m = byMonth.get(key) ?? { label: `${MONTHS[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}`, direto: 0, redmine: 0, spans: [] };
     withRedmine(t) ? m.redmine++ : m.direto++;
     const s = spanDays(t);
-    if (s !== null) m.spans.push(s);
+    if (s !== null && (t.tmrHours !== null && t.tmrHours !== undefined || !closed.some((x) => x.tmrHours !== null && x.tmrHours !== undefined))) m.spans.push(s);
     byMonth.set(key, m);
   }
   const meses = [...byMonth.entries()]
@@ -62,8 +62,15 @@ export async function GET(request: Request) {
       .sort((a, b) => b[1] - a[1])
       .map(([nome, n]) => ({ nome, n }));
 
-  const spans = closed.map(spanDays).filter((x): x is number => x !== null);
-  const fromTmr = closed.filter((t) => t.tmrHours !== null && t.tmrHours !== undefined).length;
+  // Uma métrica só: se a maioria tem o TMR exclusivo do escala, a média usa só
+  // esses (misturar com "abertura → fechamento" infla o número).
+  const hasTmr = (t: (typeof closed)[number]) => t.tmrHours !== null && t.tmrHours !== undefined;
+  const fromTmr = closed.filter(hasTmr).length;
+  const useTmrOnly = fromTmr > 0 && fromTmr >= closed.length / 2;
+  const spans = closed
+    .filter((t) => !useTmrOnly || hasTmr(t))
+    .map(spanDays)
+    .filter((x): x is number => x !== null);
   const first = closed.reduce<Date | null>((m, t) => (!m || t.resolvedAt! < m ? t.resolvedAt! : m), null);
   const weeks = first ? Math.max(1, (Date.now() - first.getTime()) / (7 * DAY)) : 1;
 
@@ -76,7 +83,8 @@ export async function GET(request: Request) {
       tempoMedioDias: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : null,
       tempoMedianoDias: median(spans),
       ateUmDiaPct: spans.length ? Math.round((spans.filter((d) => d <= 1).length / spans.length) * 100) : null,
-      tempoFonte: fromTmr >= spans.length / 2 ? "tmr" : "datas",
+      tempoFonte: useTmrOnly ? "tmr" : "datas",
+      tempoBase: spans.length,
       semRedminePct: closed.length ? Math.round((closed.filter((t) => !withRedmine(t)).length / closed.length) * 100) : null,
       emAberto: openCount,
     },

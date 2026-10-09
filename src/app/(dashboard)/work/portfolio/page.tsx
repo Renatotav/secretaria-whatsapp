@@ -15,6 +15,7 @@ type Data = {
     tempoMedianoDias: number | null;
     ateUmDiaPct: number | null;
     tempoFonte: "tmr" | "datas";
+    tempoBase: number;
     semRedminePct: number | null;
     emAberto: number;
   };
@@ -204,7 +205,7 @@ export default function PortfolioPage() {
               <Kpi
                 label={data.kpis.tempoFonte === "tmr" ? "Tempo médio com você" : "Tempo médio"}
                 value={fmtDias(data.kpis.tempoMedioDias)}
-                hint={data.kpis.ateUmDiaPct !== null ? `${data.kpis.ateUmDiaPct}% fechados em até 1 dia` : undefined}
+                hint={data.kpis.ateUmDiaPct !== null ? `${data.kpis.ateUmDiaPct}% em até 1 dia · base ${data.kpis.tempoBase}` : undefined}
               />
               <Kpi label="Resolvidos sem Redmine" value={data.kpis.semRedminePct === null ? "—" : `${data.kpis.semRedminePct}%`} hint="sem precisar escalar" />
               <Kpi label="Dia mais produtivo" value={best && best.n ? DIAS[best.d] : "—"} hint={best && best.n ? `${best.n} fechados` : undefined} />
