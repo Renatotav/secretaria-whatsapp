@@ -106,8 +106,8 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
       if (!(await prisma.workTicket.findUnique({ where: { ticketId: id }, select: { id: true } }))) await upsertWorkTicket({ ticketId: id }, "whatsapp");
       await setSituation(id, sit?.key ?? "");
       return sit
-        ? `💼 Chamado *${id}*: ${sit.emoji} ${sit.name}${sit.pauses ? " · 🕒 relógio parado" : ""}.`
-        : `💼 Chamado *${id}* sem situação (o prazo volta a contar).`;
+        ? `💼 Chamado *${id}*: ${sit.emoji} ${sit.name}${sit.pauses ? " · 🕒 aguardando retorno (o badge de dias para de pulsar)" : ""}.`
+        : `💼 Chamado *${id}* sem situação.`;
     }
   }
 

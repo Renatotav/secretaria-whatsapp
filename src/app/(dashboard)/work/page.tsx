@@ -136,25 +136,25 @@ function TicketBadges({ t, situations }: { t: Ticket; situations: Situation[] })
           URGENTE
         </span>
       )}
-      {/* Badge 1: prazo (🕒 cinza quando o relógio está parado) */}
+      {/* Badge 1: dias (🟢🟡🔴; vermelho pulsa — aguardando retorno = vermelho fixo 🕒) */}
       {a.days !== null && a.color && (
         <span
-          className={!a.paused && a.color === "vermelho" ? "badge-alerta" : undefined}
+          className={a.pulsing ? "badge-alerta" : undefined}
           title={
             a.paused
-              ? `Relógio parado (${sit?.name}) · ${a.days} dia(s) contados · prazo ${a.sla ?? 5}`
+              ? `${a.days} dia(s) com você · aguardando retorno (${sit?.name}), não pulsa`
               : a.color === "vermelho"
               ? `Passou do prazo de ${a.sla ?? 5} dias`
               : `${a.days} dia(s) com você · prazo ${a.sla ?? 5} dias`
           }
           style={{
             ...tag,
-            color: !a.paused && a.color === "amarelo" ? "#111827" : "#fff",
-            background: a.paused ? "#6b7280" : a.color === "vermelho" ? "#dc2626" : a.color === "amarelo" ? "#facc15" : "#16a34a",
+            color: a.color === "amarelo" ? "#111827" : "#fff",
+            background: a.color === "vermelho" ? "#dc2626" : a.color === "amarelo" ? "#facc15" : "#16a34a",
           }}
         >
           {a.paused ? "🕒 " : a.color === "vermelho" ? "⚠ " : ""}
-          {a.days}d{a.paused ? " · parado" : ""}
+          {a.days}d
         </span>
       )}
       {/* Badge 2: situação (com quem está a bola) */}
@@ -213,7 +213,7 @@ function SituationsEditor({ list, onSaved }: { list: Situation[]; onSaved: (l: S
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>🏷️ Situações dos chamados</div>
       <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
-        O segundo badge do chamado: com quem está a bola. &quot;Para o prazo&quot; congela o badge de dias (🕒). &quot;Pulsa&quot; chama atenção quando é hora de agir.
+        O segundo badge do chamado: com quem está a bola. &quot;Aguardando retorno&quot; faz o badge de dias parar de pulsar (vermelho fixo 🕒). &quot;Pulsa&quot; chama atenção no próprio badge da situação.
       </p>
       {rows.map((r, i) => (
         <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 6, fontSize: 12 }}>
@@ -221,7 +221,7 @@ function SituationsEditor({ list, onSaved }: { list: Situation[]; onSaved: (l: S
           <input aria-label="Nome" value={r.name} onChange={(e) => set(i, { name: e.target.value })} style={{ flex: "1 1 180px" }} />
           <input aria-label="Cor" type="color" value={r.color} onChange={(e) => set(i, { color: e.target.value })} style={{ width: 40, padding: 0 }} />
           <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <input type="checkbox" checked={r.pauses} onChange={(e) => set(i, { pauses: e.target.checked })} /> para o prazo 🕒
+            <input type="checkbox" checked={r.pauses} onChange={(e) => set(i, { pauses: e.target.checked })} /> aguardando retorno 🕒
           </label>
           <select
             aria-label="Quando pulsa"
@@ -231,7 +231,7 @@ function SituationsEditor({ list, onSaved }: { list: Situation[]; onSaved: (l: S
             <option value="nunca">não pulsa</option>
             <option value="sempre">pulsa sempre</option>
             <option value="apos">pulsa depois de N dias</option>
-            <option value="redmine">pulsa quando o Redmine resolver</option>
+
           </select>
           {pulseKind(r.pulse) === "apos" && (
             <input
