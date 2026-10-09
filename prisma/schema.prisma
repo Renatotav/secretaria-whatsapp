@@ -284,6 +284,15 @@ model WorkTicket {
   chatLog     String    @default("")
   /// Grupo do erro sugerido pelo Jev (ex: "MNI / integração"); "" = sem grupo.
   errorGroup  String    @default("")
+  /// Quando o chamado chegou para ele (o prazo conta daqui; vazio = da abertura). Editável.
+  receivedAt  DateTime?
+  /// Prazo em dias definido à mão para este chamado (vazio = regra da fila).
+  slaOverride Int?
+  /// Situação escolhida por ele (WorkSituation.key; "" = nenhuma).
+  situation   String    @default("")
+  situationSince DateTime?
+  /// Tempo acumulado com o relógio parado (ms), de situações que pausam.
+  pausedMs    Float     @default(0)
   description String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")
@@ -311,4 +320,25 @@ model WorkSkill {
   name      String
   prompt    String
   updatedAt DateTime @updatedAt
+}
+
+/// Situações dos chamados (lista do dono, editável no painel). pulse: nunca | sempre | apos:N | redmine.
+model WorkSituation {
+  key       String  @id
+  emoji     String
+  name      String
+  color     String
+  pauses    Boolean @default(false)
+  pulse     String  @default("nunca")
+  sortOrder Int     @default(0)
+}
+
+/// Histórico das trocas de situação (para medir o tempo com ele × esperando outros).
+model WorkSituationLog {
+  id        String   @id @default(cuid())
+  ticketId  String
+  situation String
+  at        DateTime @default(now())
+
+  @@index([ticketId])
 }

@@ -20,6 +20,8 @@ export interface WorkTicketInput {
   description?: string;
   /** Quando foi resolvido (importação de histórico). Sem isso, fechar agora = resolvido agora. */
   resolvedAt?: string | null;
+  /** Quando chegou para ele (planilha). Só preenche se ainda estiver vazio — o ajuste manual vence. */
+  receivedAt?: string | null;
 }
 
 /** Data válida e não futura (para não inventar "resolvido hoje" ao importar histórico). */
@@ -47,6 +49,7 @@ export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" 
   const closing = status && (status === "resolvido" || status === "escalado") && before?.status !== status;
   const data = {
     ...(input.openedAt ? { openedAt: new Date(input.openedAt) } : {}),
+    ...(pastDate(input.receivedAt) && !before?.receivedAt ? { receivedAt: pastDate(input.receivedAt)! } : {}),
     ...(status ? { status } : {}),
     ...(clean(input.errorType, 200) !== undefined ? { errorType: clean(input.errorType, 200) } : {}),
     ...(origin !== undefined ? { origin } : {}),
@@ -81,11 +84,10 @@ export const CAN_CLOSE_WHERE = {
 
 /** Urgentes (última ação "Solicitação de Urgência") e atrasados (passou do prazo da fila). */
 async function openAlerts() {
-  const open = await prisma.workTicket.findMany({
-    where: { status: { in: ["aberto", "pendente"] } },
-    select: { status: true, openedAt: true, queue: true, errorType: true, lastAction: true, redmineStatus: true },
-  });
-  const a = open.map(alertsFor);
+  const { getSituations } = await import("./work-situations");
+  const situations = await getSituations();
+  const open = await prisma.workTicket.findMany({ where: { status: { in: ["aberto", "pendente"] } } });
+  const a = open.map((t) => alertsFor(t, situations));
   return { urgentes: a.filter((x) => x.urgent).length, atrasados: a.filter((x) => x.overdue).length };
 }
 
@@ -190,17 +192,19 @@ export async function workWeekSection(monday: Date): Promise<string> {
 
 /** Situação atual dos alertas (mesmas regras do escala). */
 export async function workAlertsNow() {
-  const open = await prisma.workTicket.findMany({
-    where: { status: { in: ["aberto", "pendente"] } },
-    select: { ticketId: true, status: true, openedAt: true, queue: true, errorType: true, lastAction: true, redmineStatus: true, redmine: true },
-    orderBy: { openedAt: "asc" },
-  });
-  const rows = open.map((t) => ({ t, a: alertsFor(t) }));
+  const { getSituations } = await import("./work-situations");
+  const situations = await getSituations();
+  const open = await prisma.workTicket.findMany({ where: { status: { in: ["aberto", "pendente"] } }, orderBy: { openedAt: "asc" } });
+  const rows = open.map((t) => ({ t, a: alertsFor(t, situations) }));
   return {
     total: open.length,
     urgentes: rows.filter((r) => r.a.urgent).map((r) => r.t.ticketId),
     atrasados: rows.filter((r) => r.a.overdue).map((r) => ({ id: r.t.ticketId, dias: r.a.days ?? 0 })),
     encerrar: rows.filter((r) => r.a.canClose).map((r) => ({ id: r.t.ticketId, redmine: r.t.redmine })),
+    // Situação pulsando = hora de agir (cobrar o usuário, retornar…).
+    cobrar: rows
+      .filter((r) => r.a.situation?.pulsing && r.a.situation.pulse !== "redmine")
+      .map((r) => ({ id: r.t.ticketId, sit: `${r.a.situation!.emoji} ${r.a.situation!.name}`, dias: r.a.situation!.days })),
   };
 }
 
@@ -211,18 +215,20 @@ const alertKeys = (a: Awaited<ReturnType<typeof workAlertsNow>>) => [
   ...a.urgentes.map((id) => `U:${id}`),
   ...a.atrasados.map((x) => `A:${x.id}`),
   ...a.encerrar.map((x) => `E:${x.id}`),
+  ...a.cobrar.map((x) => `C:${x.id}`),
 ];
 
 export async function buildWorkBriefing(markAsSent = false): Promise<string> {
   const a = await workAlertsNow();
   // O briefing das 8h conta como aviso: às 11h10 só vem o que mudou depois dele.
   if (markAsSent) await prisma.agentConfig.updateMany({ data: { workAlerted: JSON.stringify(alertKeys(a)) } });
-  if (!a.urgentes.length && !a.atrasados.length && !a.encerrar.length) return "";
+  if (!a.urgentes.length && !a.atrasados.length && !a.encerrar.length && !a.cobrar.length) return "";
   return [
     "💼 *Bom dia! Seu trabalho hoje:*",
     a.urgentes.length ? `🚨 ${a.urgentes.length} urgente(s): ${list(a.urgentes)}` : "",
     a.atrasados.length ? `⚠ ${a.atrasados.length} passou(aram) do prazo: ${list(a.atrasados.map((x) => `${x.id} (${x.dias}d)`))}` : "",
     a.encerrar.length ? `⚡ ${a.encerrar.length} com Redmine resolvido para encerrar: ${list(a.encerrar.map((x) => x.id))}` : "",
+    a.cobrar.length ? `🔔 Hora de agir: ${list(a.cobrar.map((x) => `${x.id} (${x.sit} · ${x.dias}d)`), 6)}` : "",
     `📂 ${a.total} em aberto no total.`,
   ]
     .filter(Boolean)
@@ -244,12 +250,13 @@ export async function buildWorkNewAlerts(): Promise<string> {
   await prisma.agentConfig.update({ where: { id: config.id }, data: { workAlerted: JSON.stringify(now) } });
   if (!fresh.length) return "";
   const pick = (p: string) => fresh.filter((k) => k.startsWith(p)).map((k) => k.slice(2));
-  const u = pick("U:"), at = pick("A:"), e = pick("E:");
+  const u = pick("U:"), at = pick("A:"), e = pick("E:"), c = pick("C:");
   return [
     "💼 *Novidade nos seus chamados* (atualização do escala):",
     u.length ? `🚨 Urgente: ${list(u)}` : "",
     at.length ? `⚠ Passou do prazo: ${list(at.map((id) => `${id} (${a.atrasados.find((x) => x.id === id)?.dias ?? "?"}d)`))}` : "",
     e.length ? `⚡ Redmine resolvido — encerre: ${list(e)}` : "",
+    c.length ? `🔔 Hora de agir: ${list(c.map((id) => { const x = a.cobrar.find((y) => y.id === id); return x ? `${id} (${x.sit})` : id; }))}` : "",
   ]
     .filter(Boolean)
     .join("\n");

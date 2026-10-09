@@ -15,7 +15,12 @@ export async function POST(request: Request) {
   const errors: string[] = [];
   for (const t of list.slice(0, 500)) {
     try {
-      await upsertWorkTicket(t, "extensao");
+      const row = await upsertWorkTicket(t, "extensao");
+      // Situação escolhida no ⚡ (registro rápido): "" limpa; ausente não mexe.
+      if (typeof t?.situation === "string") {
+        const { setSituation } = await import("@/lib/work-situations");
+        await setSituation(row.ticketId, t.situation).catch(() => {});
+      }
       saved++;
     } catch (err) {
       errors.push(`${t?.ticketId ?? "?"}: ${err instanceof Error ? err.message : String(err)}`);

@@ -95,6 +95,22 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     ].join("\n");
   }
 
+  // "chamado 2154585 aguardando usuário" / "chamado 2154585 sem situação"
+  const sm = msg.match(new RegExp(`^\\s*(?:o\\s+)?chamado\\s+${TICKET}\\s*[,:-]?\\s*(?:est[aá]\\s+|fica\\s+|ficou\\s+)?(.{3,60}?)\\s*\\.?$`, "i"));
+  if (sm) {
+    const { findSituation, setSituation } = await import("./work-situations");
+    const clear = /^(sem situa[cç][aã]o|limpar situa[cç][aã]o|nenhuma)$/i.test(sm[2].trim());
+    const sit = clear ? null : await findSituation(sm[2]);
+    if (clear || sit) {
+      const id = normalizeTicketId(sm[1]);
+      if (!(await prisma.workTicket.findUnique({ where: { ticketId: id }, select: { id: true } }))) await upsertWorkTicket({ ticketId: id }, "whatsapp");
+      await setSituation(id, sit?.key ?? "");
+      return sit
+        ? `💼 Chamado *${id}*: ${sit.emoji} ${sit.name}${sit.pauses ? " · 🕒 relógio parado" : ""}.`
+        : `💼 Chamado *${id}* sem situação (o prazo volta a contar).`;
+    }
+  }
+
   if ((m = msg.match(LOOKUP_RE))) return describeTicket(m[1]);
 
   if ((m = msg.match(COUNT_RE))) {
@@ -116,22 +132,23 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   }
 
   if (OPEN_RE.test(msg)) {
+    const { getSituations } = await import("./work-situations");
+    const situations = await getSituations();
     const open = await prisma.workTicket.findMany({
       where: { status: { in: ["aberto", "pendente"] } },
       orderBy: [{ openedAt: "asc" }],
       take: 15,
-      select: { ticketId: true, status: true, errorType: true, openedAt: true, redmineStatus: true, queue: true, lastAction: true },
     });
     if (!open.length) return "💼 Nenhum chamado em aberto. 🎉";
     const total = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
     // Mesma ordem e alertas do escala: urgente, Redmine resolvido, atrasado.
     const rank = (a: ReturnType<typeof alertsFor>) => (a.urgent ? 0 : a.canClose ? 1 : a.overdue ? 2 : 3);
     const lines = open
-      .map((t) => ({ t, a: alertsFor(t) }))
+      .map((t) => ({ t, a: alertsFor(t, situations) }))
       .sort((x, y) => rank(x.a) - rank(y.a))
       .map(
         ({ t, a }) =>
-          `• ${a.urgent ? "🚨 *URGENTE* " : ""}*${t.ticketId}*${a.overdue ? ` ⚠ ${a.days}d` : ""}${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}${a.canClose ? " · ⚡ Redmine resolvido, encerre" : ""}`
+          `• ${a.urgent ? "🚨 *URGENTE* " : ""}*${t.ticketId}*${a.overdue ? ` ⚠ ${a.days}d` : ""}${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}${a.paused ? " 🕒" : ""}${a.situation ? ` · ${a.situation.emoji} ${a.situation.name}${a.situation.days ? ` ${a.situation.days}d` : ""}` : ""}${a.canClose ? " · ⚡ Redmine resolvido, encerre" : ""}`
       );
     return [`💼 *${total} chamado(s) em aberto*${total > open.length ? ` (os ${open.length} mais antigos)` : ""}:`, ...lines].join("\n");
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { alertsFor } from "@/lib/work-sla";
+import { alertsFor, DEFAULT_SITUATIONS, type Situation } from "@/lib/work-sla";
 
 type Ticket = {
   id: string;
@@ -17,6 +17,11 @@ type Ticket = {
   lastAction?: string;
   chatLog?: string;
   errorGroup?: string;
+  receivedAt?: string | null;
+  slaOverride?: number | null;
+  situation?: string;
+  situationSince?: string | null;
+  pausedMs?: number;
   attachments?: { id: string; caption: string }[];
   description: string;
   source: string;
@@ -121,8 +126,9 @@ function ProductivityChart({ p }: { p: Prod }) {
 const tag = { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, lineHeight: 1.2, whiteSpace: "nowrap" } as const;
 
 /** URGENTE (vermelho pulsando) e dias em aberto: 🟢 no prazo · 🟡 perto · 🔴 passou (pulsando). */
-function TicketBadges({ t }: { t: Ticket }) {
-  const a = alertsFor(t);
+function TicketBadges({ t, situations }: { t: Ticket; situations: Situation[] }) {
+  const a = alertsFor(t, situations);
+  const sit = a.situation;
   return (
     <>
       {a.urgent && (
@@ -130,17 +136,129 @@ function TicketBadges({ t }: { t: Ticket }) {
           URGENTE
         </span>
       )}
+      {/* Badge 1: prazo (🕒 cinza quando o relógio está parado) */}
       {a.days !== null && a.color && (
         <span
-          className={a.color === "vermelho" ? "badge-alerta" : undefined}
-          title={a.color === "vermelho" ? `Passou do prazo de ${a.sla ?? 5} dias` : `${a.days} dia(s) em aberto · prazo ${a.sla ?? 5} dias`}
-          style={{ ...tag, color: a.color === "amarelo" ? "#111827" : "#fff", background: a.color === "vermelho" ? "#dc2626" : a.color === "amarelo" ? "#facc15" : "#16a34a" }}
+          className={!a.paused && a.color === "vermelho" ? "badge-alerta" : undefined}
+          title={
+            a.paused
+              ? `Relógio parado (${sit?.name}) · ${a.days} dia(s) contados · prazo ${a.sla ?? 5}`
+              : a.color === "vermelho"
+              ? `Passou do prazo de ${a.sla ?? 5} dias`
+              : `${a.days} dia(s) com você · prazo ${a.sla ?? 5} dias`
+          }
+          style={{
+            ...tag,
+            color: !a.paused && a.color === "amarelo" ? "#111827" : "#fff",
+            background: a.paused ? "#6b7280" : a.color === "vermelho" ? "#dc2626" : a.color === "amarelo" ? "#facc15" : "#16a34a",
+          }}
         >
-          {a.color === "vermelho" ? "⚠ " : ""}
-          {a.days}d
+          {a.paused ? "🕒 " : a.color === "vermelho" ? "⚠ " : ""}
+          {a.days}d{a.paused ? " · parado" : ""}
+        </span>
+      )}
+      {/* Badge 2: situação (com quem está a bola) */}
+      {sit && (
+        <span
+          className={sit.pulsing ? "pulsar" : undefined}
+          title={`${sit.name} há ${sit.days} dia(s)${sit.pulsing ? " — hora de agir" : ""}`}
+          style={{ ...tag, color: "#fff", background: sit.color, outline: sit.pulsing ? `2px solid ${sit.color}` : undefined, outlineOffset: 1 }}
+        >
+          {sit.emoji} {sit.name}
+          {sit.days ? ` · ${sit.days}d` : ""}
         </span>
       )}
     </>
+  );
+}
+
+/** "⚙️ prazo": recebido em (de quando conta) e prazo em dias só deste chamado. */
+function AdjustPrazo({ t, onSave }: { t: Ticket; onSave: (d: { receivedAt: string; slaOverride: string }) => void }) {
+  const toDay = (v?: string | null) => (v ? new Date(new Date(v).getTime() - 3 * 3600_000).toISOString().slice(0, 10) : "");
+  const [received, setReceived] = useState(toDay(t.receivedAt));
+  const [sla, setSla] = useState(t.slaOverride ? String(t.slaOverride) : "");
+  return (
+    <details style={{ fontSize: 12 }}>
+      <summary style={{ cursor: "pointer", color: "var(--text-muted)" }}>⚙️ prazo</summary>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6 }}>
+        <label>
+          Recebido em <input type="date" value={received} onChange={(e) => setReceived(e.target.value)} style={{ fontSize: 12 }} />
+        </label>
+        <label>
+          Prazo <input type="number" min={1} max={365} placeholder="fila" value={sla} onChange={(e) => setSla(e.target.value)} style={{ width: 60, fontSize: 12 }} /> dias
+        </label>
+        <button className="btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => onSave({ receivedAt: received, slaOverride: sla })}>
+          Salvar
+        </button>
+      </div>
+    </details>
+  );
+}
+
+/** Editor da lista de situações (nome, emoji, cor, pausa o prazo, quando pulsa). */
+function SituationsEditor({ list, onSaved }: { list: Situation[]; onSaved: (l: Situation[]) => void }) {
+  const [rows, setRows] = useState<Situation[]>(list);
+  const [msg, setMsg] = useState("");
+  const set = (i: number, patch: Partial<Situation>) => setRows((r) => r.map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  async function save() {
+    const res = await fetch("/api/work/situations", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ situations: rows }) });
+    const data = await res.json();
+    if (!res.ok) return setMsg(data.error || "Não consegui salvar.");
+    setRows(data.situations);
+    onSaved(data.situations);
+    setMsg("✅ Salvo.");
+  }
+  const pulseKind = (p: string) => (p.startsWith("apos:") ? "apos" : p);
+  return (
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>🏷️ Situações dos chamados</div>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
+        O segundo badge do chamado: com quem está a bola. &quot;Para o prazo&quot; congela o badge de dias (🕒). &quot;Pulsa&quot; chama atenção quando é hora de agir.
+      </p>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 6, fontSize: 12 }}>
+          <input aria-label="Emoji" value={r.emoji} onChange={(e) => set(i, { emoji: e.target.value })} style={{ width: 44, textAlign: "center" }} />
+          <input aria-label="Nome" value={r.name} onChange={(e) => set(i, { name: e.target.value })} style={{ flex: "1 1 180px" }} />
+          <input aria-label="Cor" type="color" value={r.color} onChange={(e) => set(i, { color: e.target.value })} style={{ width: 40, padding: 0 }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input type="checkbox" checked={r.pauses} onChange={(e) => set(i, { pauses: e.target.checked })} /> para o prazo 🕒
+          </label>
+          <select
+            aria-label="Quando pulsa"
+            value={pulseKind(r.pulse)}
+            onChange={(e) => set(i, { pulse: e.target.value === "apos" ? "apos:2" : e.target.value })}
+          >
+            <option value="nunca">não pulsa</option>
+            <option value="sempre">pulsa sempre</option>
+            <option value="apos">pulsa depois de N dias</option>
+            <option value="redmine">pulsa quando o Redmine resolver</option>
+          </select>
+          {pulseKind(r.pulse) === "apos" && (
+            <input
+              aria-label="Dias"
+              type="number"
+              min={1}
+              max={60}
+              value={Number(r.pulse.split(":")[1] || 2)}
+              onChange={(e) => set(i, { pulse: `apos:${Math.max(1, Number(e.target.value) || 1)}` })}
+              style={{ width: 56 }}
+            />
+          )}
+          <button className="btn-ghost" style={{ fontSize: 11, padding: "3px 7px" }} onClick={() => setRows((x) => x.filter((_, k) => k !== i))}>
+            Remover
+          </button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => setRows((x) => [...x, { key: "", emoji: "•", name: "Nova situação", color: "#64748b", pauses: false, pulse: "nunca" }])}>
+          + Situação
+        </button>
+        <button className="btn-primary" style={{ fontSize: 12, padding: "5px 12px" }} onClick={save}>
+          Salvar
+        </button>
+        <span style={{ fontSize: 12 }}>{msg}</span>
+      </div>
+    </div>
   );
 }
 
@@ -154,9 +272,9 @@ function ClosePill() {
 }
 
 /** Ordem: urgente, Redmine resolvido, atrasado, aberto, o resto. */
-function priority(t: Ticket) {
-  const a = alertsFor(t);
-  return a.urgent ? 0 : a.canClose ? 1 : a.overdue ? 2 : t.status === "aberto" || t.status === "pendente" ? 3 : 4;
+function priority(t: Ticket, situations: Situation[]) {
+  const a = alertsFor(t, situations);
+  return a.urgent ? 0 : a.canClose ? 1 : a.situation?.pulsing ? 2 : a.overdue ? 3 : t.status === "aberto" || t.status === "pendente" ? 4 : 5;
 }
 
 /** Cartão-filtro (clique liga/desliga), igual aos do escala. */
@@ -203,6 +321,8 @@ export default function WorkPage() {
   const [guideUrl, setGuideUrl] = useState("");
   const [links, setLinks] = useState<Links>({ ticket: "", redmine: "" });
   const [prod, setProd] = useState<Prod | null>(null);
+  const [situations, setSituations] = useState<Situation[]>(DEFAULT_SITUATIONS);
+  const [showSituations, setShowSituations] = useState(false);
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
 
@@ -219,6 +339,7 @@ export default function WorkPage() {
       if (data.links) setLinks(data.links);
       setPhoneLinked(!!data.phoneLinked);
       if (data.produtividade) setProd(data.produtividade);
+      if (data.situations) setSituations(data.situations);
     }
   }, [q, f]);
 
@@ -257,6 +378,13 @@ export default function WorkPage() {
         ? `✅ Aba "${r.aba}": ${r.salvas} de ${r.lidas} chamados importados${r.ignoradas ? ` · ${r.ignoradas} ignorados (${r.erros.join("; ")})` : ""}.`
         : `⚠️ ${r.error || "Não consegui importar."}`
     );
+    load();
+  }
+
+  async function postAction(body: Record<string, unknown>) {
+    setError("");
+    const res = await fetch("/api/work", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) setError((await res.json()).error || "Não consegui salvar.");
     load();
   }
 
@@ -301,6 +429,9 @@ export default function WorkPage() {
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowPhone((v) => !v)}>
           📱 Celular do trabalho{phoneLinked ? " ✅" : ""}
         </button>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSituations((v) => !v)}>
+          🏷️ Situações
+        </button>
       </div>
       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
         Chamados do PJe. A descrição é guardada com CPF mascarado (xxx.xxx.xxx-xx) e sem telefone/e-mail, e não passa pela IA.
@@ -320,6 +451,8 @@ export default function WorkPage() {
             </a>
           </p>
         )}
+      {showSituations && <SituationsEditor list={situations} onSaved={(l) => { setSituations(l); load(); }} />}
+
       {showPhone && (
         <div style={{ ...box, marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>📱 Celular do trabalho → chamados</div>
@@ -446,8 +579,8 @@ export default function WorkPage() {
       <input placeholder="🔎 Buscar por número ou tipo de erro" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
-        {[...tickets].sort((a, b) => priority(a) - priority(b)).map((t) => {
-          const al = alertsFor(t);
+        {[...tickets].sort((a, b) => priority(a, situations) - priority(b, situations)).map((t) => {
+          const al = alertsFor(t, situations);
           return (
           <div
             key={t.id}
@@ -467,7 +600,7 @@ export default function WorkPage() {
               <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <TicketLink id={t.ticketId} links={links} />
-                  <TicketBadges t={t} />
+                  <TicketBadges t={t} situations={situations} />
                 </span>
                 {al.canClose && <ClosePill />}
               </span>
@@ -490,6 +623,7 @@ export default function WorkPage() {
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
               {t.origin ? `Usuário ${t.origin} · ` : ""}
               {t.openedAt ? `aberto em ${new Date(t.openedAt).toLocaleDateString("pt-BR")} · ` : ""}
+              {t.receivedAt ? `recebido em ${new Date(t.receivedAt).toLocaleDateString("pt-BR")} · ` : ""}
               atualizado {new Date(t.updatedAt).toLocaleDateString("pt-BR")} · via {t.source}
             </div>
             {t.resolution && <div style={{ fontSize: 12 }}>✅ {t.resolution}</div>}
@@ -523,6 +657,24 @@ export default function WorkPage() {
                 <summary>Descrição</summary>
                 <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{t.description}</div>
               </details>
+            )}
+            {(t.status === "aberto" || t.status === "pendente") && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", fontSize: 12 }}>
+                <select
+                  aria-label="Situação"
+                  value={t.situation || ""}
+                  onChange={(e) => postAction({ action: "situation", ticketId: t.ticketId, situation: e.target.value })}
+                  style={{ fontSize: 12, padding: "3px 6px" }}
+                >
+                  <option value="">— situação —</option>
+                  {situations.map((x) => (
+                    <option key={x.key} value={x.key}>
+                      {x.emoji} {x.name}
+                    </option>
+                  ))}
+                </select>
+                <AdjustPrazo t={t} onSave={(d) => postAction({ action: "adjust", ticketId: t.ticketId, ...d })} />
+              </div>
             )}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
               {t.status !== "resolvido" && (

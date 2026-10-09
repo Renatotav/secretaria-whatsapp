@@ -13,12 +13,15 @@ export async function GET(request: Request) {
     .map(normalizeTicketId)
     .filter((id) => /^[A-Z]?\d{6,9}$/.test(id))
     .slice(0, 300);
-  if (ids.length === 0) return NextResponse.json({ tickets: {} });
+  if (ids.length === 0) {
+    const { getSituations } = await import("@/lib/work-situations");
+    return NextResponse.json({ tickets: {}, situations: await getSituations() });
+  }
   // Mesma regra de casamento da extensão: sem letra de um lado, compara só os dígitos.
   const digits = [...new Set(ids.map((id) => id.replace(/^[A-Z]/, "")))];
   const rows = await prisma.workTicket.findMany({
     where: { OR: digits.flatMap((d) => [{ ticketId: d }, { ticketId: { endsWith: d } }]) },
-    select: { ticketId: true, status: true, errorType: true, origin: true, resolution: true, redmine: true, redmineStatus: true, queue: true, lastAction: true, openedAt: true, resolvedAt: true, updatedAt: true },
+    select: { ticketId: true, status: true, errorType: true, origin: true, resolution: true, redmine: true, redmineStatus: true, queue: true, lastAction: true, receivedAt: true, slaOverride: true, situation: true, situationSince: true, pausedMs: true, openedAt: true, resolvedAt: true, updatedAt: true },
   });
   const tickets: Record<string, unknown> = {};
   for (const id of ids) {
@@ -29,5 +32,6 @@ export async function GET(request: Request) {
       rows.find((r) => r.ticketId.replace(/^[A-Z]/, "") === d && (!letter || !/^[A-Z]/.test(r.ticketId)));
     if (hit) tickets[id] = hit;
   }
-  return NextResponse.json({ tickets });
+  const { getSituations } = await import("@/lib/work-situations");
+  return NextResponse.json({ tickets, situations: await getSituations() });
 }

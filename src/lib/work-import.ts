@@ -76,7 +76,9 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
         await upsertWorkTicket(
           {
             ticketId,
-            openedAt,
+            // A "DATA DA ABERTURA" da planilha é quando o chamado chegou para ele
+            // (a abertura de verdade vem do escala).
+            receivedAt: openedAt,
             description: col.description !== undefined ? String(r[col.description] ?? "") : undefined,
             errorType: col.errorType !== undefined ? String(r[col.errorType] ?? "") : undefined,
             origin: origin.includes("EXTERNO") ? "externo" : origin.includes("INTERNO") ? "interno" : undefined,
