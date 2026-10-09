@@ -16,6 +16,7 @@ type Ticket = {
   queue?: string;
   lastAction?: string;
   chatLog?: string;
+  errorGroup?: string;
   attachments?: { id: string; caption: string }[];
   description: string;
   source: string;
@@ -31,6 +32,7 @@ type Stats = {
   atrasados: number;
   tiposDoMes: { name: string; n: number }[];
   origemDoMes: { name: string; n: number }[];
+  gruposDoMes?: { name: string; n: number }[];
   paraEncerrar: { ticketId: string; redmine: string; openedAt: string | null }[];
 };
 
@@ -379,6 +381,24 @@ export default function WorkPage() {
 
       {prod && <ProductivityChart p={prod} />}
 
+      {stats && !!stats.gruposDoMes?.length && (
+        <div style={{ ...box, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>🗂️ O que mais se repete no mês (grupos de erro)</div>
+          {stats.gruposDoMes.map((g) => {
+            const max = stats.gruposDoMes![0].n || 1;
+            return (
+              <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 4 }}>
+                <span style={{ flex: "0 0 45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
+                <span style={{ flex: 1, height: 8, background: "var(--bg-hover)", borderRadius: 4 }}>
+                  <span style={{ display: "block", height: "100%", width: `${(g.n / max) * 100}%`, background: "var(--success)", borderRadius: 4 }} />
+                </span>
+                <strong>{g.n}</strong>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {stats && stats.tiposDoMes.length > 0 && (
         <div style={{ ...box, marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>🏷️ Tipos de erro do mês</div>
@@ -457,6 +477,11 @@ export default function WorkPage() {
               </span>
             </div>
             {t.errorType && <div style={{ fontSize: 13 }}>{t.errorType}</div>}
+            {t.errorGroup && t.errorGroup !== "Sem grupo" && (
+              <span title="Grupo do erro (sugerido pela IA)" style={{ fontSize: 11, color: "var(--text-muted)", border: "1px solid var(--border)", borderRadius: 999, padding: "1px 8px", width: "fit-content" }}>
+                🗂️ {t.errorGroup}
+              </span>
+            )}
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
               {t.origin ? `Usuário ${t.origin} · ` : ""}
               {t.openedAt ? `aberto em ${new Date(t.openedAt).toLocaleDateString("pt-BR")} · ` : ""}

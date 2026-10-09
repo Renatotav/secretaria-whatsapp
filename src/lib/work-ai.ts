@@ -8,6 +8,7 @@ import { normalizeTicketId } from "./work-privacy";
 // banco (WorkSkill). Nada do texto enviado é gravado.
 
 export const WORK_SKILLS: Record<string, string> = {
+  auto: "✨ Automático",
   resumo: "Resumir erro",
   redmine: "Preparar Redmine",
   whatsapp: "Registrar WhatsApp",
@@ -25,7 +26,18 @@ const FALLBACK: Record<string, string> = {
 
 const MAX_TEXT = 20_000;
 
+// Para o "✨ Automático": o Jev escolhe a skill pelo tipo de texto.
+const SKILL_CRITERIA: Record<string, string> = {
+  redmine: "um CHAMADO técnico para formalizar e abrir no Redmine (relato de erro com processos, testes realizados, itens 1/2/3)",
+  whatsapp: "uma CONVERSA de WhatsApp com o usuário (nomes, horários, falas trocadas) para virar registro formal no chamado",
+  resumo: "a descrição de um chamado para entender qual é o erro e o próximo passo",
+  corrigir: "um texto solto do tribunal (e-mail, resposta ao usuário, despacho, nota) que só precisa de correção de português",
+  "corrigir-whatsapp": "uma mensagem curta e informal que ele vai mandar no WhatsApp e só precisa de correção de português",
+};
+
 export interface WorkAiResult {
+  /** Skill usada (no "Automático", a que o Jev escolheu). */
+  skill?: string;
   text: string;
   model: string;
   tokens: { input: number; output: number };
@@ -41,7 +53,18 @@ const PRESERVE =
 
 export async function runWorkSkill(key: string, text: string, ticketRaw?: string, plain = false): Promise<WorkAiResult> {
   if (!WORK_SKILLS[key]) throw new Error("Skill desconhecida");
-  const input = (text || "").trim();
+  let input = (text || "").trim();
+  if (key === "auto") {
+    const { choose } = await import("./jev");
+    const pick = await choose(input.slice(0, 6000), "Que tipo de texto é este, e qual tratamento ele precisa?", SKILL_CRITERIA, 0).catch(() => null);
+    key = pick?.choice && WORK_SKILLS[pick.choice] ? pick.choice : "corrigir";
+    // Mesma regra dos botões: resumo e registro de WhatsApp vão com CPF mascarado;
+    // Redmine leva o CPF completo; os corretores, o texto como está.
+    if (key === "resumo" || key === "whatsapp") {
+      const { maskPersonalData } = await import("./work-privacy");
+      input = maskPersonalData(input);
+    }
+  }
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
   if (input.length > MAX_TEXT) throw new Error(`Texto grande demais (máx. ${MAX_TEXT.toLocaleString("pt-BR")} caracteres).`);
 
@@ -89,5 +112,5 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   });
   const out = res.choices[0]?.message?.content?.trim() || "";
   if (!out) throw new Error("A IA não devolveu texto. Tente de novo.");
-  return { text: out, model, tokens: { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 } };
+  return { skill: key, text: out, model, tokens: { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 } };
 }

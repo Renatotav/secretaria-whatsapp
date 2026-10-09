@@ -63,6 +63,8 @@ model AgentConfig {
   workAiModel      String  @default("anthropic/claude-sonnet-5.5")
   /// Alertas do trabalho já avisados no WhatsApp (JSON: ["U:2154585","A:2099736","E:2016229"]), para não repetir.
   workAlerted      String  @default("[]")
+  /// Modelo de decisão do OpenRouter (Jev): classificações rápidas e baratas.
+  decisionModel    String  @default("typesafe/jev-1.13")
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
@@ -280,6 +282,8 @@ model WorkTicket {
   lastAction  String    @default("")
   /// Conversas encaminhadas do celular institucional (texto, CPF mascarado), mais recentes no fim.
   chatLog     String    @default("")
+  /// Grupo do erro sugerido pelo Jev (ex: "MNI / integração"); "" = sem grupo.
+  errorGroup  String    @default("")
   description String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")

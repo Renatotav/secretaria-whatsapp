@@ -55,11 +55,13 @@ export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" 
     ...(clean(input.description, 8000) !== undefined ? { description: clean(input.description, 8000) } : {}),
     ...(closing ? { resolvedAt: pastDate(input.resolvedAt) ?? new Date() } : {}),
   };
-  return prisma.workTicket.upsert({
+  const saved = await prisma.workTicket.upsert({
     where: { ticketId },
     create: { ticketId, source, ...data },
-    update: data,
+    // Texto novo = grupo do erro recalculado pelo agendador.
+    update: { ...data, ...(data.description !== undefined || data.errorType !== undefined ? { errorGroup: "" } : {}) },
   });
+  return saved;
 }
 
 /** Início do dia/semana/mês no horário de Brasília (em UTC, para comparar com o banco). */
@@ -98,9 +100,9 @@ export async function workStats() {
   });
   const monthTickets = await prisma.workTicket.findMany({
     where: { OR: [{ openedAt: { gte: starts.month } }, { openedAt: null, createdAt: { gte: starts.month } }, { resolvedAt: { gte: starts.month } }] },
-    select: { errorType: true, origin: true },
+    select: { errorType: true, origin: true, errorGroup: true },
   });
-  const tally = (key: "errorType" | "origin") =>
+  const tally = (key: "errorType" | "origin" | "errorGroup") =>
     Object.entries(monthTickets.reduce<Record<string, number>>((acc, t) => ((acc[t[key] || "(sem)"] = (acc[t[key] || "(sem)"] || 0) + 1), acc), {}))
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
@@ -112,6 +114,7 @@ export async function workStats() {
     emAberto: await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } }),
     tiposDoMes: tally("errorType"),
     origemDoMes: tally("origin"),
+    gruposDoMes: tally("errorGroup").filter((g) => g.name !== "(sem)" && g.name !== "Sem grupo"),
     ...(await openAlerts()),
     paraEncerrar: await prisma.workTicket.findMany({
       where: CAN_CLOSE_WHERE,
@@ -139,7 +142,7 @@ export async function workWeekSection(monday: Date): Promise<string> {
   const end = new Date(start.getTime() + 7 * 86400_000);
   const closed = await prisma.workTicket.findMany({
     where: { status: { in: ["resolvido", "escalado"] }, resolvedAt: { gte: start, lt: end } },
-    select: { status: true, resolvedAt: true, errorType: true },
+    select: { status: true, resolvedAt: true, errorType: true, errorGroup: true },
   });
   const opened = await prisma.workTicket.count({
     where: { OR: [{ openedAt: { gte: start, lt: end } }, { openedAt: null, createdAt: { gte: start, lt: end } }] },
@@ -172,6 +175,14 @@ export async function workWeekSection(monday: Date): Promise<string> {
     "```",
     closed.length ? `🏆 Melhor dia: ${days[best]} (${perDay[best]})` : "",
     types.length ? `🔎 Erros mais comuns: ${types.map(([t, n]) => `${t} (${n})`).join(" · ")}` : "",
+    (() => {
+      const g = Object.entries(
+        closed.reduce<Record<string, number>>((acc, t) => (t.errorGroup && t.errorGroup !== "Sem grupo" ? ((acc[t.errorGroup] = (acc[t.errorGroup] || 0) + 1), acc) : acc), {})
+      )
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+      return g.length ? `🗂️ Grupos: ${g.map(([n, c]) => `${n} (${c})`).join(" · ")}` : "";
+    })(),
   ]
     .filter(Boolean)
     .join("\n");

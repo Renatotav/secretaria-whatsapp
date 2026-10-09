@@ -112,6 +112,14 @@ export function startScheduler(): void {
         }
       }
 
+      // Grupo do erro dos chamados com texto (Jev, poucos por minuto).
+      try {
+        const { classifyPendingGroups } = await import("./work-groups");
+        await classifyPendingGroups(5);
+      } catch (err) {
+        console.error("Erro ao agrupar chamados:", err);
+      }
+
       // Trabalho (Central do Atendente): briefing às 08:00 em dia útil e, logo
       // depois de cada atualização do escala (11h e 16h), só as novidades.
       const weekday = brtDate.getUTCDay() >= 1 && brtDate.getUTCDay() <= 5;

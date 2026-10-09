@@ -192,8 +192,20 @@ async function save(config: AgentConfig, ticketId: string, notify = true): Promi
       : t?.status === "escalado"
       ? `🔁 Virou Redmine${t.redmine ? ` #${t.redmine}` : ""}`
       : `🟡 Em aberto${t?.redmineStatus ? ` · Redmine ${t.redmineStatus}` : ""}`;
+  // A conversa parece pedir urgência? (Jev, decisão rápida; sem certeza = sem aviso)
+  let urgent = false;
+  if (s.lines.length) {
+    try {
+      const { decide } = await import("./jev");
+      const a = (await decide(maskPersonalData(s.lines.join("\n")).slice(-6000), { u: { type: "noul", instructions: "O usuário pede urgência, fala em prazo vencendo, audiência próxima ou sessão de julgamento?" } })).u;
+      urgent = !!a && a.type === "noul" && a.noul >= 0.7;
+    } catch {
+      // sem aviso de urgência
+    }
+  }
   const reply = [
     `📱 Chamado *${ticketId}*${existing ? "" : " (novo)"} — ${statusLine}`,
+    urgent ? "🚨 A conversa parece pedir urgência." : "",
     ...(s.prints || []).slice(0, 1).map((p) => `📝 ${p.replace(/\n/g, " · ")}`),
     "Salvo:",
     s.lines.length ? `• ${s.lines.join("\n").split("\n").filter((l) => l.trim()).length} linha(s) de texto (CPF mascarado, sem telefone/e-mail)` : "",
