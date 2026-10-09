@@ -455,6 +455,9 @@ export default function WorkPage() {
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowPhone((v) => !v)}>
           📱 Celular do trabalho{phoneLinked ? " ✅" : ""}
         </button>
+        <a href="/work/portfolio" className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }}>
+          📊 Minha produtividade
+        </a>
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSituations((v) => !v)}>
           🏷️ Situações
         </button>
