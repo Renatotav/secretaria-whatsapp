@@ -72,7 +72,15 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     const s = await workStats();
     return (await buildWorkBriefing()) || `💼 Nada pedindo ação agora. ${s.emAberto} chamado(s) em aberto, nenhum urgente, atrasado ou com Redmine resolvido. 👍`;
   }
-  if (!/chamado/i.test(msg)) return null;
+  const isQuestion = /\?\s*$/.test(msg) || /^(?:quant[oa]s?|qual|quais|como|m[eé]dia|tempo|em\s+qu[ea]l)\b/i.test(msg);
+  if (!/chamado/i.test(msg)) {
+    // Pergunta livre sobre o trabalho sem a palavra "chamado" ("qual meu tempo médio de MNI?").
+    if (isQuestion && /\b(?:trabalho|redmine|mni|resolvi|fechei|atendi)/i.test(msg)) {
+      const { answerWorkQuestion } = await import("./work-ask");
+      return answerWorkQuestion(msg).catch(() => null);
+    }
+    return null;
+  }
 
   let m = msg.match(ACTION_RE);
   const mine = m ? null : msg.match(RESOLVED_BY_ME_RE);
@@ -158,6 +166,13 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
           `• ${a.urgent ? "🚨 *URGENTE* " : ""}*${t.ticketId}*${a.overdue ? ` ⚠ ${a.days}d` : ""}${t.status === "pendente" ? " (pendente)" : ""}${t.errorType ? ` — ${t.errorType}` : ""}${t.openedAt ? ` · desde ${fmtDate(t.openedAt)}` : ""}${a.paused ? " 🕒" : ""}${a.situation ? ` · ${a.situation.emoji} ${a.situation.name}${a.situation.days ? ` ${a.situation.days}d` : ""}` : ""}${a.canClose ? " · ⚡ Redmine resolvido, encerre" : ""}`
       );
     return [`💼 *${total} chamado(s) em aberto*${total > open.length ? ` (os ${open.length} mais antigos)` : ""}:`, ...lines].join("\n");
+  }
+
+  // Pergunta livre (a IA só monta os filtros; a conta é feita no banco).
+  if (isQuestion) {
+    const { answerWorkQuestion } = await import("./work-ask");
+    const r = await answerWorkQuestion(msg).catch(() => null);
+    if (r) return r;
   }
 
   return null;
