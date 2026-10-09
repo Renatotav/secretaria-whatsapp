@@ -39,6 +39,16 @@ export function ticketCandidates(text: string): string[] {
   return [...found];
 }
 
+/** Print de conversa (WhatsApp): o texto lido, limpo e mascarado (sem a faixa de criptografia). */
+export function conversationFromPrint(text: string): string {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 1)
+    .filter((l) => !/criptografia de ponta|Somente as pessoas que fazem parte|podem ler, ouvir|Clique para saber mais/i.test(l));
+  return maskPersonalData(lines.join("\n")).slice(0, 4000);
+}
+
 /** Resumo do print do Assyst: serviço, categoria e começo da descrição (mascarado). */
 export function summarizeAssystPrint(text: string): string {
   const line = (label: RegExp) => {

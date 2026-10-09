@@ -123,9 +123,15 @@ async function flush(config: AgentConfig) {
   // Prints: leitura local (sem IA) para o resumo e, se faltar, o nº do chamado.
   if (s.images.length && !s.prints) {
     try {
-      const { readImageText, summarizeAssystPrint, ticketCandidates } = await import("./work-ocr");
-      const texts = await readImageText(s.images.slice(0, 4).map((i) => i.data));
-      s.prints = texts.map(summarizeAssystPrint).filter(Boolean);
+      const { readImageText, summarizeAssystPrint, ticketCandidates, conversationFromPrint } = await import("./work-ocr");
+      const texts = await readImageText(s.images.slice(0, 6).map((i) => i.data));
+      // Print do Assyst → resumo; print de conversa → o texto lido (mascarado).
+      s.prints = texts
+        .map((t) => {
+          const assyst = summarizeAssystPrint(t);
+          return assyst ? `🖼️ Print do chamado:\n${assyst}` : conversationFromPrint(t) ? `🖼️ Texto do print:\n${conversationFromPrint(t)}` : "";
+        })
+        .filter(Boolean);
       for (const t of texts) {
         if (ticket) break;
         // "chamado n.º 2120102" no print da mensagem padrão: confiável.
@@ -176,7 +182,7 @@ async function save(config: AgentConfig, ticketId: string, notify = true): Promi
   const existing = await prisma.workTicket.findUnique({ where: { ticketId }, select: { chatLog: true } });
   if (!existing) await upsertWorkTicket({ ticketId }, "whatsapp");
   const stamp = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-  const body = [s.lines.length ? maskPersonalData(s.lines.join("\n")).trim() : "", ...(s.prints || []).map((p) => `🖼️ Print do chamado:\n${p}`)].filter(Boolean);
+  const body = [s.lines.length ? maskPersonalData(s.lines.join("\n")).trim() : "", ...(s.prints || [])].filter(Boolean);
   const block = body.length ? `── ${stamp} · celular do trabalho ──\n${body.join("\n\n")}` : "";
   if (block) {
     const log = [existing?.chatLog, block].filter(Boolean).join("\n\n");
@@ -206,7 +212,7 @@ async function save(config: AgentConfig, ticketId: string, notify = true): Promi
   const reply = [
     `📱 Chamado *${ticketId}*${existing ? "" : " (novo)"} — ${statusLine}`,
     urgent ? "🚨 A conversa parece pedir urgência." : "",
-    ...(s.prints || []).slice(0, 1).map((p) => `📝 ${p.replace(/\n/g, " · ")}`),
+    ...(s.prints || []).slice(0, 1).map((p) => `📝 ${p.replace(/^🖼️ [^\n]*\n/, "").replace(/\n/g, " · ").slice(0, 300)}`),
     "Salvo:",
     s.lines.length ? `• ${s.lines.join("\n").split("\n").filter((l) => l.trim()).length} linha(s) de texto (CPF mascarado, sem telefone/e-mail)` : "",
     s.images.length ? `• ${s.images.length} imagem(ns) anexada(s)` : "",
