@@ -59,6 +59,13 @@ async function describeTicket(rawId: string): Promise<string> {
 /** Responde ao comando do trabalho, ou null se a mensagem não é um deles. */
 export async function applyWorkCommand(text: string): Promise<string | null> {
   const msg = text.trim();
+  // "atualizar escala": pede a cópia agora (o vigia do servidor roda em até 1 min).
+  if (/^\s*(?:atualiz(?:ar|a)\s+(?:o\s+)?escala|sincroniz(?:ar|a)\s+(?:o\s+)?escala)\s*\.?\s*$/i.test(msg)) {
+    const { requestEscalaSync } = await import("./work-sync");
+    await requestEscalaSync();
+    return "🔄 Pedido feito: em até 1 minuto eu copio do escala e te aviso o que mudou.";
+  }
+
   // "como está meu trabalho?" / "resumo do trabalho": o briefing das 8h na hora.
   if (/^\s*(?:como\s+(?:est[aá]|t[aá])\s+(?:o\s+)?meu\s+trabalho|resumo\s+do\s+trabalho|briefing(?:\s+do\s+trabalho)?)\s*\??\s*$/i.test(msg)) {
     const { buildWorkBriefing } = await import("./work");

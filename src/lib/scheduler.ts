@@ -14,6 +14,7 @@ let lastWishCheckDate = "";
 let lastReminderHour = -1;
 let lastWorkBriefDate = "";
 let lastWorkAlertSlot = "";
+let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
 
 export function startScheduler(): void {
   setInterval(async () => {
@@ -133,12 +134,19 @@ export function startScheduler(): void {
           console.error("Erro no briefing do trabalho:", err);
         }
       }
-      const workSlot = hhmm === "11:10" || hhmm === "16:10" ? `${todayDate} ${hhmm}` : "";
+      // Alertas logo depois de cada cópia do escala (agendada às 11h/16h ou
+      // pedida pelo botão "Atualizar do escala"). Na 1ª volta só memoriza.
+      const syncedAt = config.workSyncedAt ? config.workSyncedAt.getTime() : 0;
+      const justSynced = lastEscalaSync !== null && syncedAt > lastEscalaSync;
+      const askedByHim = justSynced && !!config.workSyncRequested && syncedAt - config.workSyncRequested.getTime() < 15 * 60_000 && syncedAt >= config.workSyncRequested.getTime();
+      lastEscalaSync = syncedAt;
+      const workSlot = justSynced ? `sync ${syncedAt}` : hhmm === "11:10" || hhmm === "16:10" ? `${todayDate} ${hhmm}` : "";
       if (workSlot && lastWorkAlertSlot !== workSlot && config.ownerPhone) {
         lastWorkAlertSlot = workSlot;
         try {
           const { buildWorkNewAlerts } = await import("./work");
-          const msg = await buildWorkNewAlerts();
+          const fresh = await buildWorkNewAlerts();
+          const msg = fresh || (askedByHim ? "🔄 Escala atualizado. Nada novo nos seus chamados. 👍" : "");
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
         } catch (err) {
           console.error("Erro nos alertas do trabalho:", err);

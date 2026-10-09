@@ -65,6 +65,10 @@ model AgentConfig {
   workAlerted      String  @default("[]")
   /// Modelo de decisão do OpenRouter (Jev): classificações rápidas e baratas.
   decisionModel    String  @default("typesafe/jev-1.13")
+  /// Pedido de "atualizar do escala agora" (botão do painel/extensão/WhatsApp); o vigia do servidor roda a cópia.
+  workSyncRequested DateTime?
+  /// Fim da última cópia do escala (agendada ou pedida).
+  workSyncedAt     DateTime?
   /// Último mês ("AAAA-MM") cujo resultado já foi aplicado na Reserva (evita tirar duas vezes).
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())

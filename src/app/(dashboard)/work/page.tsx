@@ -323,6 +323,7 @@ export default function WorkPage() {
   const [prod, setProd] = useState<Prod | null>(null);
   const [situations, setSituations] = useState<Situation[]>(DEFAULT_SITUATIONS);
   const [showSituations, setShowSituations] = useState(false);
+  const [sync, setSync] = useState<{ pending: boolean; syncedAt: string | null } | null>(null);
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
 
@@ -381,6 +382,31 @@ export default function WorkPage() {
     load();
   }
 
+  // "🔄 Atualizar do escala": grava o pedido; o vigia do servidor copia em até 1 min.
+  const loadSync = useCallback(async () => {
+    const res = await fetch("/api/work/sync");
+    if (res.ok) setSync(await res.json());
+  }, []);
+  async function requestSync() {
+    const res = await fetch("/api/work/sync", { method: "POST" });
+    if (res.ok) setSync(await res.json());
+  }
+  useEffect(() => {
+    loadSync();
+  }, [loadSync]);
+  useEffect(() => {
+    if (!sync?.pending) return;
+    // Enquanto espera, confere a cada 10 s; quando terminar, recarrega os chamados.
+    const t = setInterval(async () => {
+      const res = await fetch("/api/work/sync");
+      if (!res.ok) return;
+      const st = await res.json();
+      setSync(st);
+      if (!st.pending) load();
+    }, 10_000);
+    return () => clearInterval(t);
+  }, [sync?.pending, load]);
+
   async function postAction(body: Record<string, unknown>) {
     setError("");
     const res = await fetch("/api/work", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -431,6 +457,18 @@ export default function WorkPage() {
         </button>
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSituations((v) => !v)}>
           🏷️ Situações
+        </button>
+        <button
+          className="btn-ghost"
+          disabled={!!sync?.pending}
+          title={sync?.syncedAt ? `Última cópia do escala: ${new Date(sync.syncedAt).toLocaleString("pt-BR")}` : "Copiar agora os seus chamados do escala"}
+          style={{ fontSize: 12, padding: "6px 10px" }}
+          onClick={requestSync}
+        >
+          {sync?.pending ? "⏳ Atualizando… (até 1 min)" : "🔄 Atualizar do escala"}
+          {!sync?.pending && sync?.syncedAt ? (
+            <span style={{ color: "var(--text-muted)" }}> · {new Date(sync.syncedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+          ) : null}
         </button>
       </div>
       <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
