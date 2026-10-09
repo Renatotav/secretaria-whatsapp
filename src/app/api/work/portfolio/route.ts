@@ -9,6 +9,15 @@ const DAY = 86400_000;
 const brt = (d: Date) => new Date(d.getTime() - 3 * 3600_000);
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
+// Nome das equipes do escala como ele chama no dia a dia (APOF/APC são as siglas).
+function teamName(raw: string) {
+  const t = raw.replace(/^3N\s+SUPJUD\s+/i, "").trim();
+  if (/apof/i.test(t)) return "Erro e Falha";
+  if (/\bapc\b/i.test(t)) return "Cadastro";
+  if (/redmine/i.test(t)) return "Redmines";
+  return t;
+}
+
 function median(xs: number[]) {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
@@ -95,6 +104,6 @@ export async function GET(request: Request) {
     gruposSem: closed.filter((t) => !t.errorGroup || t.errorGroup === "Sem grupo").length,
     origem: tally((t) => (t.origin === "externo" ? "Usuário externo" : t.origin === "interno" ? "Usuário interno" : "")).filter((x) => x.nome),
     origemSem: closed.filter((t) => t.origin !== "externo" && t.origin !== "interno").length,
-    equipes: tally((t) => t.team.replace(/^3N\s+SUPJUD\s+/i, "")).filter((x) => x.nome),
+    equipes: tally((t) => teamName(t.team)).filter((x) => x.nome),
   });
 }
