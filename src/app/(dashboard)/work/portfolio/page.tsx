@@ -177,7 +177,8 @@ export default function PortfolioPage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ padding: 20, maxWidth: 1100, display: "grid", gap: 16 }}>
+      {/* minmax(0, 1fr): o mapa de calor rola por dentro em vez de alargar a página no celular. */}
+      <div style={{ padding: 20, maxWidth: 1100, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <div>
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>📊 Minha produtividade</h1>
