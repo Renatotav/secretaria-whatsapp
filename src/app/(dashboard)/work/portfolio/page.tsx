@@ -34,7 +34,7 @@ const fmtDias = (d: number | null) => (d === null ? "—" : d < 2 ? `${Math.roun
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div style={{ ...card, flex: "1 1 140px", minWidth: 0 }}>
+    <div style={{ ...card, flex: "1 1 120px", minWidth: 0, padding: 14 }}>
       <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {hint && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{hint}</div>}
