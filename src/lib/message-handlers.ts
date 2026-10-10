@@ -1429,7 +1429,8 @@ async function lastSavedEntries() {
 
 // Última fatura paga por mensagem ("desfazer" volta as compras para "a pagar").
 let lastInvoicePayment: { ids: string[]; at: number } | null = null;
-const INVOICE_PAID_RE = /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\bfatura\b|\bfatura\b.*\b(paga|paguei|quitada|transferi)\b/i;
+// "paguei a fatura", "fatura paga", e também "cartão Santander pago" / "meu cartão 3880,57 pago".
+const INVOICE_PAID_RE = /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\b(fatura|cart[aã]o)\b|\b(fatura|cart[aã]o)\b.*\b(pago|paga|paguei|quitad[ao]|transferi)\b/i;
 
 /**
  * "Paguei a fatura" / "transferi a fatura do Santander": dá baixa em todas as
@@ -1439,6 +1440,21 @@ const INVOICE_PAID_RE = /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\bfatur
  */
 async function applyInvoicePayment(text: string): Promise<string | null> {
   if (!INVOICE_PAID_RE.test(text) || text.includes("?")) return null;
+  // Várias faturas na mesma mensagem, uma por linha ("Cartão Santander pago\nMeu cartão 3880,57 pago").
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter((l) => INVOICE_PAID_RE.test(l));
+  if (lines.length > 1) {
+    const replies: string[] = [];
+    const allIds: string[] = [];
+    lastInvoicePayment = null;
+    for (const line of lines) {
+      const r = await applyInvoicePayment(line);
+      if (r) replies.push(r.replace(/\n↩️ Foi engano\? Responda \*desfazer\*\./, "").replace(/\nAinda em aberto:[\s\S]*$/, ""));
+      if (lastInvoicePayment) allIds.push(...lastInvoicePayment.ids);
+      lastInvoicePayment = null;
+    }
+    lastInvoicePayment = { ids: [...new Set(allIds)], at: Date.now() };
+    return [...replies, "↩️ Foi engano? Responda *desfazer* (desfaz todas)."].join("\n\n");
+  }
   const { listOpenInvoices, payInvoice, invoiceLabel } = await import("./invoices");
   const open = await listOpenInvoices();
   if (open.length === 0) return "✅ Não tem nenhuma fatura de cartão em aberto.";
@@ -1456,6 +1472,14 @@ async function applyInvoicePayment(text: string): Promise<string | null> {
   }
   const target = open.find((i) => i.card === card);
   if (!target) return `🤔 Não achei fatura em aberto de ${invoiceLabel(card)}.`;
+  // Valor informado ("3880,57") tem que bater com a fatura (tolerância de R$ 1).
+  const said = text.match(/(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{2})?)/);
+  if (said) {
+    const value = Number(said[1].replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+    if (value >= 10 && Math.abs(value - target.total) > 1) {
+      return `🤔 A fatura de ${invoiceLabel(card)} (vence ${target.dueDate.slice(8, 10)}/${target.dueDate.slice(5, 7)}) dá ${brl(target.total)}, e você falou ${brl(value)}. Não dei baixa. Confira e mande de novo.`;
+    }
+  }
 
   const { ids, total } = await payInvoice(card, target.dueDate);
   lastInvoicePayment = { ids, at: Date.now() };
