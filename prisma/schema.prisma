@@ -363,3 +363,19 @@ model WorkSnippet {
   sortOrder Int      @default(0)
   updatedAt DateTime @updatedAt
 }
+
+/// CRM do WhatsApp Web (extensão): um contato por conversa. key = nome/número
+/// como aparece no topo da conversa (normalizado). Notas com CPF mascarado.
+model WorkContact {
+  id           String    @id @default(cuid())
+  key          String    @unique
+  name         String    @default("")
+  labels       String[]  @default([])
+  notes        String    @default("")
+  /// Chamados ligados a esta pessoa (nº normalizados).
+  tickets      String[]  @default([])
+  reminderAt   DateTime?
+  reminderText String    @default("")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}

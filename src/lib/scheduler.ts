@@ -114,6 +114,17 @@ export function startScheduler(): void {
         }
       }
 
+      // Lembretes do CRM do WhatsApp Web ("retornar para fulano às 10h").
+      if (config.ownerPhone) {
+        try {
+          const { dueContactReminders } = await import("./work-crm");
+          for (const msg of await dueContactReminders())
+            await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
+        } catch (err) {
+          console.error("Erro nos lembretes de contato:", err);
+        }
+      }
+
       // Grupo do erro dos chamados com texto (Jev, poucos por minuto).
       try {
         const { classifyPendingGroups } = await import("./work-groups");

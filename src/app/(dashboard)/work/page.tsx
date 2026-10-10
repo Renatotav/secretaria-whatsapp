@@ -195,6 +195,69 @@ function AdjustPrazo({ t, onSave }: { t: Ticket; onSave: (d: { receivedAt: strin
   );
 }
 
+type Contact = { id: string; name: string; labels: string[]; notes: string; tickets: string[]; reminderAt: string | null; reminderText: string; updatedAt: string };
+
+/** 👥 Contatos do CRM do WhatsApp Web (a edição é feita no próprio WhatsApp Web). */
+function ContactsList({ links }: { links: Links }) {
+  const [rows, setRows] = useState<Contact[] | null>(null);
+  const [q, setQ] = useState("");
+  const load = useCallback(() => {
+    fetch("/api/work/contacts").then(async (r) => r.ok && setRows((await r.json()).contacts));
+  }, []);
+  useEffect(load, [load]);
+  async function remove(id: string) {
+    if (!confirm("Apagar este contato do CRM (notas, etiquetas e lembrete)?")) return;
+    await fetch("/api/work/contacts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    load();
+  }
+  const filtered = (rows ?? []).filter((c) => !q || `${c.name} ${c.labels.join(" ")} ${c.notes} ${c.tickets.join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>👥 Contatos (CRM do WhatsApp Web)</div>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+        Notas, etiquetas, chamados e lembretes de cada contato. Edite no WhatsApp Web, pelo painel 👥 da extensão.
+      </p>
+      <input placeholder="🔎 Buscar nome, etiqueta, nota ou chamado" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
+      {rows === null && <div style={{ fontSize: 12 }}>Carregando…</div>}
+      {rows && !filtered.length && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Nenhum contato ainda.</div>}
+      <div style={{ display: "grid", gap: 8 }}>
+        {filtered.map((c) => (
+          <div key={c.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, fontSize: 12, display: "grid", gap: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <strong style={{ fontSize: 13 }}>{c.name}</strong>
+              <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 7px" }} onClick={() => remove(c.id)}>
+                Apagar
+              </button>
+            </div>
+            {!!c.labels.length && (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {c.labels.map((l) => (
+                  <span key={l} style={{ fontSize: 10, padding: "1px 7px", borderRadius: 999, border: "1px solid var(--border)" }}>
+                    🏷️ {l}
+                  </span>
+                ))}
+              </div>
+            )}
+            {!!c.tickets.length && (
+              <div>
+                Chamados:{" "}
+                {c.tickets.map((t, i) => (
+                  <span key={t}>
+                    {i > 0 && ", "}
+                    <TicketLink id={t} links={links} size={12} />
+                  </span>
+                ))}
+              </div>
+            )}
+            {c.reminderAt && <div>⏰ {new Date(c.reminderAt).toLocaleString("pt-BR")} {c.reminderText}</div>}
+            {c.notes && <div style={{ whiteSpace: "pre-wrap", color: "var(--text-muted)" }}>{c.notes.length > 300 ? c.notes.slice(0, 300) + "…" : c.notes}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type Snippet = { shortcut: string; title: string; body: string };
 
 /** ⌨️ Atalhos de texto: "/padrao" vira o texto em qualquer campo (extensão). */
@@ -375,6 +438,7 @@ export default function WorkPage() {
   const [situations, setSituations] = useState<Situation[]>(DEFAULT_SITUATIONS);
   const [showSituations, setShowSituations] = useState(false);
   const [showSnippets, setShowSnippets] = useState(false);
+  const [showContacts, setShowContacts] = useState(false);
   const [sync, setSync] = useState<{ pending: boolean; syncedAt: string | null } | null>(null);
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
@@ -516,6 +580,9 @@ export default function WorkPage() {
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSnippets((v) => !v)}>
           ⌨️ Atalhos
         </button>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowContacts((v) => !v)}>
+          👥 Contatos
+        </button>
         <button
           className="btn-ghost"
           disabled={!!sync?.pending}
@@ -548,6 +615,7 @@ export default function WorkPage() {
           </p>
         )}
       {showSnippets && <SnippetsEditor />}
+      {showContacts && <ContactsList links={links} />}
       {showSituations && <SituationsEditor list={situations} onSaved={(l) => { setSituations(l); load(); }} />}
 
       {showPhone && (
