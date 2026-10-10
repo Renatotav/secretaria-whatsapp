@@ -110,7 +110,7 @@ export function GoalsSection() {
         </div>
       )}
 
-      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+      <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))" }}>
         {goals.map((g) => {
           const percent = Math.min((g.currentAmount / g.targetAmount) * 100, 100);
           const conquered = g.currentAmount >= g.targetAmount;

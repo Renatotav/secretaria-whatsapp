@@ -755,7 +755,7 @@ export default function WorkPage() {
 
       <input placeholder="🔎 Buscar por número ou tipo de erro" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", marginBottom: 12 }} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: 10 }}>
         {[...tickets].sort((a, b) => priority(a, situations) - priority(b, situations)).map((t) => {
           const al = alertsFor(t, situations);
           return (

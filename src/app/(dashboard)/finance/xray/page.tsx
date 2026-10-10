@@ -106,7 +106,7 @@ function XRayContent() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", alignItems: "start" }}>
+          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", alignItems: "start" }}>
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>💰 Gastos por Subcategoria</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

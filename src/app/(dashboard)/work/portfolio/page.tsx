@@ -34,7 +34,7 @@ const fmtDias = (d: number | null) => (d === null ? "—" : d < 2 ? `${Math.roun
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div style={{ ...card, flex: "1 1 150px", minWidth: 0 }}>
+    <div style={{ ...card, flex: "1 1 140px", minWidth: 0 }}>
       <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {hint && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{hint}</div>}
@@ -221,7 +221,7 @@ export default function PortfolioPage() {
               <MonthlyChart meses={data.meses} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(320px, 100%), 1fr))", gap: 16 }}>
               <div style={{ ...card, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Por equipe / fila</div>
                 {data.equipes.length ? <Bars rows={data.equipes} color="var(--warning)" /> : <Empty />}

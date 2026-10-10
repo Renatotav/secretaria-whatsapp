@@ -104,7 +104,7 @@ export default function WishlistPage() {
       {loading && <div style={{ color: "var(--text-muted)" }}>Carregando...</div>}
       {!loading && active.length === 0 && <div style={{ color: "var(--text-muted)" }}>Nenhum desejo na lista. No WhatsApp: &quot;quero comprar um tênis de 300 em 3x&quot;.</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(280px, 100%), 1fr))", gap: 10 }}>
         {active.map((w) => (
           <div key={w.id} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
