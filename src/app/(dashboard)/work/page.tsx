@@ -195,6 +195,57 @@ function AdjustPrazo({ t, onSave }: { t: Ticket; onSave: (d: { receivedAt: strin
   );
 }
 
+type Snippet = { shortcut: string; title: string; body: string };
+
+/** ⌨️ Atalhos de texto: "/padrao" vira o texto em qualquer campo (extensão). */
+function SnippetsEditor() {
+  const [rows, setRows] = useState<Snippet[] | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    fetch("/api/work/snippets").then(async (r) => r.ok && setRows((await r.json()).snippets));
+  }, []);
+  const set = (i: number, patch: Partial<Snippet>) => setRows((r) => (r ?? []).map((x, k) => (k === i ? { ...x, ...patch } : x)));
+  async function save() {
+    const res = await fetch("/api/work/snippets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ snippets: rows }) });
+    const data = await res.json();
+    if (!res.ok) return setMsg(data.error || "Não consegui salvar.");
+    setRows(data.snippets);
+    setMsg(`✅ Salvo (${data.snippets.length} atalho(s)). A extensão pega em até 10 minutos — ou clique em ⚡ › Atualizar atalhos.`);
+  }
+  return (
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>⌨️ Atalhos de texto</div>
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
+        Digite o atalho em qualquer campo (Assyst, WhatsApp Web, e-mail, Redmine) e ele vira o texto. Campos automáticos: <code>{"{chamado}"}</code> nº do chamado
+        aberto · <code>{"{saudacao}"}</code> Bom dia/Boa tarde/Boa noite · <code>{"{data}"}</code> · <code>{"{hora}"}</code> · <code>{"{campo:Nome do usuário}"}</code>{" "}
+        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica.
+      </p>
+      {rows === null && <div style={{ fontSize: 12 }}>Carregando…</div>}
+      {rows?.map((r, i) => (
+        <div key={i} style={{ display: "grid", gap: 6, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <input aria-label="Atalho" value={r.shortcut} onChange={(e) => set(i, { shortcut: e.target.value })} placeholder="/atalho" style={{ width: 130, fontFamily: "monospace" }} />
+            <input aria-label="Nome" value={r.title} onChange={(e) => set(i, { title: e.target.value })} placeholder="Nome (ex: Mensagem padrão)" style={{ flex: "1 1 200px" }} />
+            <button className="btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setRows((x) => (x ?? []).filter((_, k) => k !== i))}>
+              Remover
+            </button>
+          </div>
+          <textarea aria-label="Texto" value={r.body} onChange={(e) => set(i, { body: e.target.value })} rows={Math.min(10, Math.max(3, r.body.split("\n").length + 1))} style={{ width: "100%", fontSize: 12 }} />
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "5px 10px" }} onClick={() => setRows((x) => [...(x ?? []), { shortcut: "/novo", title: "", body: "" }])}>
+          + Atalho
+        </button>
+        <button className="btn-primary" style={{ fontSize: 12, padding: "5px 12px" }} onClick={save}>
+          Salvar
+        </button>
+        <span style={{ fontSize: 12 }}>{msg}</span>
+      </div>
+    </div>
+  );
+}
+
 /** Editor da lista de situações (nome, emoji, cor, pausa o prazo, quando pulsa). */
 function SituationsEditor({ list, onSaved }: { list: Situation[]; onSaved: (l: Situation[]) => void }) {
   const [rows, setRows] = useState<Situation[]>(list);
@@ -323,6 +374,7 @@ export default function WorkPage() {
   const [prod, setProd] = useState<Prod | null>(null);
   const [situations, setSituations] = useState<Situation[]>(DEFAULT_SITUATIONS);
   const [showSituations, setShowSituations] = useState(false);
+  const [showSnippets, setShowSnippets] = useState(false);
   const [sync, setSync] = useState<{ pending: boolean; syncedAt: string | null } | null>(null);
   const [error, setError] = useState("");
   const [importMsg, setImportMsg] = useState("");
@@ -461,6 +513,9 @@ export default function WorkPage() {
         <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSituations((v) => !v)}>
           🏷️ Situações
         </button>
+        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSnippets((v) => !v)}>
+          ⌨️ Atalhos
+        </button>
         <button
           className="btn-ghost"
           disabled={!!sync?.pending}
@@ -492,6 +547,7 @@ export default function WorkPage() {
             </a>
           </p>
         )}
+      {showSnippets && <SnippetsEditor />}
       {showSituations && <SituationsEditor list={situations} onSaved={(l) => { setSituations(l); load(); }} />}
 
       {showPhone && (

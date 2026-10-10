@@ -352,3 +352,14 @@ model WorkSituationLog {
 
   @@index([ticketId])
 }
+
+/// Atalhos de texto da Central do Atendente ("/padrao" vira a mensagem inteira).
+/// Campos: {chamado} {saudacao} {data} {hora} {campo:Rótulo}. Texto no banco, não no repositório.
+model WorkSnippet {
+  id        String   @id @default(cuid())
+  shortcut  String   @unique
+  title     String   @default("")
+  body      String
+  sortOrder Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
