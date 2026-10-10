@@ -267,7 +267,7 @@ export async function workProductivity() {
   const since = new Date(Date.now() - 30 * 86400_000);
   const closed = await prisma.workTicket.findMany({
     where: { status: { in: ["resolvido", "escalado"] }, resolvedAt: { gte: since } },
-    select: { status: true, openedAt: true, resolvedAt: true },
+    select: { status: true, openedAt: true, receivedAt: true, resolvedAt: true, tmrHours: true },
   });
   const key = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10); // dia em Brasília
   const days: { dia: string; resolvidos: number; redmine: number }[] = [];
@@ -276,7 +276,11 @@ export async function workProductivity() {
     const d = days.find((x) => x.dia === key(t.resolvedAt!));
     if (d) t.status === "resolvido" ? d.resolvidos++ : d.redmine++;
   }
-  const spans = closed.filter((t) => t.openedAt && t.resolvedAt! > t.openedAt).map((t) => (t.resolvedAt!.getTime() - t.openedAt!.getTime()) / 3600_000);
+  // Mesmo número do painel de produtividade: TMR exclusivo do escala (tempo com ele).
+  const withTmr = closed.filter((t) => t.tmrHours !== null && t.tmrHours !== undefined);
+  const spans = withTmr.length
+    ? withTmr.map((t) => t.tmrHours!)
+    : closed.filter((t) => (t.receivedAt ?? t.openedAt) && t.resolvedAt! > (t.receivedAt ?? t.openedAt)!).map((t) => (t.resolvedAt!.getTime() - (t.receivedAt ?? t.openedAt)!.getTime()) / 3600_000);
   const tmrHoras = spans.length ? Math.round((spans.reduce((a, b) => a + b, 0) / spans.length) * 10) / 10 : null;
   return { dias: days, total: closed.length, tmrHoras };
 }

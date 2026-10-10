@@ -89,13 +89,14 @@ type Prod = { dias: { dia: string; resolvidos: number; redmine: number }[]; tota
 /** Barras dos últimos 30 dias (resolvidos + Redmine), com o tempo médio. */
 function ProductivityChart({ p }: { p: Prod }) {
   const max = Math.max(1, ...p.dias.map((d) => d.resolvidos + d.redmine));
-  const W = 600, H = 120, bw = W / p.dias.length;
+  // viewBox largo: no computador as letras não ficam gigantes.
+  const W = 900, H = 120, bw = W / p.dias.length;
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>📈 Sua produtividade — últimos 30 dias</div>
         <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {p.total} fechado(s){p.tmrHoras !== null ? ` · tempo médio ${p.tmrHoras < 48 ? `${p.tmrHoras}h` : `${Math.round(p.tmrHoras / 24)} dias`}` : ""}
+          {p.total} fechado(s){p.tmrHoras !== null ? ` · tempo médio com você ${p.tmrHoras < 48 ? `${p.tmrHoras} h` : `${Math.round(p.tmrHoras / 24)} dias`}` : ""}
         </div>
       </div>
       <svg viewBox={`0 0 ${W} ${H + 18}`} width="100%" role="img" aria-label="Chamados fechados por dia">
@@ -107,7 +108,7 @@ function ProductivityChart({ p }: { p: Prod }) {
               <rect x={i * bw + 2} y={H - hr} width={bw - 4} height={hr} rx={2} fill="var(--success)" />
               <rect x={i * bw + 2} y={H - hr - hm} width={bw - 4} height={hm} rx={2} fill="var(--accent)" />
               {i % 5 === 0 && (
-                <text x={i * bw + bw / 2} y={H + 14} fontSize={10} textAnchor="middle" fill="var(--text-muted)">
+                <text x={i === 0 ? 2 : i * bw + bw / 2} y={H + 14} fontSize={11} textAnchor={i === 0 ? "start" : "middle"} fill="var(--text-muted)">
                   {d.dia.slice(8, 10)}/{d.dia.slice(5, 7)}
                 </text>
               )}
@@ -565,39 +566,50 @@ export default function WorkPage() {
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
     <div style={{ padding: 20, maxWidth: 1100 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700 }}>💼 Trabalho — Central do Atendente</h1>
-        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowKey((v) => !v)}>🔑 Chave da extensão</button>
-        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowPhone((v) => !v)}>
-          📱 Celular do trabalho{phoneLinked ? " ✅" : ""}
-        </button>
-        <a href="/work/portfolio" className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }}>
-          📊 Minha produtividade
-        </a>
-        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSituations((v) => !v)}>
-          🏷️ Situações
-        </button>
-        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowSnippets((v) => !v)}>
-          ⌨️ Atalhos
-        </button>
-        <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => setShowContacts((v) => !v)}>
-          👥 Contatos
-        </button>
-        <button
-          className="btn-ghost"
-          disabled={!!sync?.pending}
-          title={sync?.syncedAt ? `Última cópia do escala: ${new Date(sync.syncedAt).toLocaleString("pt-BR")}` : "Copiar agora os seus chamados do escala"}
-          style={{ fontSize: 12, padding: "6px 10px" }}
-          onClick={requestSync}
-        >
-          {sync?.pending ? "⏳ Atualizando… (até 1 min)" : "🔄 Atualizar do escala"}
-          {!sync?.pending && sync?.syncedAt ? (
-            <span style={{ color: "var(--text-muted)" }}> · {new Date(sync.syncedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
-          ) : null}
-        </button>
+      {/* Topo: título + as 2 ações do dia a dia; o resto fica em "⚙️ Ferramentas". */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, textWrap: "balance" }}>💼 Trabalho</h1>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            className="btn-ghost"
+            disabled={!!sync?.pending}
+            title={sync?.syncedAt ? `Última cópia do escala: ${new Date(sync.syncedAt).toLocaleString("pt-BR")}` : "Copiar agora os seus chamados do escala"}
+            style={{ fontSize: 12, padding: "6px 10px", whiteSpace: "nowrap" }}
+            onClick={requestSync}
+          >
+            {sync?.pending ? "⏳ Atualizando…" : "🔄 Atualizar do escala"}
+            {!sync?.pending && sync?.syncedAt ? (
+              <span style={{ color: "var(--text-muted)" }}> · {new Date(sync.syncedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+            ) : null}
+          </button>
+          <a href="/work/portfolio" className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px", whiteSpace: "nowrap" }}>
+            📊 Produtividade
+          </a>
+          <details className="tools-menu" style={{ position: "relative" }}>
+            <summary className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px", listStyle: "none", cursor: "pointer", whiteSpace: "nowrap" }}>
+              ⚙️ Ferramentas ▾
+            </summary>
+            <div
+              style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20, minWidth: 220, display: "grid", gap: 2, padding: 6, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.35)" }}
+              onClick={(e) => (e.currentTarget.parentElement as HTMLDetailsElement).removeAttribute("open")}
+            >
+              {[
+                { label: "⌨️ Atalhos de texto", on: () => setShowSnippets((v) => !v) },
+                { label: "👥 Contatos (CRM)", on: () => setShowContacts((v) => !v) },
+                { label: "🏷️ Situações", on: () => setShowSituations((v) => !v) },
+                { label: `📱 Celular do trabalho${phoneLinked ? " ✅" : ""}`, on: () => setShowPhone((v) => !v) },
+                { label: "🔑 Chave da extensão", on: () => setShowKey((v) => !v) },
+              ].map((x) => (
+                <button key={x.label} className="btn-ghost" style={{ fontSize: 12, padding: "7px 10px", textAlign: "left", border: 0 }} onClick={x.on}>
+                  {x.label}
+                </button>
+              ))}
+            </div>
+          </details>
+        </div>
       </div>
-      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
-        Chamados do PJe. A descrição é guardada com CPF mascarado (xxx.xxx.xxx-xx) e sem telefone/e-mail, e não passa pela IA.
+      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16, maxWidth: "70ch" }}>
+        Central do Atendente PJe. A descrição dos chamados é guardada com CPF mascarado e sem telefone/e-mail.
       </p>
 
       {showKey && (

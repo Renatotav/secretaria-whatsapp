@@ -246,3 +246,7 @@ button {
 @keyframes pulsar-suave { 50% { opacity: 0.55; } }
 .pulsar { animation: pulsar-suave 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 @media (prefers-reduced-motion: reduce) { .pulsar { animation: none; } }
+
+/* Menu "⚙️ Ferramentas" da aba Trabalho (details/summary sem o triângulo). */
+.tools-menu > summary::-webkit-details-marker { display: none; }
+.tools-menu > summary::marker { content: ""; }

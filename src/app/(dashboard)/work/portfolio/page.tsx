@@ -139,8 +139,8 @@ function Bars({ rows, color }: { rows: { nome: string; n: number }[]; color: str
   return (
     <div style={{ display: "grid", gap: 6 }}>
       {rows.map((r) => (
-        <div key={r.nome} style={{ display: "grid", gridTemplateColumns: "minmax(0, 42%) 1fr auto", gap: 8, alignItems: "center", fontSize: 12 }}>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
+        <div key={r.nome} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(48px, 1fr) auto", gap: 8, alignItems: "center", fontSize: 12 }}>
+          <span title={r.nome} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
           <span style={{ height: 10, background: "var(--bg-hover)", borderRadius: 5 }}>
             <span style={{ display: "block", height: "100%", width: `${(r.n / max) * 100}%`, background: color, borderRadius: 5 }} />
           </span>

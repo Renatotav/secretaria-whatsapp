@@ -26,13 +26,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+    // Tela estreita (celular): o menu começa recolhido (só ícones), senão o
+    // conteúdo fica espremido. Mesmo design; ele ainda pode abrir pelo ›.
+    let saved: string | null = null;
+    try {
+      saved = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    } catch {}
+    const narrow = window.matchMedia("(max-width: 760px)").matches;
+    setCollapsed(narrow ? saved !== "0" || sessionStorage.getItem("sidebar_open_mobile") !== "1" : saved === "1");
   }, []);
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
       const next = !prev;
-      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
+        // No celular, abrir o menu vale só até fechar a aba.
+        sessionStorage.setItem("sidebar_open_mobile", next ? "0" : "1");
+      } catch {}
       return next;
     });
   }
