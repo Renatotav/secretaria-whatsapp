@@ -1449,7 +1449,9 @@ async function applyInvoicePayment(text: string): Promise<string | null> {
     for (const line of lines) {
       const r = await applyInvoicePayment(line);
       if (r) replies.push(r.replace(/\n↩️ Foi engano\? Responda \*desfazer\*\./, "").replace(/\nAinda em aberto:[\s\S]*$/, ""));
-      if (lastInvoicePayment) allIds.push(...lastInvoicePayment.ids);
+      // (o TypeScript não vê que a chamada acima muda a variável)
+      const paid = lastInvoicePayment as { ids: string[]; at: number } | null;
+      if (paid) allIds.push(...paid.ids);
       lastInvoicePayment = null;
     }
     lastInvoicePayment = { ids: [...new Set(allIds)], at: Date.now() };
