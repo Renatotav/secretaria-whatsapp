@@ -1434,7 +1434,7 @@ let lastInvoicePayment: { ids: string[]; at: number } | null = null;
 // em "pago" ("Cartão Santander pago", "Meu cartão 3880,57 pago"). Frases como
 // "almoço 30 pago no cartão" são gasto, não pagamento de fatura.
 const INVOICE_PAID_RE =
-  /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\bfatura\b|\bfatura\b.*\b(paga|pago|paguei|quitada|transferi)\b|^\s*(?:o\s+)?(?:meu\s+)?cart[aã]o\b[^\n]*\b(?:pago|paga|quitad[ao])\s*[.!]?\s*$/im;
+  /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\bfatura\b|\bfatura\b.*\b(paga|pago|paguei|quitada|transferi)\b|\b(?:paguei|quitei|transferi)\b\s+(?:a\s+fatura\s+d[oe]\s+|o\s+)?cart[aã]o\b|^\s*(?:o\s+)?(?:meu\s+)?cart[aã]o\b[^\n]*\b(?:pago|paga|quitad[ao])\s*[.!]?\s*$/im;
 
 /**
  * "Paguei a fatura" / "transferi a fatura do Santander": dá baixa em todas as
@@ -1617,7 +1617,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   if (!config || !config.ownerPhone) return;
 
   // Resposta com o valor que faltava ("25") completa a frase anterior.
-  joinedText = takeAmountReply(joinedText) ?? joinedText;
+  // (Com um print ou nota esperando resposta, o número é para eles.)
+  if (!pendingImageDraft && !pendingInvoiceDraft) joinedText = takeAmountReply(joinedText) ?? joinedText;
 
   // "sim"/"não" para o gasto alto que estava esperando confirmação.
   if (pendingHighValue) {
@@ -1714,12 +1715,14 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     case "finance": {
       // Sem valor ("gastei com uber"): não grava, pergunta e espera a resposta.
       if (!(route.amount > 0)) {
-        if (Date.now() - imageArrivedAt < IMAGE_NOTE_WINDOW_MS && route.financeType !== "income") {
+        if ((imageReading || pendingImageDraft) && Date.now() - imageArrivedAt < IMAGE_NOTE_WINDOW_MS && route.financeType !== "income") {
           imageNote = { description: route.description || "", category: route.category || "", subcategory: route.subcategory || "", at: Date.now() };
           if (pendingImageDraft) {
             // O print já foi lido: ajusta o cartão e pergunta de novo.
             applyNoteToReading(pendingImageDraft.reading);
             pendingImageDraft.at = Date.now();
+            // Ele descreveu um gasto: não é mais a pergunta "é o pagamento da fatura?".
+            pendingImageDraft.invoice = undefined;
             response = `📝 Juntei com o print:\n\n${entryCard(imageDraftEntry(pendingImageDraft.reading, config), "🧐 Lançar assim?")}\n\nResponda *sim* para salvar ou *não* para descartar.`;
           } else {
             response = "📸 Beleza, junto essa descrição com o print que estou lendo. Já te mostro.";
@@ -1775,6 +1778,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
         const today = cardPurchaseDate;
         const compraEm = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}`;
         lastSaved = { since: new Date() };
+        pendingInvoiceDraft = null;
         lastInvoicePayment = null;
         await saveStatementEntries(
           config,
@@ -1850,6 +1854,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           if (finalMood === "neutro") finalMood = await diaryMoodOn(spentOn);
 
           lastSaved = { since: new Date() };
+          pendingInvoiceDraft = null;
           lastInvoicePayment = null;
           const created = await prisma.financeEntry.create({
             data: {
@@ -2013,14 +2018,15 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
       response = await answerChat(joinedText, recentContext, config.ownerName, providerOpts);
       break;
     case "diary": {
-      const ask = pendingMoodAsk && Date.now() - pendingMoodAsk.at < 30 * 60 * 1000 ? pendingMoodAsk : null;
+      // Só vale como resposta logo depois da pergunta e se ele não falou de "hoje".
+      const ask = pendingMoodAsk && Date.now() - pendingMoodAsk.at < 10 * 60 * 1000 && !/\bhoje\b/i.test(joinedText) ? pendingMoodAsk : null;
       pendingMoodAsk = null;
       await prisma.diaryEntry.create({
         data: {
           content: route.content,
           mood: route.mood,
           source: "whatsapp",
-          // Resposta à pergunta do humor da nota: dia da compra, meio-dia BRT.
+          // Resposta à pergunta do humor da nota: dia da compra, 15:00 BRT.
           ...(ask ? { date: new Date(ask.day.getTime() + 15 * 3600_000) } : {}),
         },
       });
@@ -2641,11 +2647,13 @@ const CONFIRM_YES_RE = /^(sim|s|isso|pode|pode sim|pode salvar|confirma|confirmo
 // do lançamento do print.
 const IMAGE_NOTE_WINDOW_MS = 3 * 60 * 1000;
 let imageArrivedAt = 0;
+let imageReading = false; // a IA ainda está lendo um print sem legenda
 let imageNote: { description: string; category: string; subcategory: string; at: number } | null = null;
 
 /** Chamado pelo webhook assim que chega um print sem legenda no canal pessoal. */
 export function noteImageArriving(): void {
   imageArrivedAt = Date.now();
+  imageReading = true;
   imageNote = null;
 }
 
@@ -2669,6 +2677,16 @@ const CONFIRM_NO_RE = /^(n[aã]o|nao|cancela|deixa|esquece)[.!]*$/i;
  * "Confirma?" (nada é gravado sem o "sim"); outra coisa é explicada.
  */
 export async function handleSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
+  try {
+    await readSmartImage(base64, mimetype, caption);
+  } finally {
+    imageReading = false;
+    // Sem cartão de print esperando, um texto depois disso é mensagem normal.
+    if (!pendingImageDraft) imageArrivedAt = 0;
+  }
+}
+
+async function readSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
   const { readImage } = await import("./personal-router");
@@ -2762,6 +2780,7 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
   }
   const d = imageDraftEntry(reading, config);
   lastSaved = { since: new Date() };
+  pendingInvoiceDraft = null;
   lastInvoicePayment = null;
 
   if (reading.installments && d.type === "expense" && d.paymentMethod === "cartão") {
@@ -2939,10 +2958,15 @@ async function applyInvoiceDraftReply(text: string, config: AgentConfig): Promis
   }
   const m = t.match(/^(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{1,2})?)$/i);
   if (!CONFIRM_YES_RE.test(t) && !m) return null;
-  pendingInvoiceDraft = null;
   const inv = draft.invoice;
-  if (m) inv.total = Number(m[1].replace(/\.(?=\d{3})/g, "").replace(",", "."));
   const sum = inv.items.reduce((acc, i) => acc + (i.amount || i.quantity * i.unitPrice), 0);
+  if (m) {
+    const total = Number(m[1].replace(/\.(?=\d{3})/g, "").replace(",", "."));
+    // "2" (resposta do pix/cartão de outro gasto) não é o total da nota.
+    if (!(total >= sum * 0.5 && total <= sum * 2)) return null;
+    inv.total = total;
+  }
+  pendingInvoiceDraft = null;
   const gap = Math.round((inv.total - sum) * 100) / 100;
   if (Math.abs(gap) >= 0.01) {
     inv.items.push({ name: gap > 0 ? "Itens não lidos" : "Desconto / ajuste", category: "Desconto / Ajuste", quantity: 1, unitPrice: gap, amount: gap });

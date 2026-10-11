@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { isAuthenticated } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { searchParams } = new URL(req.url);
     const month = searchParams.get("month") || "default";
@@ -19,6 +21,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { category, amount, month } = await req.json();
     const targetMonth = month || "default";
@@ -50,6 +53,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id } = await req.json();
     await prisma.budget.delete({ where: { id } });

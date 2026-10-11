@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { isAuthenticated } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateResponse } from "@/lib/openai";
 
 export async function GET(request: Request) {
+  if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month");

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { isAuthenticated } from "@/lib/auth";
 import { listOpenInvoices, payInvoice } from "@/lib/invoices";
 
 // Faturas em aberto, uma por cartão e vencimento.
-export async function GET() {
+export async function GET(request: Request) {
+  if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     return NextResponse.json(await listOpenInvoices());
   } catch (error) {
@@ -12,6 +14,7 @@ export async function GET() {
 
 // "Marcar como paga": dá baixa em todas as compras da fatura de uma vez.
 export async function POST(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { card, dueDate } = await req.json();
     if (typeof dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {

@@ -682,6 +682,20 @@ Formato esperado:
     const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
     const parsed = JSON.parse(json) as InvoiceEntry;
     if (!parsed.items || !Array.isArray(parsed.items)) return null;
+    // A IA às vezes manda "6,99" (texto) ou null: tudo vira número aqui, senão a
+    // soma vira NaN e a conferência "conta fechou?" passa sem perceber.
+    const num = (v: unknown) => {
+      const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+      return Number.isFinite(n) ? n : 0;
+    };
+    parsed.total = num(parsed.total);
+    if (!(parsed.total > 0)) return null;
+    parsed.itemCount = num(parsed.itemCount);
+    parsed.items = parsed.items.map((i) => {
+      const quantity = num(i.quantity) || 1;
+      const unitPrice = num(i.unitPrice);
+      return { ...i, name: String(i.name || "Item"), quantity, unitPrice, amount: num(i.amount) || Math.round(quantity * unitPrice * 100) / 100 };
+    });
     return parsed;
   } catch (err) {
     console.error("[invoice] falha ao parsear JSON:", err);

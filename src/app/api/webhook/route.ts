@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { bufferMessage } from "@/lib/debounce";
 import {
@@ -26,7 +27,21 @@ export async function GET() {
   return NextResponse.json({ status: "webhook online" });
 }
 
+/** Só a Evolution conhece a chave (cabeçalho x-webhook-token). Sem chave cadastrada, ainda aceita. */
+async function fromEvolution(request: Request): Promise<boolean> {
+  const cfg = await prisma.agentConfig.findFirst({ select: { webhookToken: true } });
+  const expected = cfg?.webhookToken || "";
+  if (!expected) return true;
+  const got = Buffer.from(request.headers.get("x-webhook-token") || "");
+  const want = Buffer.from(expected);
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
 export async function POST(request: Request) {
+  if (!(await fromEvolution(request))) {
+    console.warn("[webhook] chamada recusada: sem a chave da Evolution");
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   try {
     const body = await request.json();
     console.log("[webhook] evento recebido:", body.event);
@@ -133,6 +148,8 @@ export async function POST(request: Request) {
       const isInvoice = !isStatement && (caption.includes("nota") || caption.includes("mercado") || caption.includes("recibo") || caption.includes("cupom"));
       
       console.log(`[webhook] imagem recebida no canal pessoal (isInvoice=${isInvoice})`);
+      // Antes de baixar: um texto que chegue durante o download já sabe do print.
+      if (!isStatement && !isInvoice) noteImageArriving();
       try {
         const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "imageMessage", "image/jpeg");
         if (base64) {
@@ -143,7 +160,6 @@ export async function POST(request: Request) {
           } else if (isInvoice) {
             await handleInvoiceImage(base64, mimetype, caption);
           } else {
-            noteImageArriving();
             await handleSmartImage(base64, mimetype, caption);
           }
         } else {

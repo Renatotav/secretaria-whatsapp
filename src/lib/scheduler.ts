@@ -143,14 +143,16 @@ export function startScheduler(): void {
       // Janela 08:00–08:59 (se o minuto exato passar com o servidor ocupado, não perde o dia).
       if (weekday && hhmm >= "08:00" && hhmm < "09:00" && lastWorkBriefDate !== todayDate && config.workBriefDate !== todayDate && config.ownerPhone) {
         lastWorkBriefDate = todayDate;
+        let sent = false;
         try {
           const { buildWorkBriefing } = await import("./work");
           const msg = await buildWorkBriefing(true);
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
-          // Só marca o dia depois de enviar: se falhar, tenta de novo no próximo minuto da janela.
+          sent = true;
+          // Só marca o dia depois de enviar: se o ENVIO falhar, tenta de novo no próximo minuto da janela.
           await prisma.agentConfig.update({ where: { id: config.id }, data: { workBriefDate: todayDate } });
         } catch (err) {
-          lastWorkBriefDate = "";
+          if (!sent) lastWorkBriefDate = "";
           console.error("Erro no briefing do trabalho:", err);
         }
       }

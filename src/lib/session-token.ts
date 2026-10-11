@@ -1,6 +1,6 @@
 /**
  * Token de sessão assinado: "<expira em ms>.<HMAC-SHA256 hex>". O segredo só
- * existe no servidor (SESSION_SECRET, ou a própria ADMIN_PASSWORD), então não
+ * existe no servidor (SESSION_SECRET, ou ADMIN_PASSWORD + DATABASE_URL), então não
  * dá pra forjar o cookie lendo o código — antes o valor era fixo
  * ("authenticated") e o repositório é público.
  *
@@ -10,7 +10,9 @@ export const SESSION_COOKIE = "agent_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 dias
 
 function sessionSecret(): string {
-  return process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || "admin";
+  // Sem SESSION_SECRET, a senha sozinha é fraca demais como chave: junta a
+  // DATABASE_URL (que tem a senha do banco e nunca vai para o repositório).
+  return process.env.SESSION_SECRET || `${process.env.ADMIN_PASSWORD || "admin"}|${process.env.DATABASE_URL || ""}`;
 }
 
 async function sign(payload: string): Promise<string> {

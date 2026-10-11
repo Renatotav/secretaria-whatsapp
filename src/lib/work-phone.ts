@@ -48,11 +48,24 @@ export function findTicketInText(text: string): string | null {
 }
 
 /** Vínculo: no painel ele gera um código e manda "vincular 1234" do celular institucional. */
+let pairFails = 0;
+
 export async function tryPairWorkPhone(config: AgentConfig, phone: string, text: string): Promise<boolean> {
   const m = text.match(PAIR_RE);
   if (!m || !config.workPairCode) return false;
   const [code, until] = config.workPairCode.split("|");
-  if (code !== m[1] || Date.now() > Number(until)) return false;
+  if (Date.now() > Number(until)) return false;
+  if (code !== m[1]) {
+    // Código de 4 dígitos: 3 erros e ele deixa de valer (é preciso gerar outro no painel).
+    pairFails += 1;
+    if (pairFails >= 3) {
+      pairFails = 0;
+      await prisma.agentConfig.update({ where: { id: config.id }, data: { workPairCode: "" } });
+      await notifyOwner(config, "📱 3 tentativas erradas do código de vínculo do celular do trabalho: cancelei o código. Se foi você, gere outro no painel (💼 Trabalho › Ferramentas › Celular).");
+    }
+    return true; // não segue para o CRM
+  }
+  pairFails = 0;
   await prisma.agentConfig.update({ where: { id: config.id }, data: { workPhone: phone, workPairCode: "" } });
   await notifyOwner(config, "📱 Celular institucional vinculado! Agora é só encaminhar a conversa do usuário para cá com \"chamado 1234567\" no meio.");
   return true;

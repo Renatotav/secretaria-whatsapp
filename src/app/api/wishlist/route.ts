@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { isAuthenticated } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkWish } from "@/lib/message-handlers";
 
 // Lista de desejos: itens com o veredito "cabe agora?" (mesma conta do
 // "posso comprar?" do WhatsApp).
-export async function GET() {
+export async function GET(request: Request) {
+  if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const wishes = await prisma.wishItem.findMany({ orderBy: [{ status: "desc" }, { createdAt: "asc" }] });
     const withVerdict = [];
@@ -18,6 +20,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const body = await req.json();
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -41,6 +44,7 @@ export async function POST(req: Request) {
 
 // Comprei / desisti / voltar para a lista.
 export async function PATCH(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id, status } = await req.json();
     if (!id || !["wish", "bought", "dropped"].includes(status)) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
@@ -51,6 +55,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!(await isAuthenticated(req))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   try {
     const { id } = await req.json();
     await prisma.wishItem.delete({ where: { id } });
