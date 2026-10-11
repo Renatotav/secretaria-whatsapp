@@ -617,6 +617,8 @@ export interface InvoiceEntry {
   paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro" | "ticket";
   account: string;
   status: "paid" | "pending";
+  /** "Qtde. Total de Itens" impresso no cupom (0 = não tem). */
+  itemCount?: number;
   items: InvoiceItemEntry[];
 }
 
@@ -650,6 +652,12 @@ Para CADA linha de produto/serviço, extraia:
 - unitPrice: valor unitário do item (número)
 - amount: valor total pago pelo item (número, com desconto já deduzido do item se houver "desconto sobre item").
 ATENÇÃO PARA DESCONTOS: Se houver linha de "desconto sobre item" ou desconto global na nota, abata o valor do desconto no 'amount' do item ou inclua um item de desconto com valor negativo (ex: amount: -2.51) para que a SOMA de todos os 'amount' seja EXATAMENTE IGUAL ao 'total' (VALOR A PAGAR).
+CUPOM COM LINHA "DESCONTO" EMBAIXO DO ITEM (muito comum em supermercado):
+  003 7891149108718 CERV CORONA LN 330ML EXTRA 1UN 8,69 8,69
+      DESCONTO -19,56% R$ -1,70 6,99
+  A linha "DESCONTO" NÃO é um item: ela pertence ao item de cima, e o número mais à DIREITA dela (6,99) é o valor final pago por esse item → amount: 6.99 (unitPrice 8.69). Item sem linha de desconto → amount = valor da direita da própria linha.
+- Cada item numerado (001, 002, 003…) é UMA entrada, mesmo que se repita igual várias vezes (14 cervejas iguais = 14 entradas, ou 1 entrada com quantity 14 e o amount somado). Não pule linhas repetidas.
+- itemCount: o número de "Qtde. Total de Itens" (ou "Qtd. total de itens") impresso no fim do cupom; 0 se não houver.
 
 IMPORTANTE:
 - Retorne APENAS um JSON válido. Não coloque texto antes ou depois.
@@ -663,6 +671,7 @@ Formato esperado:
   "paymentMethod": "cartão",
   "account": "Principal",
   "status": "pending",
+  "itemCount": 22,
   "items": [
     { "name": "Cerveja", "category": "Bebidas Alcoólicas", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
   ]
