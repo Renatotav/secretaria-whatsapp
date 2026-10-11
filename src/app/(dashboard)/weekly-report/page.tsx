@@ -99,16 +99,18 @@ export default function WeeklyReportPage() {
         {/* Week nav */}
         <div
           style={{
-            padding: "12px 24px",
+            padding: "12px 16px",
             borderBottom: "1px solid var(--border)",
             display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
             alignItems: "center",
             justifyContent: "space-between",
             flexShrink: 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button className="btn-ghost" onClick={() => setWeekOffset((w) => w - 1)}>← Anterior</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="btn-ghost" style={{ whiteSpace: "nowrap" }} onClick={() => setWeekOffset((w) => w - 1)}>← Anterior</button>
             <span style={{ fontWeight: 600, fontSize: 14 }}>
               Semana de {new Date(weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
               {" a "}
@@ -118,6 +120,7 @@ export default function WeeklyReportPage() {
               className="btn-ghost"
               onClick={() => setWeekOffset((w) => w + 1)}
               disabled={weekOffset >= 0}
+              style={{ whiteSpace: "nowrap" }}
             >
               Próxima →
             </button>
