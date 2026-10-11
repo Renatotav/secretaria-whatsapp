@@ -69,6 +69,13 @@ export async function DELETE(request: Request) {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await request.json().catch(() => ({}));
   if (typeof id !== "string" || !id) return NextResponse.json({ error: "Informe o chamado" }, { status: 400 });
-  await prisma.workTicket.deleteMany({ where: { id } });
+  const t = await prisma.workTicket.findUnique({ where: { id }, select: { ticketId: true } });
+  if (!t) return NextResponse.json({ ok: true });
+  // Junto: imagens anexadas (ficam sem máscara) e histórico de situação.
+  await prisma.$transaction([
+    prisma.workAttachment.deleteMany({ where: { ticketId: t.ticketId } }),
+    prisma.workSituationLog.deleteMany({ where: { ticketId: t.ticketId } }),
+    prisma.workTicket.delete({ where: { id } }),
+  ]);
   return NextResponse.json({ ok: true });
 }

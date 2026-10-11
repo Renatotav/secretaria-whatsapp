@@ -105,9 +105,9 @@ export default function ConversationsPage() {
   });
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div className="split" style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       {/* Col 1: Kanban / List */}
-      <div
+      <div className="split-list"
         style={{
           width: 320,
           flexShrink: 0,
@@ -208,11 +208,11 @@ export default function ConversationsPage() {
                   gap: 4,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {c.contactName || c.displayName || c.phone || "—"}
                   </span>
-                  <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)", flexShrink: 0 }}>
                     {new Date(c.updatedAt).toLocaleDateString("pt-BR")}
                   </span>
                 </div>

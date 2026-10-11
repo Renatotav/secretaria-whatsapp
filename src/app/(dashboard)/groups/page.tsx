@@ -106,9 +106,9 @@ export default function GroupsPage() {
   });
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div className="split" style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       {/* List */}
-      <div
+      <div className="split-list"
         style={{
           width: 340,
           flexShrink: 0,

@@ -6,21 +6,23 @@ import { alertsFor } from "./work-sla";
 // Comandos do trabalho pelo WhatsApp, por regra fixa (nada disso vai para a
 // IA nem fica no histórico da conversa — dado do Tribunal não passa por ela).
 // Sempre exigem a palavra "chamado" para não confundir com o financeiro:
-//   "chamado 2154585 resolvido: reset de senha"
-//   "chamado 2154585 virou redmine 4321"  /  "chamado 2154585 pendente"
-//   "chamado 2154585"  /  "como está o chamado 2154585?"
+//   "chamado 1234567 resolvido: reset de senha"
+//   "chamado 1234567 virou redmine 4321"  /  "chamado 1234567 pendente"
+//   "chamado 1234567"  /  "como está o chamado 1234567?"
 //   "quantos chamados fechei hoje?" (hoje / semana / mês)
 //   "chamados em aberto"  /  "chamados para encerrar" (Redmine já resolvido)
 
 const TICKET = "([A-Za-z]?\\d{6,9})";
+// "nº", "n.º", "n°", "no" antes do número; ponto final e texto livre depois do status.
+const NUM = "(?:n[\\s.]*[ºo°]?\\.?\\s*)?";
 const ACTION_RE = new RegExp(
-  `^\\s*(?:o\\s+)?chamado\\s+(?:n[ºo°]?\\.?\\s*)?${TICKET}\\s*[,:-]?\\s*(?:foi\\s+|está\\s+|esta\\s+|ficou\\s+)?` +
-    `(resolvido|fechado|encerrado|finalizado|pendente|aberto|reaberto|escalado|(?:virou|foi\\s+pro|foi\\s+para\\s+o|abri)\\s+(?:o\\s+)?redmine|redmine)` +
-    `(?:\\s*(?:n[ºo°]?\\.?\\s*)?(\\d{3,7}))?\\s*(?:[,:.\\-–]\\s*(.+))?$`,
+  `^\\s*(?:o\\s+)?chamado\\s+${NUM}${TICKET}\\s*[,:-]?\\s*(?:foi\\s+|está\\s+|esta\\s+|ficou\\s+)?` +
+    `(resolvido|fechado|encerrado|finalizado|pendente|aberto|reaberto|escalado|(?:virou|foi\\s+pro|foi\\s+para\\s+o|abri)\\s+(?:o\\s+)?redmine|redmine)\\b` +
+    `(?:\\s*${NUM}(\\d{3,7})\\b)?\\s*(?:[,:.\\-–]?\\s*(.*?))?\\s*[.!]?\\s*$`,
   "is"
 );
-const RESOLVED_BY_ME_RE = new RegExp(`^\\s*(?:resolvi|fechei|encerrei|finalizei)\\s+(?:o\\s+)?chamado\\s+${TICKET}\\s*(?:[,:.\\-–]\\s*(.+))?$`, "is");
-const LOOKUP_RE = new RegExp(`^\\s*(?:(?:como\\s+(?:está|esta|tá|ta)|e\\s+o|status\\s+do|ver)\\s+)?(?:o\\s+)?chamado\\s+${TICKET}\\s*\\??\\s*$`, "i");
+const RESOLVED_BY_ME_RE = new RegExp(`^\\s*(?:resolvi|fechei|encerrei|finalizei)\\s+(?:o\\s+)?chamado\\s+${NUM}${TICKET}\\b\\s*(?:[,:.\\-–]?\\s*(.*?))?\\s*[.!]?\\s*$`, "is");
+const LOOKUP_RE = new RegExp(`^\\s*(?:(?:como\\s+(?:está|esta|tá|ta)|e\\s+o|status\\s+do|ver)\\s+)?(?:o\\s+)?chamado\\s+${NUM}${TICKET}\\s*[?.]?\\s*$`, "i");
 const COUNT_RE = /^\s*quantos\s+chamados\b.*?\b(hoje|semana|m[eê]s)\b/i;
 const TO_CLOSE_RE = /^\s*(?:quais\s+(?:os\s+)?|meus\s+)?chamados?\s+(?:para|pra|p\/)\s+(?:encerrar|fechar)\s*\??\s*$/i;
 const OPEN_RE = /^\s*(?:quais\s+(?:os\s+)?|meus\s+|o\s+que\s+tenho\s+de\s+)?chamados?\s+(?:em\s+aberto|abertos|pendentes)\s*\??\s*$/i;
@@ -88,7 +90,9 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     const id = normalizeTicketId((m ?? mine)![1]);
     const status = m ? statusFrom(m[2]) : "resolvido";
     const redmine = m?.[3];
-    const note = (m ? m[4] : mine![2])?.trim();
+    const raw = (m ? m[4] : mine![2])?.trim();
+    // "resolvido hoje" / "resolvi agora": a palavra solta não é resolução.
+    const note = raw && !/^(hoje|agora|ontem|já|ja|ok|pronto)$/i.test(raw) ? raw : undefined;
     const before = await prisma.workTicket.findUnique({ where: { ticketId: id }, select: { status: true } });
     const saved = await upsertWorkTicket(
       {
@@ -110,7 +114,7 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     ].join("\n");
   }
 
-  // "chamado 2154585 aguardando usuário" / "chamado 2154585 sem situação"
+  // "chamado 1234567 aguardando usuário" / "chamado 1234567 sem situação"
   const sm = msg.match(new RegExp(`^\\s*(?:o\\s+)?chamado\\s+${TICKET}\\s*[,:-]?\\s*(?:est[aá]\\s+|fica\\s+|ficou\\s+)?(.{3,60}?)\\s*\\.?$`, "i"));
   if (sm) {
     const { findSituation, setSituation } = await import("./work-situations");
@@ -173,6 +177,12 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     const { answerWorkQuestion } = await import("./work-ask");
     const r = await answerWorkQuestion(msg).catch(() => null);
     if (r) return r;
+  }
+
+  // Começou com "chamado <nº>" e nada acima entendeu: responde aqui (não vai
+  // para a IA nem para o histórico — dado do Tribunal).
+  if (new RegExp(`^\\s*(?:o\\s+)?chamado\\s+${NUM}${TICKET}\\b`, "i").test(msg)) {
+    return '💼 Não entendi o comando do chamado. Exemplos: "chamado 1234567 resolvido: o que foi feito", "chamado 1234567 virou redmine 4321", "chamado 1234567 aguardando retorno", "como está o chamado 1234567?".';
   }
 
   return null;

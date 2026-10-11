@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { alertsFor, DEFAULT_SITUATIONS, type Situation } from "@/lib/work-sla";
+import { useWidth } from "@/lib/use-width";
 
 type Ticket = {
   id: string;
@@ -64,7 +65,7 @@ function TicketLink({ id, links, size = 15 }: { id: string; links: Links; size?:
   );
 }
 
-/** "273231, 281479" ou "273231 e 281479" → um link por linha (mesma regra do escala). */
+/** "100001, 100002" ou "100001 e 100002" → um link por linha (mesma regra do escala). */
 function RedmineLinks({ value, links }: { value: string; links: Links }) {
   const nums = value.split(/[;/,|\\]|\s+e\s+|\s+/i).map((n) => n.trim()).filter(Boolean);
   return (
@@ -89,17 +90,18 @@ type Prod = { dias: { dia: string; resolvidos: number; redmine: number }[]; tota
 /** Barras dos últimos 30 dias (resolvidos + Redmine), com o tempo médio. */
 function ProductivityChart({ p }: { p: Prod }) {
   const max = Math.max(1, ...p.dias.map((d) => d.resolvidos + d.redmine));
-  // viewBox largo: no computador as letras não ficam gigantes.
-  const W = 900, H = 120, bw = W / p.dias.length;
+  // viewBox = largura real: letras do mesmo tamanho em qualquer tela.
+  const [chartRef, W] = useWidth<SVGSVGElement>(900);
+  const H = 120, bw = W / p.dias.length;
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>📈 Sua produtividade — últimos 30 dias</div>
         <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {p.total} fechado(s){p.tmrHoras !== null ? ` · tempo médio com você ${p.tmrHoras < 48 ? `${p.tmrHoras} h` : `${Math.round(p.tmrHoras / 24)} dias`}` : ""}
+          {p.total} fechado(s){p.tmrHoras !== null ? ` · tempo médio com você ${p.tmrHoras < 48 ? `${p.tmrHoras.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h` : `${Math.round(p.tmrHoras / 24)} dias`}` : ""}
         </div>
       </div>
-      <svg viewBox={`0 0 ${W} ${H + 18}`} width="100%" role="img" aria-label="Chamados fechados por dia">
+      <svg ref={chartRef} viewBox={`0 0 ${W} ${H + 18}`} width="100%" role="img" aria-label="Chamados fechados por dia">
         {p.dias.map((d, i) => {
           const hr = (d.resolvidos / max) * H, hm = (d.redmine / max) * H;
           return (
@@ -626,6 +628,14 @@ export default function WorkPage() {
             </a>
           </p>
         )}
+        {token ? (
+          <code style={{ display: "block", wordBreak: "break-all", fontSize: 12, padding: 8, background: "var(--bg-hover)", borderRadius: 6 }}>{token}</code>
+        ) : (
+          <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={newToken}>Gerar chave</button>
+        )}
+      </div>
+      )}
+
       {showSnippets && <SnippetsEditor />}
       {showContacts && <ContactsList links={links} />}
       {showSituations && <SituationsEditor list={situations} onSaved={(l) => { setSituations(l); load(); }} />}
@@ -634,8 +644,8 @@ export default function WorkPage() {
         <div style={{ ...box, marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>📱 Celular do trabalho → chamados</div>
           <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
-            Do WhatsApp do celular institucional, encaminhe (ou exporte, sem mídia) a conversa com o usuário para o seu número, com <b>chamado 2154585</b> numa das mensagens.
-            A secretária guarda o texto no chamado com CPF mascarado e sem telefone/e-mail, e as imagens como anexo. Nada passa por IA; áudio é ignorado.
+            Do WhatsApp do celular institucional, encaminhe (ou exporte, sem mídia) a conversa com o usuário para o seu número, com <b>chamado 1234567</b> numa das mensagens.
+            A secretária guarda o texto no chamado com CPF mascarado e sem telefone/e-mail, e as imagens como anexo (lidas aqui mesmo). Só o texto já mascarado vai ao Jev, para avisar urgência; áudio é ignorado.
           </p>
           {phoneLinked ? (
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", fontSize: 13 }}>
@@ -651,13 +661,6 @@ export default function WorkPage() {
             <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={() => pairPhone("pair")}>Vincular celular</button>
           )}
         </div>
-      )}
-        {token ? (
-          <code style={{ display: "block", wordBreak: "break-all", fontSize: 12, padding: 8, background: "var(--bg-hover)", borderRadius: 6 }}>{token}</code>
-        ) : (
-          <button className="btn-ghost" style={{ fontSize: 12, padding: "6px 10px" }} onClick={newToken}>Gerar chave</button>
-        )}
-      </div>
       )}
 
       <div style={{ ...box, marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
@@ -733,7 +736,7 @@ export default function WorkPage() {
       )}
 
       <form onSubmit={add} style={{ ...box, display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
-        <input placeholder="Nº do chamado (ex: R2428333)" value={form.ticketId} onChange={(e) => setForm((f) => ({ ...f, ticketId: e.target.value }))} style={{ flex: "1 1 160px" }} />
+        <input placeholder="Nº do chamado (ex: R1234567)" value={form.ticketId} onChange={(e) => setForm((f) => ({ ...f, ticketId: e.target.value }))} style={{ flex: "1 1 160px" }} />
         <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} style={{ flex: "1 1 120px" }}>
           {Object.entries(STATUS).map(([k, v]) => (
             <option key={k} value={k}>{v.label}</option>

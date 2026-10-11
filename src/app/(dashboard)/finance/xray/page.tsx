@@ -92,7 +92,7 @@ function XRayContent() {
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", marginBottom: 20 }}>
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Total (Raio-X)</p>
-              <p style={{ fontSize: 22, fontWeight: 700 }}>R$ {total.toFixed(2)}</p>
+              <p style={{ fontSize: 22, fontWeight: 700 }}>{total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
             </div>
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Itens</p>
@@ -114,7 +114,7 @@ function XRayContent() {
                   <div key={cat}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13 }}>
                       <span>{cat}</span>
-                      <span style={{ fontWeight: 600 }}>R$ {val.toFixed(2)}</span>
+                      <span style={{ fontWeight: 600 }}>{val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
                     </div>
                     <div style={{ width: "100%", height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }}>
                       <div style={{ width: `${(val / total) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
@@ -133,7 +133,7 @@ function XRayContent() {
                       <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i + 1}. {prod.name}</div>
                       <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{prod.quantity} un.</div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>R$ {prod.amount.toFixed(2)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{prod.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                   </div>
                 ))}
               </div>

@@ -111,9 +111,9 @@ export default function TicketsPage() {
         ))}
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div className="split" style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* List */}
-        <div
+        <div className="split-list"
           style={{
             width: 340,
             flexShrink: 0,

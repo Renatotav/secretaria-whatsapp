@@ -79,7 +79,9 @@ export async function answerWorkQuestion(question: string): Promise<string | nul
       ...(p.origem ? { origin: p.origem } : {}),
       ...(p.status === "escalado" ? { AND: [{ OR: [{ status: "escalado" }, { redmine: { not: "" } }] }] } : {}),
       ...(p.texto ? { OR: [{ errorType: { contains: p.texto, mode: "insensitive" } }, { queue: { contains: p.texto, mode: "insensitive" } }] } : {}),
+      ...(dateField === "resolvedAt" && (from || to) ? { resolvedAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}),
     },
+    select: { ticketId: true, status: true, errorType: true, errorGroup: true, origin: true, openedAt: true, receivedAt: true, resolvedAt: true, createdAt: true },
   });
   // Período: pelo fechamento (ou recebimento; sem "recebido em", vale a abertura).
   if (from || to) {

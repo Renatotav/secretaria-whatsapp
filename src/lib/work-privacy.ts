@@ -14,7 +14,8 @@ export function maskPersonalData(text: string): string {
   });
   t = t
     .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[e-mail removido]")
-    .replace(/(?<![\d.\-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\d.\-])/g, "xxx.xxx.xxx-xx")
+    // CPF com ou sem pontos/traço/espaços; o ponto final da frase não impede a máscara.
+      .replace(/(?<!\d)(?<!\d[.-])\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}(?!\d)(?![.-]\d)/g, "xxx.xxx.xxx-xx")
     .replace(/(\+?55\s?)?\(?\b\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b/g, "[telefone removido]");
   return t.replace(/\u0000(\d+)\u0000/g, (_m, i) => saved[Number(i)]);
 }

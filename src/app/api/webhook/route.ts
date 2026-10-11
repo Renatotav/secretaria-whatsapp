@@ -70,8 +70,9 @@ export async function POST(request: Request) {
     const evo = { evolutionUrl: config.evolutionUrl, evolutionApiKey: config.evolutionApiKey, instanceId: config.instanceId };
 
     // Celular institucional (trabalho): vínculo por código e conversas
-    // encaminhadas para os chamados. Vem antes de tudo — nada daqui passa por
-    // IA, transcrição de áudio ou pelas conversas do CRM.
+    // encaminhadas para os chamados. Vem antes de tudo — nada daqui passa pela
+    // IA de conversa, transcrição de áudio ou pelas conversas do CRM (só o
+    // texto já mascarado vai ao Jev, ver work-phone.ts).
     if (!isGroup && !isSelfChat) {
       const { handleWorkPhoneMessage, tryPairWorkPhone } = await import("@/lib/work-phone");
       if (config.workPhone && phone === config.workPhone) {

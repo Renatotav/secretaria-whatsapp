@@ -3,8 +3,8 @@ import { timingSafeEqual } from "crypto";
 import { createSession, clearSession } from "@/lib/auth";
 
 // Login do painel. O endereço é público e a senha é curta, então há limite de
-// tentativas: 5 erros por IP em 15 min bloqueiam aquele IP por 15 min, e 30
-// erros no total em 1 hora travam o login por 1 hora. Na 10ª falha da hora a
+// tentativas: 5 erros por IP em 15 min bloqueiam aquele IP por 15 min; 30
+// erros no total em 1 hora deixam cada tentativa 4 s mais lenta. Na 10ª falha da hora a
 // secretária avisa o dono no WhatsApp. (Fica na memória: reinício zera.)
 
 const PER_IP = 5;
@@ -31,9 +31,12 @@ export async function POST(request: Request) {
   const ip = clientIp(request);
   const ipFails = recent(byIp.get(ip) ?? [], IP_WINDOW);
   allFails = recent(allFails, GLOBAL_WINDOW);
-  if (ipFails.length >= PER_IP || allFails.length >= GLOBAL) {
+  if (ipFails.length >= PER_IP) {
     return NextResponse.json({ error: "Muitas tentativas. Espere alguns minutos e tente de novo." }, { status: 429 });
   }
+  // Muitas falhas no geral (vários IPs): não trava o login de todo mundo, só
+  // deixa cada tentativa bem mais lenta.
+  if (allFails.length >= GLOBAL) await new Promise((r) => setTimeout(r, 4000));
 
   const body = await request.json().catch(() => ({}));
   const password = String(body.password ?? "").trim();

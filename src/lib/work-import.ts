@@ -26,7 +26,8 @@ const COLUMNS: { field: string; test: (h: string) => boolean }[] = [
 
 /** Data da planilha (número do Excel, Date ou "dd/mm/aaaa") → ISO. */
 function toISO(v: unknown): string | null {
-  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString();
+  // Meio-dia UTC (= 9h em Brasília): meia-noite UTC viraria o dia anterior aqui.
+  if (v instanceof Date && !isNaN(v.getTime())) return new Date(Date.UTC(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate(), 15)).toISOString();
   if (typeof v === "number" && v > 20000) {
     const d = XLSX.SSF.parse_date_code(v);
     return d ? new Date(Date.UTC(d.y, d.m - 1, d.d, 15)).toISOString() : null;

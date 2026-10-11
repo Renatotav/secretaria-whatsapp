@@ -56,7 +56,9 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   let input = (text || "").trim();
   if (key === "auto") {
     const { choose } = await import("./jev");
-    const pick = await choose(input.slice(0, 6000), "Que tipo de texto é este, e qual tratamento ele precisa?", SKILL_CRITERIA, 0).catch(() => null);
+    const { maskPersonalData } = await import("./work-privacy");
+    // Para decidir o tipo basta o texto mascarado (o CPF não muda a escolha).
+    const pick = await choose(maskPersonalData(input).slice(0, 6000), "Que tipo de texto é este, e qual tratamento ele precisa?", SKILL_CRITERIA, 0).catch(() => null);
     key = pick?.choice && WORK_SKILLS[pick.choice] ? pick.choice : "corrigir";
     // Mesma regra dos botões: resumo e registro de WhatsApp vão com CPF mascarado;
     // Redmine leva o CPF completo; os corretores, o texto como está.

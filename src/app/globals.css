@@ -250,3 +250,15 @@ button {
 /* Menu "⚙️ Ferramentas" da aba Trabalho (details/summary sem o triângulo). */
 .tools-menu > summary::-webkit-details-marker { display: none; }
 .tools-menu > summary::marker { content: ""; }
+
+/* Telas de lista + detalhe (agenda, conversas, relatórios…): no celular,
+   empilha — a lista em cima (com rolagem própria) e o detalhe embaixo. */
+@media (max-width: 760px) {
+  .split { flex-direction: column !important; overflow-y: auto !important; height: 100%; }
+  .split > * { width: 100% !important; flex: 0 0 auto !important; overflow: visible !important; height: auto !important; border-right: 0 !important; }
+  .split > .split-list { max-height: 42vh; overflow: hidden !important; border-bottom: 1px solid var(--border); }
+}
+
+/* Margem da página (o reset "* { padding: 0 }" acima vence as classes p-4 do Tailwind). */
+.page-pad { padding: 16px; }
+@media (min-width: 768px) { .page-pad { padding: 24px; } }

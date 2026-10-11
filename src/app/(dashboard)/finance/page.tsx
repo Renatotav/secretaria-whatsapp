@@ -9,6 +9,7 @@ import { InsightsModal } from "./InsightsModal";
 import { InvoiceDrawer } from "./InvoiceDrawer";
 import { FINANCE_TAXONOMY_DATA } from "@/lib/finance-taxonomy";
 import { autoEntryDates } from "@/lib/dates";
+import { useWidth } from "@/lib/use-width";
 
 interface FinanceEntry {
   id: string;
@@ -329,7 +330,7 @@ function MonthlyBarChart({
   onSelectMonth: (monthIndex: number, type: "income" | "expense" | null) => void;
 }) {
   const [hover, setHover] = useState<{ month: number; type: "income" | "expense" } | null>(null);
-  const width = 640;
+  const [chartRef, width] = useWidth<SVGSVGElement>(640);
   const height = 220;
   const padding = { top: 10, right: 10, bottom: 24, left: 44 };
   const chartW = width - padding.left - padding.right;
@@ -351,7 +352,7 @@ function MonthlyBarChart({
           <span style={{ width: 8, height: 8, borderRadius: 2, background: "var(--danger)" }} /> Despesa
         </span>
       </div>
-      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
+      <svg ref={chartRef} width="100%" viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
         {yTicks.map((t, i) => {
           const y = padding.top + chartH - (t / max) * chartH;
           return (
@@ -455,7 +456,7 @@ function MonthlyBarChart({
 /* ── Linha: fluxo de caixa acumulado ─────────────────────────────────── */
 function CashFlowLine({ monthly, selectedType, selectedMonth, onSelectMonth }: { monthly: { income: number; expense: number }[], selectedType: "income" | "expense" | null, selectedMonth: number, onSelectMonth: (m: number) => void }) {
   const [hover, setHover] = useState<number | null>(null);
-  const width = 640;
+  const [chartRef, width] = useWidth<SVGSVGElement>(640);
   const height = 180;
   const padding = { top: 16, right: 10, bottom: 24, left: 50 };
   const chartW = width - padding.left - padding.right;
@@ -482,7 +483,7 @@ function CashFlowLine({ monthly, selectedType, selectedMonth, onSelectMonth }: {
   const areaPath = `${path} L${points[points.length - 1].x},${padding.top + chartH} L${points[0].x},${padding.top + chartH} Z`;
 
   return (
-    <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
+    <svg ref={chartRef} width="100%" viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
       <line
         x1={padding.left}
         x2={width - padding.right}
@@ -998,7 +999,7 @@ export default function FinancePage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 160 }} className="p-4 md:p-6">
+      <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 160 }} className="page-pad">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>

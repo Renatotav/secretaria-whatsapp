@@ -29,7 +29,11 @@ export async function classifyTicketGroup(ticketId: string): Promise<string | nu
   const t = await prisma.workTicket.findUnique({ where: { ticketId }, select: { errorType: true, description: true, chatLog: true, queue: true } });
   if (!t) return null;
   const text = textOf(t);
-  if (text.length < 15) return null;
+  if (text.length < 15) {
+    // Texto curto demais para classificar: marca e segue (senão trava a fila).
+    await prisma.workTicket.update({ where: { ticketId }, data: { errorGroup: NO_GROUP } });
+    return NO_GROUP;
+  }
   const r = await choose(text, "Qual é o grupo do erro deste chamado de suporte do PJe?", ERROR_GROUPS, 0.6);
   const group = r?.choice ?? NO_GROUP;
   await prisma.workTicket.update({ where: { ticketId }, data: { errorGroup: group } });
@@ -44,6 +48,7 @@ export async function classifyPendingGroups(limit = 5): Promise<number> {
       OR: [{ description: { not: "" } }, { chatLog: { not: "" } }, { NOT: { errorType: { startsWith: "Erro/Falha" } }, errorType: { not: "" } }],
     },
     select: { ticketId: true },
+    orderBy: { updatedAt: "asc" },
     take: limit,
   });
   let n = 0;
@@ -51,8 +56,11 @@ export async function classifyPendingGroups(limit = 5): Promise<number> {
     try {
       if (await classifyTicketGroup(p.ticketId)) n++;
     } catch (err) {
-      console.error("[trabalho] grupo do erro:", err instanceof Error ? err.message : err);
-      break; // sem rede/crédito: tenta no próximo minuto
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[trabalho] grupo do erro:", msg);
+      // Erro do Jev com este chamado (4xx): marca e segue. Sem rede/crédito: tenta no próximo minuto.
+      if (/Jev 4\d\d/.test(msg)) await prisma.workTicket.update({ where: { ticketId: p.ticketId }, data: { errorGroup: NO_GROUP } });
+      else break;
     }
   }
   return n;

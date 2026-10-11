@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useWidth } from "@/lib/use-width";
 
 // 📊 Minha produtividade — portfólio do trabalho no suporte do PJe.
 // Só números agregados (sem nome, CPF, descrição ou número de chamado).
@@ -44,7 +45,8 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
 
 /** Barras empilhadas por mês (direto × com Redmine) e linha do tempo médio. */
 function MonthlyChart({ meses }: { meses: Data["meses"] }) {
-  const W = 640, H = 200, pad = { l: 30, r: 44, t: 12, b: 26 };
+  const [chartRef, W] = useWidth<SVGSVGElement>(640);
+  const H = 200, pad = { l: 30, r: 44, t: 12, b: 26 };
   const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
   const max = Math.max(1, ...meses.map((m) => m.direto + m.redmine));
   const maxT = Math.max(1, ...meses.map((m) => m.tempoMedio ?? 0));
@@ -57,7 +59,7 @@ function MonthlyChart({ meses }: { meses: Data["meses"] }) {
     .join(" ");
   const ticks = [0, Math.round(max / 2), max];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Chamados fechados por mês e tempo médio">
+    <svg ref={chartRef} viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Chamados fechados por mês e tempo médio">
       {ticks.map((t) => (
         <g key={t}>
           <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeDasharray="3 3" />

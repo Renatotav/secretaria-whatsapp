@@ -1,13 +1,17 @@
+import { createHash } from "crypto";
 import { prisma } from "./prisma";
 import { maskPersonalData, normalizeTicketId } from "./work-privacy";
 
 // CRM leve do WhatsApp Web: notas, etiquetas, chamados ligados e lembrete por
 // contato. Nada é enviado no WhatsApp: a extensão só mostra e insere texto.
 
-/** "Dra. Mayara Coutinho (MPCE)" → "dra mayara coutinho mpce"; números ficam só com dígitos. */
+/** "Dra. Maria Souza (MP)" → "dra maria souza mp"; números ficam só com dígitos. */
+const isPhone = (t: string) => /^\+?[\d\s().-]{8,}$/.test(String(t || "").trim());
+
 export function contactKey(raw: string): string {
   const t = String(raw || "").trim();
-  if (/^\+?[\d\s().-]{8,}$/.test(t)) return t.replace(/\D/g, "");
+  // Conversa sem nome (só o número): guarda um código do número, nunca o telefone.
+  if (isPhone(t)) return "tel-" + createHash("sha256").update(t.replace(/\D/g, "")).digest("hex").slice(0, 16);
   return t
     .toLowerCase()
     .normalize("NFD")
@@ -59,7 +63,10 @@ export async function saveContact(input: ContactInput) {
       : {}),
   };
   if ("reminderAt" in data && data.reminderAt && isNaN(data.reminderAt.getTime())) throw new Error("Data do lembrete inválida");
-  return prisma.workContact.upsert({ where: { key }, create: { key, name: String(input.name || input.key).slice(0, 120), ...data }, update: data });
+  // Nome que é só um número de telefone não é gravado.
+  if ("name" in data && isPhone(String(data.name))) data.name = "Contato sem nome";
+  const name = isPhone(String(input.name || input.key)) ? "Contato sem nome" : String(input.name || input.key).slice(0, 120);
+  return prisma.workContact.upsert({ where: { key }, create: { key, ...data, name }, update: data });
 }
 
 /** Lembretes vencidos: avisa e limpa (chamado pelo agendador). */

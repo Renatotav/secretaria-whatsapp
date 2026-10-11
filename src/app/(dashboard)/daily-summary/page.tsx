@@ -93,7 +93,7 @@ export default function DailySummaryPage() {
           <select
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
-            style={{ width: 220 }}
+            style={{ width: 220, maxWidth: "100%" }}
           >
             <option value="self">📋 Seu dia</option>
             {groups.some((g) => g.active) && (
@@ -108,7 +108,7 @@ export default function DailySummaryPage() {
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            style={{ width: 160 }}
+            style={{ width: 160, maxWidth: "100%" }}
           />
           <button className="btn-ghost" onClick={() => { setSelectedGroup(""); setSelectedDate(""); }}>
             Ver todos

@@ -7,9 +7,11 @@ import { maskPersonalData, normalizeTicketId } from "./work-privacy";
 
 // Celular institucional → secretária. O dono encaminha (ou exporta) do
 // WhatsApp do trabalho para o próprio número a conversa com o usuário, com
-// "chamado 2154585" no meio. Nada disso passa por IA nem vira conversa do
-// CRM: o texto é guardado no chamado com CPF mascarado e sem telefone/e-mail,
-// e as imagens viram anexo. Áudio é ignorado (transcrever usaria IA).
+// "chamado 1234567" no meio. Nada disso vai para a IA de conversa nem vira
+// conversa do CRM: o texto é guardado no chamado com CPF mascarado e sem
+// telefone/e-mail, e as imagens viram anexo (lidas aqui, com OCR local).
+// Só o texto JÁ mascarado pode ir ao Jev (OpenRouter), que avisa se há
+// urgência e o grupo do erro — decisão do dono. Áudio é ignorado.
 
 type Evo = { evolutionUrl: string; evolutionApiKey: string; instanceId: string };
 
@@ -26,7 +28,8 @@ interface Session {
 
 // Uma sessão só (há um celular institucional). Fica na memória: se o app
 // reiniciar no meio, ele encaminha de novo.
-let session: Session | null = null;
+let session: Session | null = null; // juntando as mensagens que estão chegando
+let waiting: Session | null = null; // conversa já fechada, esperando ele dizer de qual chamado é
 const IDLE_MS = 45_000;
 const WAIT_MS = 30 * 60_000;
 const MAX_IMAGE = 5 * 1024 * 1024;
@@ -35,7 +38,7 @@ const PAIR_RE = /^\s*vincular\s+(\d{4,6})\s*$/i;
 
 const CNJ = /\d{7}-?\d{2}\.?\d{4}\.?\d\.?\d{2}\.?\d{4}/g;
 
-/** Nº do chamado no texto: "chamado 2154585" (ou uma linha só com o número). */
+/** Nº do chamado no texto: "chamado 1234567" (ou uma linha só com o número). */
 export function findTicketInText(text: string): string | null {
   const t = text.replace(CNJ, " ");
   const m = t.match(/chamado\s*(?:n[\s.]*[ºo°]?\.?\s*|#\s*)?[*_]*([A-Za-z]?\d{6,9})\b/i);
@@ -51,7 +54,7 @@ export async function tryPairWorkPhone(config: AgentConfig, phone: string, text:
   const [code, until] = config.workPairCode.split("|");
   if (code !== m[1] || Date.now() > Number(until)) return false;
   await prisma.agentConfig.update({ where: { id: config.id }, data: { workPhone: phone, workPairCode: "" } });
-  await notifyOwner(config, "📱 Celular institucional vinculado! Agora é só encaminhar a conversa do usuário para cá com \"chamado 2154585\" no meio.");
+  await notifyOwner(config, "📱 Celular institucional vinculado! Agora é só encaminhar a conversa do usuário para cá com \"chamado 1234567\" no meio.");
   return true;
 }
 
@@ -118,6 +121,9 @@ export async function handleWorkPhoneMessage(config: AgentConfig, evo: Evo, mess
 
 async function flush(config: AgentConfig) {
   const s = session;
+  // Solta a sessão ANTES de qualquer espera (OCR leva segundos): mensagens que
+  // chegarem agora começam uma conversa nova, sem se misturar com esta.
+  session = null;
   if (!s || (!s.lines.length && !s.images.length)) return;
   let ticket = findTicketInText(s.lines.join("\n"));
   // Prints: leitura local (sem IA) para o resumo e, se faltar, o nº do chamado.
@@ -134,7 +140,7 @@ async function flush(config: AgentConfig) {
         .filter(Boolean);
       for (const t of texts) {
         if (ticket) break;
-        // "chamado n.º 2120102" no print da mensagem padrão: confiável.
+        // "chamado n.º 1234567" no print da mensagem padrão: confiável.
         ticket = findTicketInText(t);
         // Número solto (ex: trilha do Assyst): só vale se o chamado já existe aqui.
         if (!ticket) {
@@ -152,32 +158,32 @@ async function flush(config: AgentConfig) {
     }
   }
   console.log(`[trabalho] juntando: ${s.lines.length} texto(s), ${s.images.length} imagem(ns) → ${ticket ? "chamado encontrado" : "sem número, perguntando"}`);
-  if (ticket) return save(config, ticket);
+  if (ticket) return save(config, ticket, s);
   s.waitingUntil = Date.now() + WAIT_MS;
+  waiting = s; // a anterior que ainda esperava é descartada (não vai para o chamado errado)
   await notifyOwner(
     config,
-    `📱 Recebi do celular do trabalho ${s.lines.length} mensagem(ns)${s.images.length ? ` e ${s.images.length} imagem(ns)` : ""}, mas não achei o número do chamado.\nDe qual chamado é? Responda: *chamado 2154585*`
+    `📱 Recebi do celular do trabalho ${s.lines.length} mensagem(ns)${s.images.length ? ` e ${s.images.length} imagem(ns)` : ""}, mas não achei o número do chamado.\nDe qual chamado é? Responda: *chamado 1234567*`
   );
 }
 
-/** "chamado 2154585" no chat pessoal enquanto há conversa esperando: guarda nesse chamado. */
+/** "chamado 1234567" no chat pessoal enquanto há conversa esperando: guarda nesse chamado. */
 export async function attachPendingWorkChat(text: string): Promise<string | null> {
-  const s = session;
+  const s = waiting;
   if (!s?.waitingUntil) return null;
   if (Date.now() > s.waitingUntil) {
-    session = null;
+    waiting = null; // passou de 30 min: descarta
     return null;
   }
   const m = text.trim().match(/^(?:o\s+)?(?:chamado\s*)?(?:n[ºo°]?\.?\s*)?([A-Za-z]?\d{6,9})\s*$/i);
   if (!m) return null;
   const config = await prisma.agentConfig.findFirst();
   if (!config) return null;
-  return save(config, normalizeTicketId(m[1]), false);
+  waiting = null;
+  return save(config, normalizeTicketId(m[1]), s, false);
 }
 
-async function save(config: AgentConfig, ticketId: string, notify = true): Promise<string> {
-  const s = session!;
-  session = null;
+async function save(config: AgentConfig, ticketId: string, s: Session, notify = true): Promise<string> {
   if (s.timer) clearTimeout(s.timer);
   const existing = await prisma.workTicket.findUnique({ where: { ticketId }, select: { chatLog: true } });
   if (!existing) await upsertWorkTicket({ ticketId }, "whatsapp");

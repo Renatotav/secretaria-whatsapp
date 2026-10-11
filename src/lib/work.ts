@@ -3,8 +3,8 @@ import { maskPersonalData, normalizeTicketId } from "./work-privacy";
 import { alertsFor } from "./work-sla";
 
 // Central do Atendente PJe: chamados do trabalho do Renato. Tudo que entra
-// passa por maskPersonalData (CPF mascarado, sem telefone/e-mail) e nada
-// daqui é mandado para a IA.
+// passa por maskPersonalData (CPF mascarado, sem telefone/e-mail). Para a IA
+// (OpenRouter/Jev) só vai texto já mascarado: agrupar o erro e as skills.
 
 export const WORK_STATUSES = ["aberto", "pendente", "resolvido", "escalado"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];

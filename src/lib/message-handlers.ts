@@ -1429,8 +1429,11 @@ async function lastSavedEntries() {
 
 // Última fatura paga por mensagem ("desfazer" volta as compras para "a pagar").
 let lastInvoicePayment: { ids: string[]; at: number } | null = null;
-// "paguei a fatura", "fatura paga", e também "cartão Santander pago" / "meu cartão 3880,57 pago".
-const INVOICE_PAID_RE = /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\b(fatura|cart[aã]o)\b|\b(fatura|cart[aã]o)\b.*\b(pago|paga|paguei|quitad[ao]|transferi)\b/i;
+// "paguei a fatura", "fatura paga" — ou a linha que COMEÇA com "cartão" e TERMINA
+// em "pago" ("Cartão Santander pago", "Meu cartão 3880,57 pago"). Frases como
+// "almoço 30 pago no cartão" são gasto, não pagamento de fatura.
+const INVOICE_PAID_RE =
+  /\b(paguei|quitei|transferi|mandei|pago|paga)\b.*\bfatura\b|\bfatura\b.*\b(paga|pago|paguei|quitada|transferi)\b|^\s*(?:o\s+)?(?:meu\s+)?cart[aã]o\b[^\n]*\b(?:pago|paga|quitad[ao])\s*[.!]?\s*$/im;
 
 /**
  * "Paguei a fatura" / "transferi a fatura do Santander": dá baixa em todas as
@@ -1475,7 +1478,8 @@ async function applyInvoicePayment(text: string): Promise<string | null> {
   const target = open.find((i) => i.card === card);
   if (!target) return `🤔 Não achei fatura em aberto de ${invoiceLabel(card)}.`;
   // Valor informado ("3880,57") tem que bater com a fatura (tolerância de R$ 1).
-  const said = text.match(/(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{2})?)/);
+  // Só valor de verdade: "3880,57", "3.880,57" ou 3+ dígitos — nunca "s25" nem "dia 10".
+  const said = text.match(/(?<![\w.,])(\d{1,3}(?:\.\d{3})*,\d{2}|\d{3,}(?:[.,]\d{2})?)(?![\w])/);
   if (said) {
     const value = Number(said[1].replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
     if (value >= 10 && Math.abs(value - target.total) > 1) {
@@ -1633,7 +1637,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   if (await applyPdfPassword(joinedText, config)) return;
   if (await applyStatementChoice(joinedText, config)) return;
 
-  // Comandos do trabalho ("chamado 2154585 resolvido"): regra fixa, sem IA e
+  // Comandos do trabalho ("chamado 1234567 resolvido"): regra fixa, sem IA e
   // fora do histórico da conversa (dado do Tribunal não passa pela IA).
   const { applyWorkCommand } = await import("./work-commands");
   const { attachPendingWorkChat } = await import("./work-phone");

@@ -72,12 +72,12 @@ export function InvoiceDrawer({
               {Object.entries(byCategory).sort((a,b) => b[1] - a[1]).map(([cat, val]) => (
                 <div key={cat} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13 }}>
                   <span>{cat}</span>
-                  <span style={{ fontWeight: 500 }}>R$ {val.toFixed(2)}</span>
+                  <span style={{ fontWeight: 500 }}>{val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
                 </div>
               ))}
               <div style={{ borderTop: "1px solid var(--border-light)", marginTop: 12, paddingTop: 12, display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
                 <span>Total Calculado</span>
-                <span>R$ {total.toFixed(2)}</span>
+                <span>{total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
               </div>
             </div>
 
@@ -87,9 +87,9 @@ export function InvoiceDrawer({
                 <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 12, borderBottom: "1px solid var(--border-light)" }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{item.category} • {item.quantity}x R$ {item.unitPrice.toFixed(2)}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{item.category} • {item.quantity}x {item.unitPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>R$ {item.amount.toFixed(2)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{item.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                 </div>
               ))}
             </div>

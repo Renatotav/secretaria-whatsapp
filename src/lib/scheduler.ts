@@ -17,8 +17,12 @@ let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
 let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai uma vez só)
 
+let ticking = false; // uma volta por vez: se a anterior ainda roda, pula esta
+
 export function startScheduler(): void {
   setInterval(async () => {
+    if (ticking) return;
+    ticking = true;
     try {
       const config = await prisma.agentConfig.findFirst();
       if (!config) return;
@@ -139,12 +143,14 @@ export function startScheduler(): void {
       // Janela 08:00–08:59 (se o minuto exato passar com o servidor ocupado, não perde o dia).
       if (weekday && hhmm >= "08:00" && hhmm < "09:00" && lastWorkBriefDate !== todayDate && config.workBriefDate !== todayDate && config.ownerPhone) {
         lastWorkBriefDate = todayDate;
-        await prisma.agentConfig.update({ where: { id: config.id }, data: { workBriefDate: todayDate } });
         try {
           const { buildWorkBriefing } = await import("./work");
           const msg = await buildWorkBriefing(true);
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
+          // Só marca o dia depois de enviar: se falhar, tenta de novo no próximo minuto da janela.
+          await prisma.agentConfig.update({ where: { id: config.id }, data: { workBriefDate: todayDate } });
         } catch (err) {
+          lastWorkBriefDate = "";
           console.error("Erro no briefing do trabalho:", err);
         }
       }
@@ -235,6 +241,8 @@ export function startScheduler(): void {
       }
     } catch {
       // scheduler errors are non-fatal
+    } finally {
+      ticking = false;
     }
   }, 60_000);
 }

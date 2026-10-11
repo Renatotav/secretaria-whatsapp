@@ -5,7 +5,7 @@ import { normalizeTicketId } from "@/lib/work-privacy";
 
 // Balão da extensão: dados dos chamados pedidos (escala + planilha + painel).
 // Não devolve a descrição (o atendente já está vendo o chamado no Assyst).
-// GET /api/work/ext/lookup?ids=2154585,R2428333  (até 300 por vez)
+// GET /api/work/ext/lookup?ids=1234567,R1234567  (até 300 por vez)
 export async function GET(request: Request) {
   if (!(await checkWorkToken(request))) return NextResponse.json({ error: "Chave inválida" }, { status: 401 });
   const ids = (new URL(request.url).searchParams.get("ids") || "")
