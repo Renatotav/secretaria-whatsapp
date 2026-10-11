@@ -262,3 +262,11 @@ button {
 /* Margem da página (o reset "* { padding: 0 }" acima vence as classes p-4 do Tailwind). */
 .page-pad { padding: 16px; }
 @media (min-width: 768px) { .page-pad { padding: 24px; } }
+@media (max-width: 760px) {
+  /* Nada selecionado: esconde o painel vazio ("Selecione…") e a lista usa a tela toda. */
+  .split > *:has(> .split-empty) { display: none !important; }
+  .split:has(> * > .split-empty) > .split-list { max-height: none; flex: 1 1 auto !important; overflow: hidden !important; }
+}
+
+/* Barras de rolagem e campos nativos no tema escuro (sem o quadrado branco). */
+:root { color-scheme: dark; }

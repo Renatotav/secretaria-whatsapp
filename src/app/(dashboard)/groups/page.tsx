@@ -226,6 +226,7 @@ export default function GroupsPage() {
                     borderRadius: "50%",
                     background: g.active ? "var(--success)" : "var(--text-dim)",
                     flexShrink: 0,
+                    marginLeft: 8,
                   }}
                 />
               </div>
@@ -247,7 +248,7 @@ export default function GroupsPage() {
       {/* Detail */}
       <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
         {!selected ? (
-          <div
+          <div className="split-empty"
             style={{
               display: "flex",
               flexDirection: "column",

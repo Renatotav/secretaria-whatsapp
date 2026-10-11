@@ -333,11 +333,11 @@ function SituationsEditor({ list, onSaved }: { list: Situation[]; onSaved: (l: S
         O segundo badge do chamado: com quem está a bola. &quot;Aguardando retorno&quot; faz o badge de dias parar de pulsar (vermelho fixo 🕒). &quot;Pulsa&quot; chama atenção no próprio badge da situação.
       </p>
       {rows.map((r, i) => (
-        <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 6, fontSize: 12 }}>
+        <div key={i} style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 8, paddingBottom: 8, borderBottom: "1px solid var(--border)", fontSize: 12 }}>
           <input aria-label="Emoji" value={r.emoji} onChange={(e) => set(i, { emoji: e.target.value })} style={{ width: 44, textAlign: "center" }} />
           <input aria-label="Nome" value={r.name} onChange={(e) => set(i, { name: e.target.value })} style={{ flex: "1 1 180px" }} />
           <input aria-label="Cor" type="color" value={r.color} onChange={(e) => set(i, { color: e.target.value })} style={{ width: 40, padding: 0 }} />
-          <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
             <input type="checkbox" checked={r.pauses} onChange={(e) => set(i, { pauses: e.target.checked })} /> aguardando retorno 🕒
           </label>
           <select

@@ -238,7 +238,7 @@ export default function ConversationsPage() {
       {/* Col 2: Chat */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", borderRight: "1px solid var(--border)" }}>
         {!selected ? (
-          <div
+          <div className="split-empty"
             style={{
               display: "flex",
               flexDirection: "column",
@@ -340,7 +340,7 @@ export default function ConversationsPage() {
         }}
       >
         {!selected ? (
-          <div style={{ padding: 20, color: "var(--text-muted)", textAlign: "center", fontSize: 13, marginTop: 40 }}>
+          <div className="split-empty" style={{ padding: 20, color: "var(--text-muted)", textAlign: "center", fontSize: 13, marginTop: 40 }}>
             Selecione uma conversa para ver o perfil do contato.
           </div>
         ) : (

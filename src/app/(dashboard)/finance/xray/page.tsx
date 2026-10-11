@@ -68,7 +68,7 @@ function XRayContent() {
           <Link href="/finance" style={{ color: "var(--accent)", textDecoration: "none", fontSize: 13, marginBottom: 6, display: "inline-block" }}>
             ← Voltar para Finanças
           </Link>
-          <h1 style={{ fontSize: 20, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>🔍 Raio-X Universal</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>🔍 Raio-X Universal</h1>
           <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Itens detalhados das notas fiscais do mês.</p>
         </div>
         <div style={{ flexShrink: 0 }}>
@@ -131,7 +131,7 @@ function XRayContent() {
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: "1px solid var(--border-light)" }}>
                     <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i + 1}. {prod.name}</div>
-                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{prod.quantity} un.</div>
+                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{Number.isInteger(prod.quantity) ? `${prod.quantity} un.` : `${prod.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`}</div>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{prod.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                   </div>

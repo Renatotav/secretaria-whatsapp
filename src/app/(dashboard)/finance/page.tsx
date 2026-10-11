@@ -144,8 +144,8 @@ function formatMoney(value: number): string {
 }
 
 function formatCompact(value: number): string {
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return value.toFixed(0);
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return value.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 }
 
 /** Tick "redondo" pra eixo Y: arredonda o máximo pra um valor limpo. */

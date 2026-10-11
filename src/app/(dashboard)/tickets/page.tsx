@@ -85,6 +85,7 @@ export default function TicketsPage() {
       <div
         style={{
           display: "flex",
+          flexWrap: "wrap",
           gap: 12,
           padding: "12px 20px",
           borderBottom: "1px solid var(--border)",
@@ -211,7 +212,7 @@ export default function TicketsPage() {
         {/* Detail */}
         <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
           {!selected ? (
-            <div
+            <div className="split-empty"
               style={{
                 display: "flex",
                 flexDirection: "column",

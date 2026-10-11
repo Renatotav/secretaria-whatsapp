@@ -188,7 +188,7 @@ export default function BriefingsPage() {
       {/* Detail */}
       <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
         {!selected ? (
-          <div
+          <div className="split-empty"
             style={{
               display: "flex",
               flexDirection: "column",

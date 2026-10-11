@@ -89,7 +89,7 @@ export default function DailySummaryPage() {
             ⚡ Gerar Resumo Agora
           </button>
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <select
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}

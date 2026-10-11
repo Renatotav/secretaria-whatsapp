@@ -162,6 +162,7 @@ export default function WeeklyReportPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 height: "60%",
+                paddingTop: 32,
                 color: "var(--text-muted)",
                 gap: 8,
               }}

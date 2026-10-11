@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 interface DiaryEntry {
   id: string;
@@ -121,9 +121,18 @@ function MoodHeatmap({
   const hoveredEntry = hover ? moodByDate.get(hover) : null;
   const hoveredMood = hoveredEntry ? MOOD_MAP.get(hoveredEntry) : null;
 
+  // Abre mostrando o mês atual (no celular o ano inteiro não cabe).
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const col = Math.floor((dayOfYear(new Date()) + startOffset) / 7);
+    el.scrollLeft = Math.max(0, col * (cell + gap) - el.clientWidth * 0.7);
+  }, [startOffset, cell, gap]);
+
   return (
     <div>
-      <div style={{ overflowX: "auto" }}>
+      <div ref={scroller} style={{ overflowX: "auto" }}>
         <svg width={width} height={height + 16} style={{ minWidth: width }}>
           {monthLabels.map((m, i) => (
             <text key={i} x={m.col * (cell + gap)} y={10} fontSize={10} fill="var(--text-dim)">
@@ -294,7 +303,7 @@ export default function DiaryPage() {
               ◀
             </button>
             <div style={{ textAlign: "center" }}>
-              <p style={{ fontWeight: 600, textTransform: "capitalize" }}>{selectedLabel}</p>
+              <p style={{ fontWeight: 600 }}>{selectedLabel ? selectedLabel.charAt(0).toUpperCase() + selectedLabel.slice(1) : selectedLabel}</p>
               {selected === todayKey() && <p style={{ fontSize: 11, color: "var(--accent)" }}>Hoje</p>}
             </div>
             <button

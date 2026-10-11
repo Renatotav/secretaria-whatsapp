@@ -186,7 +186,7 @@ export default function AgendaPage() {
                 {item.senderName ? ` — ${item.senderName}` : ""}
               </span>
               <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                {new Date(item.createdAt).toLocaleString("pt-BR")}
+                {new Date(item.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
               </span>
             </button>
           ))}
@@ -196,7 +196,7 @@ export default function AgendaPage() {
       {/* Detail */}
       <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
         {!selected ? (
-          <div
+          <div className="split-empty"
             style={{
               display: "flex",
               flexDirection: "column",
