@@ -13,6 +13,7 @@ import {
   askPdfPassword,
   handleStatementImage,
   handleSmartImage,
+  noteImageArriving,
   handleInvoiceImage,
   notifyOwner,
 } from "@/lib/message-handlers";
@@ -142,6 +143,7 @@ export async function POST(request: Request) {
           } else if (isInvoice) {
             await handleInvoiceImage(base64, mimetype, caption);
           } else {
+            noteImageArriving();
             await handleSmartImage(base64, mimetype, caption);
           }
         } else {

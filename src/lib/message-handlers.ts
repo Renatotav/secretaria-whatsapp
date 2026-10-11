@@ -1712,6 +1712,18 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     case "finance": {
       // Sem valor ("gastei com uber"): não grava, pergunta e espera a resposta.
       if (!(route.amount > 0)) {
+        if (Date.now() - imageArrivedAt < IMAGE_NOTE_WINDOW_MS && route.financeType !== "income") {
+          imageNote = { description: route.description || "", category: route.category || "", subcategory: route.subcategory || "", at: Date.now() };
+          if (pendingImageDraft) {
+            // O print já foi lido: ajusta o cartão e pergunta de novo.
+            applyNoteToReading(pendingImageDraft.reading);
+            pendingImageDraft.at = Date.now();
+            response = `📝 Juntei com o print:\n\n${entryCard(imageDraftEntry(pendingImageDraft.reading, config), "🧐 Lançar assim?")}\n\nResponda *sim* para salvar ou *não* para descartar.`;
+          } else {
+            response = "📸 Beleza, junto essa descrição com o print que estou lendo. Já te mostro.";
+          }
+          break;
+        }
         pendingAmount = { text: joinedText, at: Date.now() };
         response = `💬 Quanto foi ${route.description ? `*${route.description}*` : "esse gasto"}? Responda só o valor (ex: 25,90).`;
         break;
@@ -2625,6 +2637,33 @@ let pendingImageDraft: {
   invoice?: { card: string; dueDate: string; total: number };
 } | null = null;
 const CONFIRM_YES_RE = /^(sim|s|isso|pode|pode sim|pode salvar|confirma|confirmo|ok|salva|lança|lanca)[.!]*$/i;
+
+// Print + texto mandados juntos ("Pix para água, Zé Alberto" logo depois do
+// comprovante): o texto chega enquanto a IA ainda lê o print. Em vez de
+// perguntar o valor (que está no print), o texto vira a descrição/categoria
+// do lançamento do print.
+const IMAGE_NOTE_WINDOW_MS = 3 * 60 * 1000;
+let imageArrivedAt = 0;
+let imageNote: { description: string; category: string; subcategory: string; at: number } | null = null;
+
+/** Chamado pelo webhook assim que chega um print sem legenda no canal pessoal. */
+export function noteImageArriving(): void {
+  imageArrivedAt = Date.now();
+  imageNote = null;
+}
+
+function applyNoteToReading(reading: import("./personal-router").ImageReading): void {
+  if (!imageNote || Date.now() - imageNote.at > IMAGE_NOTE_WINDOW_MS) return;
+  // "Pix para JOSE ALBERTO …" do comprovante vira "(JOSE ALBERTO …)" depois da descrição dele.
+  const fromPrint = (reading.description || "").replace(/^(pix|transfer[eê]ncia|pagamento)\s+(para|pra|a)\s+/i, "").trim();
+  const who = fromPrint && !fromPrint.toLowerCase().includes(imageNote.description.toLowerCase()) ? ` (${fromPrint})` : "";
+  if (imageNote.description) reading.description = `${imageNote.description}${who}`.slice(0, 120);
+  if (imageNote.category && imageNote.category !== "Outros") {
+    reading.category = imageNote.category;
+    reading.subcategory = imageNote.subcategory;
+  }
+  imageNote = null;
+}
 const CONFIRM_NO_RE = /^(n[aã]o|nao|cancela|deixa|esquece)[.!]*$/i;
 
 /**
@@ -2638,6 +2677,7 @@ export async function handleSmartImage(base64: string, mimetype: string, caption
   const { readImage } = await import("./personal-router");
   const reading = await readImage(base64, mimetype, getProviderOpts(config), caption, todayBRT().toISOString().slice(0, 10));
   console.log(`[image] print classificado como ${reading.kind}`);
+  if (reading.kind === "compra" || reading.kind === "estorno") applyNoteToReading(reading);
 
   if (reading.kind === "nota_fiscal") return handleInvoiceImage(base64, mimetype, caption);
   if (reading.kind === "fatura") return handleStatementImage(base64, mimetype);
@@ -2714,6 +2754,8 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
   if (!CONFIRM_YES_RE.test(t)) return null;
   const { reading } = draft;
   pendingImageDraft = null;
+  // "Quanto foi…?" perguntado sobre o mesmo gasto do print: já respondido.
+  if (pendingAmount && Date.now() - pendingAmount.at < IMAGE_NOTE_WINDOW_MS) pendingAmount = null;
   if (draft.invoice) {
     const { payInvoice, invoiceLabel } = await import("./invoices");
     const { ids, total } = await payInvoice(draft.invoice.card, draft.invoice.dueDate);
