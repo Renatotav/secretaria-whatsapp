@@ -748,16 +748,30 @@ const budgetIcon = (pct: number) => (pct >= 100 ? "🔴" : pct >= 70 ? "🟡" : 
  * planejado); gasto fora do teto derruba — é o aviso "antes de dar ruim".
  */
 async function monthForecast(year: number, monthIndex: number) {
+  return (await monthForecastParts(year, monthIndex)).total;
+}
+
+/**
+ * Resultado do mês na conta corrente, separado em: o que JÁ saiu (pago),
+ * o que ainda está a pagar/receber e o que ainda pode sair pelos tetos.
+ */
+async function monthForecastParts(year: number, monthIndex: number) {
   // Conta corrente (é ela que vira a Reserva no dia 1º): o VR fica de fora,
   // exceto para pagar a comida que ainda vem pelo teto de Alimentação.
   const isVoucher = (account: string) => /vr|ticket|vale/i.test(account);
   const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59);
   const entries = await prisma.financeEntry.findMany({
     where: { date: { gte: new Date(year, monthIndex, 1), lte: monthEnd } },
-    select: { type: true, amount: true, account: true },
+    select: { type: true, amount: true, account: true, status: true },
   });
   let checking = 0;
-  for (const e of entries) if (!isVoucher(e.account)) checking += e.type === "income" ? e.amount : -e.amount;
+  let done = 0;
+  for (const e of entries) {
+    if (isVoucher(e.account)) continue;
+    const v = e.type === "income" ? e.amount : -e.amount;
+    checking += v;
+    if (e.status === "paid") done += v;
+  }
   const vrEntries = await prisma.financeEntry.findMany({
     where: { date: { lte: monthEnd }, OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
     select: { type: true, amount: true },
@@ -771,7 +785,8 @@ async function monthForecast(year: number, monthIndex: number) {
     if (b.category === "Alimentação") stillFood += rest;
     else stillOther += rest;
   }
-  return checking - stillOther - Math.max(0, stillFood - vrAvailable);
+  const budgetRest = stillOther + Math.max(0, stillFood - vrAvailable);
+  return { total: checking - budgetRest, done, pending: checking - done, budgetRest };
 }
 
 // ── Lista de desejos ────────────────────────────────────────────────────
@@ -1006,12 +1021,23 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
 }
 
 async function monthForecastLine(year: number, monthIndex: number): Promise<string> {
-  const f = await monthForecast(year, monthIndex);
+  const { total: f, done, pending, budgetRest } = await monthForecastParts(year, monthIndex);
   const month = MONTH_NAMES[monthIndex];
   if (f >= 300) return `\n📊 Previsão de ${month}: sobra ${brl(f)}.`;
   if (f >= 0) return `\n🟡 Previsão de ${month}: sobra só ${brl(f)} — segura os gastos.`;
   const reserve = await findReserveGoal();
-  return `\n🔴 Previsão de ${month}: falta ${brl(-f)}${reserve ? ` → vai sair da ${reserve.name} (hoje ${brl(reserve.currentAmount)})` : ""}.`;
+  const fromReserve = reserve ? ` → sai da ${reserve.name} no dia 1º (hoje ${brl(reserve.currentAmount)})` : "";
+  // Tudo (ou quase) já pago: não é "falta pagar", é o mês que já fechou no vermelho.
+  if (Math.abs(pending) < 1 && done < 0) {
+    const extra = budgetRest >= 1 ? ` Se usar o resto dos tetos, mais ${brl(budgetRest)}.` : "";
+    return `\n🔴 ${month[0].toUpperCase()}${month.slice(1)}: já saiu ${brl(-done)} a mais do que entrou (tudo pago)${fromReserve}.${extra}`;
+  }
+  const parts = [
+    done < 0 ? `já saiu ${brl(-done)} a mais do que entrou` : done > 0 ? `até agora sobra ${brl(done)}` : "",
+    Math.abs(pending) >= 1 ? (pending < 0 ? `faltam pagar ${brl(-pending)}` : `faltam receber ${brl(pending)}`) : "",
+    budgetRest >= 1 ? `até ${brl(budgetRest)} pelos tetos` : "",
+  ].filter(Boolean);
+  return `\n🔴 Previsão de ${month}: fecha em −${brl(-f)} (${parts.join(" · ")})${fromReserve}.`;
 }
 
 /** "Como está meu orçamento?": cada teto com 🟢 <70% · 🟡 70–100% · 🔴 estourou. */
