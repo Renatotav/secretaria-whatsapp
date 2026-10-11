@@ -2024,14 +2024,21 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     case "chat":
       response = await answerChat(joinedText, recentContext, config.ownerName, providerOpts);
       break;
-    case "diary":
+    case "diary": {
+      const ask = pendingMoodAsk && Date.now() - pendingMoodAsk.at < 30 * 60 * 1000 ? pendingMoodAsk : null;
+      pendingMoodAsk = null;
       await prisma.diaryEntry.create({
         data: {
           content: route.content,
           mood: route.mood,
           source: "whatsapp",
+          // Resposta à pergunta do humor da nota: dia da compra, meio-dia BRT.
+          ...(ask ? { date: new Date(ask.day.getTime() + 15 * 3600_000) } : {}),
         },
       });
+      if (ask && route.mood && route.mood !== "neutro") {
+        await prisma.financeEntry.updateMany({ where: { id: ask.entryId, mood: "neutro" }, data: { mood: route.mood } });
+      }
       if (route.mood && route.mood !== "neutro") {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
@@ -2063,6 +2070,7 @@ Se houver imprevisto, defina hasUnexpectedExpense: true, escolha uma categoria d
         console.error("Falha ao classificar imprevisto no diário", e);
       }
       break;
+    }
     case "agenda_query":
       if (route.queryIntent === "chart") {
         // Pedido só do gráfico: texto curto e a imagem logo depois.
@@ -2897,6 +2905,10 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   await notifyOwner(config, await saveParsedInvoice(config, invoice, caption));
 }
 
+// Depois de "Como você estava no dia…?": a resposta vai para o diário DAQUELE
+// dia e marca o humor da nota.
+let pendingMoodAsk: { entryId: string; day: Date; at: number } | null = null;
+
 // Nota cuja soma dos itens não bateu com o total, esperando a decisão dele.
 let pendingInvoiceDraft: { invoice: InvoiceEntry; caption: string; at: number } | null = null;
 
@@ -2964,13 +2976,13 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
   }
 
   let finalMood = "neutro";
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
-  
+  // Humor do DIA DA COMPRA (nota de anteontem usa o diário de anteontem).
+  const BRT = 3 * 3600_000, DAY = 86_400_000;
+  const dayStart = new Date(purchaseDate.getTime() - ((((purchaseDate.getTime() - BRT) % DAY) + DAY) % DAY)); // 00:00 BRT
+  const dayEnd = new Date(dayStart.getTime() + 86_400_000 - 1);
+
   const todayDiary = await prisma.diaryEntry.findFirst({
-    where: { date: { gte: todayStart, lte: todayEnd }, mood: { not: "" } },
+    where: { date: { gte: dayStart, lte: dayEnd }, mood: { not: "" } },
     orderBy: { date: "desc" }
   });
   if (todayDiary && todayDiary.mood && todayDiary.mood !== "neutro") {
@@ -3011,7 +3023,13 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
   let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : paymentMethod === "ticket" ? "Se não foi no VR, responda *1* cartão · *2* pix · *3* débito." : "Pagou de outro jeito? Responda *1* cartão · *2* pix · *5* VR"}${detective}`;
 
   if (finalMood === "neutro") {
-    response += `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
+    const isToday = dayStart.getTime() <= Date.now() && Date.now() <= dayEnd.getTime();
+    const brtDay = new Date(dayStart.getTime() - BRT);
+    const dia = `${String(brtDay.getUTCDate()).padStart(2, "0")}/${String(brtDay.getUTCMonth() + 1).padStart(2, "0")}`;
+    response += isToday
+      ? `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`
+      : `\n\n🤔 Percebi esse gasto. Como você estava no dia ${dia}? (Anoto no diário desse dia.)`;
+    pendingMoodAsk = { entryId: entry.id, day: dayStart, at: Date.now() };
   }
 
   // Teto da categoria (aviso a partir de 70%) e previsão do mês — mesma regra
