@@ -1844,22 +1844,10 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             response += await buildSavingsSuggestion(newAmount);
           }
         } else {
+          // Humor do dia do GASTO ("ontem gastei…" usa o diário de ontem).
+          const spentOn = route.purchaseDate ? parseLocalDate(route.purchaseDate) : new Date();
           let finalMood = route.mood || "neutro";
-          
-          if (finalMood === "neutro") {
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-            const todayEnd = new Date();
-            todayEnd.setHours(23, 59, 59, 999);
-            
-            const todayDiary = await prisma.diaryEntry.findFirst({
-              where: { date: { gte: todayStart, lte: todayEnd }, mood: { not: "" } },
-              orderBy: { date: "desc" }
-            });
-            if (todayDiary && todayDiary.mood && todayDiary.mood !== "neutro") {
-              finalMood = todayDiary.mood;
-            }
-          }
+          if (finalMood === "neutro") finalMood = await diaryMoodOn(spentOn);
 
           lastSaved = { since: new Date() };
           lastInvoicePayment = null;
@@ -1890,7 +1878,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           }
 
           if (finalMood === "neutro" && route.financeType === "expense" && route.amount >= 100) {
-            response += `\n\n🤔 Percebi esse gasto mais elevado. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
+            response += askMoodFor(created.id, spentOn, "Percebi esse gasto mais elevado.");
           }
         }
 
@@ -2039,14 +2027,13 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
       if (ask && route.mood && route.mood !== "neutro") {
         await prisma.financeEntry.updateMany({ where: { id: ask.entryId, mood: "neutro" }, data: { mood: route.mood } });
       }
-      if (route.mood && route.mood !== "neutro") {
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date();
-        todayEnd.setHours(23, 59, 59, 999);
+      if (!ask && route.mood && route.mood !== "neutro") {
+        // Diário comum ("hoje foi puxado"): marca os gastos FEITOS hoje
+        // (purchaseDate; o `date` do cartão é o vencimento da fatura).
+        const { start: todayStart, end: todayEnd } = brtDayRange(new Date());
         await prisma.financeEntry.updateMany({
           where: {
-            date: { gte: todayStart, lte: todayEnd },
+            purchaseDate: { gte: todayStart, lte: todayEnd },
             mood: "neutro",
             source: "whatsapp"
           },
@@ -2909,6 +2896,31 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
 // dia e marca o humor da nota.
 let pendingMoodAsk: { entryId: string; day: Date; at: number } | null = null;
 
+/** 00:00 e 23:59:59 (horário de Brasília) do dia de `d`. */
+function brtDayRange(d: Date): { start: Date; end: Date } {
+  const BRT = 3 * 3600_000, DAY = 86_400_000;
+  const start = new Date(d.getTime() - ((((d.getTime() - BRT) % DAY) + DAY) % DAY));
+  return { start, end: new Date(start.getTime() + DAY - 1) };
+}
+
+/** Humor já anotado no diário do dia do gasto (ou "neutro"). */
+async function diaryMoodOn(day: Date): Promise<string> {
+  const { start, end } = brtDayRange(day);
+  const d = await prisma.diaryEntry.findFirst({ where: { date: { gte: start, lte: end }, mood: { not: "" } }, orderBy: { date: "desc" } });
+  return d && d.mood && d.mood !== "neutro" ? d.mood : "neutro";
+}
+
+/** Pergunta do humor sobre o DIA DO GASTO; a resposta vai para o diário desse dia. */
+function askMoodFor(entryId: string, purchaseDate: Date, lead: string): string {
+  const { start, end } = brtDayRange(purchaseDate);
+  pendingMoodAsk = { entryId, day: start, at: Date.now() };
+  if (start.getTime() <= Date.now() && Date.now() <= end.getTime()) {
+    return `\n\n🤔 ${lead} Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`;
+  }
+  const b = new Date(start.getTime() - 3 * 3600_000);
+  return `\n\n🤔 ${lead} Como você estava no dia ${String(b.getUTCDate()).padStart(2, "0")}/${String(b.getUTCMonth() + 1).padStart(2, "0")}? (Anoto no diário desse dia.)`;
+}
+
 // Nota cuja soma dos itens não bateu com o total, esperando a decisão dele.
 let pendingInvoiceDraft: { invoice: InvoiceEntry; caption: string; at: number } | null = null;
 
@@ -2975,19 +2987,8 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
     invoiceDate = creditCardBillDate(purchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5);
   }
 
-  let finalMood = "neutro";
   // Humor do DIA DA COMPRA (nota de anteontem usa o diário de anteontem).
-  const BRT = 3 * 3600_000, DAY = 86_400_000;
-  const dayStart = new Date(purchaseDate.getTime() - ((((purchaseDate.getTime() - BRT) % DAY) + DAY) % DAY)); // 00:00 BRT
-  const dayEnd = new Date(dayStart.getTime() + 86_400_000 - 1);
-
-  const todayDiary = await prisma.diaryEntry.findFirst({
-    where: { date: { gte: dayStart, lte: dayEnd }, mood: { not: "" } },
-    orderBy: { date: "desc" }
-  });
-  if (todayDiary && todayDiary.mood && todayDiary.mood !== "neutro") {
-    finalMood = todayDiary.mood;
-  }
+  const finalMood = await diaryMoodOn(purchaseDate);
 
   const entry = await prisma.financeEntry.create({
     data: {
@@ -3022,15 +3023,7 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
 
   let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : paymentMethod === "ticket" ? "Se não foi no VR, responda *1* cartão · *2* pix · *3* débito." : "Pagou de outro jeito? Responda *1* cartão · *2* pix · *5* VR"}${detective}`;
 
-  if (finalMood === "neutro") {
-    const isToday = dayStart.getTime() <= Date.now() && Date.now() <= dayEnd.getTime();
-    const brtDay = new Date(dayStart.getTime() - BRT);
-    const dia = `${String(brtDay.getUTCDate()).padStart(2, "0")}/${String(brtDay.getUTCMonth() + 1).padStart(2, "0")}`;
-    response += isToday
-      ? `\n\n🤔 Percebi esse gasto. Como você está se sentindo hoje? (Seu humor me ajuda a mapear seus gastos emocionais!)`
-      : `\n\n🤔 Percebi esse gasto. Como você estava no dia ${dia}? (Anoto no diário desse dia.)`;
-    pendingMoodAsk = { entryId: entry.id, day: dayStart, at: Date.now() };
-  }
+  if (finalMood === "neutro") response += askMoodFor(entry.id, purchaseDate, "Percebi esse gasto.");
 
   // Teto da categoria (aviso a partir de 70%) e previsão do mês — mesma regra
   // do gasto lançado por mensagem.
