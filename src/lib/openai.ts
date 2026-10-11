@@ -105,7 +105,9 @@ export async function generateVisionResponse(
   base64: string,
   mimetype: string,
   systemPrompt: string,
-  providerOpts: ProviderOptions
+  providerOpts: ProviderOptions,
+  /** Modelo do OpenRouter para esta leitura (padrão: gemini-2.5-flash). */
+  openrouterModel = "google/gemini-2.5-flash"
 ): Promise<string> {
   const imageContent = {
     type: "image_url" as const,
@@ -130,7 +132,7 @@ export async function generateVisionResponse(
     // de OCR/leitura de tabela densa em foto precisam de um modelo forte em
     // documento, independente do que está configurado pro resto do sistema.
     const response = await openrouter.chat.completions.create({
-      model: "google/gemini-2.5-flash",
+      model: openrouterModel,
       temperature: 0.1,
       max_tokens: 8192,
       messages: [{ role: "system", content: systemPrompt }, ...messages],

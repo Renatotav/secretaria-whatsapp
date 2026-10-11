@@ -625,7 +625,8 @@ export async function parseInvoiceImage(
   mimetype: string,
   providerOpts: ProviderOptions,
   ownerName = "",
-  caption = ""
+  caption = "",
+  model?: string
 ): Promise<InvoiceEntry | null> {
   const systemPrompt = `Você recebeu a foto de uma nota fiscal, cupom fiscal ou fatura.
 A legenda/texto do usuário enviada junto foi: "${caption}"
@@ -668,7 +669,7 @@ Formato esperado:
 }`;
 
   try {
-    const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
+    const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts, model);
     const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
     const parsed = JSON.parse(json) as InvoiceEntry;
     if (!parsed.items || !Array.isArray(parsed.items)) return null;

@@ -12,6 +12,7 @@ import {
   type PersonalQueryIntent,
   type PersonalRouteResult,
   type StatementEntry,
+  type InvoiceEntry,
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
 import { parseLocalDate, todayBRT, creditCardBillDate } from "./dates";
@@ -1657,6 +1658,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   const paymentReply =
     (await applyCommitmentCommands(joinedText, config)) ??
     (await applyImageDraftReply(joinedText, config)) ??
+    (await applyInvoiceDraftReply(joinedText, config)) ??
     (await applyUndoOrEdit(joinedText)) ??
     (await applyInvoicePayment(joinedText)) ??
     (await applySavingsReply(joinedText, conv?.messages)) ??
@@ -2846,14 +2848,24 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   if (!config || !config.ownerPhone) return;
 
   const providerOpts = getProviderOpts(config);
-  const invoice = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption);
+  const sumOf = (inv: InvoiceEntry) => inv.items.reduce((acc, i) => acc + (i.amount || i.quantity * i.unitPrice), 0);
+  const gapOf = (inv: InvoiceEntry | null) => (inv && inv.items.length ? Math.abs(inv.total - sumOf(inv)) : Infinity);
+  let invoice = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption);
+
+  // Nota comprida (40+ itens) às vezes perde linhas: relê com um modelo mais
+  // forte e fica com a leitura que fechou melhor.
+  if (gapOf(invoice) > 15 && providerOpts.openrouterApiKey) {
+    console.log(`[invoice] conta não fechou (diferença ${gapOf(invoice).toFixed(2)}): relendo com modelo mais forte`);
+    const again = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption, "google/gemini-2.5-pro");
+    if (gapOf(again) < gapOf(invoice)) invoice = again;
+  }
 
   if (!invoice || invoice.items.length === 0) {
     await notifyOwner(config, `⚠️ Não consegui ler os itens dessa nota fiscal. A imagem pode estar embaçada.`);
     return;
   }
 
-  let calculatedTotal = invoice.items.reduce((acc, i) => acc + (i.amount || (i.quantity * i.unitPrice)), 0);
+  let calculatedTotal = sumOf(invoice);
   const diff = Number((invoice.total - calculatedTotal).toFixed(2));
 
   // Se a diferença for de até R$ 15.00 (ex: descontos de itens/nota ou pequenos arredondamentos),
@@ -2868,10 +2880,55 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     });
     calculatedTotal = invoice.total;
   } else if (Math.abs(calculatedTotal - invoice.total) > 2.0) {
-    await notifyOwner(config, `⚠️ *Conta não fechou!* O total lido na nota foi ${brl(invoice.total)}, mas a soma dos ${invoice.items.length} itens deu ${brl(calculatedTotal)}. Por segurança contra alucinações da IA, não salvei a nota. Tente mandar uma foto mais nítida.`);
+    // Não grava sozinha: pergunta. O dinheiro que saiu é o total da nota; o
+    // que faltou ler vira um item "Itens não lidos".
+    console.log(`[invoice] conta não fechou: total ${invoice.total}, soma ${calculatedTotal.toFixed(2)} em ${invoice.items.length} itens`);
+    pendingInvoiceDraft = { invoice, caption, at: Date.now() };
+    await notifyOwner(
+      config,
+      `⚠️ *Conta não fechou.* Li ${invoice.items.length} itens somando ${brl(calculatedTotal)}, mas o total da nota parece ser ${brl(invoice.total)} (faltou ler ${brl(invoice.total - calculatedTotal)}).\n\n` +
+        `• *sim* → salvo com o total ${brl(invoice.total)} (a diferença vira "Itens não lidos")\n` +
+        `• mande o *total certo* (ex: 145,19) se eu li o total errado\n` +
+        `• *não* → descarto`
+    );
     return;
   }
 
+  await notifyOwner(config, await saveParsedInvoice(config, invoice, caption));
+}
+
+// Nota cuja soma dos itens não bateu com o total, esperando a decisão dele.
+let pendingInvoiceDraft: { invoice: InvoiceEntry; caption: string; at: number } | null = null;
+
+/** Resposta ao "Conta não fechou": sim / total certo / não. */
+async function applyInvoiceDraftReply(text: string, config: AgentConfig): Promise<string | null> {
+  const draft = pendingInvoiceDraft;
+  if (!draft) return null;
+  if (Date.now() - draft.at > 30 * 60 * 1000) {
+    pendingInvoiceDraft = null;
+    return null;
+  }
+  const t = text.trim();
+  if (CONFIRM_NO_RE.test(t)) {
+    pendingInvoiceDraft = null;
+    return "👍 Ok, descartei essa nota.";
+  }
+  const m = t.match(/^(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{1,2})?)$/i);
+  if (!CONFIRM_YES_RE.test(t) && !m) return null;
+  pendingInvoiceDraft = null;
+  const inv = draft.invoice;
+  if (m) inv.total = Number(m[1].replace(/\.(?=\d{3})/g, "").replace(",", "."));
+  const sum = inv.items.reduce((acc, i) => acc + (i.amount || i.quantity * i.unitPrice), 0);
+  const gap = Math.round((inv.total - sum) * 100) / 100;
+  if (Math.abs(gap) >= 0.01) {
+    inv.items.push({ name: gap > 0 ? "Itens não lidos" : "Desconto / ajuste", category: "Desconto / Ajuste", quantity: 1, unitPrice: gap, amount: gap });
+  }
+  return saveParsedInvoice(config, inv, draft.caption);
+}
+
+/** Grava a nota (com os itens) e devolve a mensagem de confirmação. */
+async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, caption: string): Promise<string> {
+  const providerOpts = getProviderOpts(config);
   let invoiceDate = invoice.date ? parseLocalDate(invoice.date) : todayBRT();
   // Valida o ano: só aceita ano atual ±1 (ex: 2025-2027 em 2026)
   const currentYear = new Date().getFullYear();
@@ -2984,8 +3041,7 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
     }
   }
   response += await monthForecastLine(entry.date.getFullYear(), entry.date.getMonth());
-
-  await notifyOwner(config, response);
+  return response;
 }
 
 export interface PrivateMessageMeta {
