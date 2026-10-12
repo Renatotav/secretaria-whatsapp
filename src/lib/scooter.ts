@@ -69,12 +69,7 @@ export async function applyScooterCommand(text: string): Promise<string | null> 
     const hours = t.match(new RegExp(`${NUM}\\s*(?:h\\b|horas?)`, "i"));
     const energy = kwh ? num(kwh[1]) : null;
     if (energy !== null && (energy <= 0 || energy > 4)) return "🛵 Esse valor de kWh parece errado (uma carga cheia fica perto de 2,6 kWh na tomada). Manda de novo, ex: *carreguei 1,8 kWh*.";
-    const odo = r.odo ?? (await lastOdo());
-    await prisma.scooterLog.create({ data: { kind: "carga", odo, kwh: energy, hours: hours ? num(hours[1]) : null, note: t.slice(0, 200) } });
-    const head = `🔌 Carga anotada${energy !== null ? `: ${fmt(energy, 2)} kWh` : ""}${odo !== null ? ` com ${fmt(odo, 1)} km` : ""}.`;
-    const tip = energy === null ? `\n💡 Quando puder, manda o kWh que a tomada mostrou (ex: *carreguei 1,8 kWh*) — é com ele que eu calculo o consumo real.` : "";
-    const noOdo = odo === null ? `\n💡 Me manda o ODO de agora (ex: *scooter 43 km*) para eu contar os km desde esta carga.` : "";
-    return `${head}${tip}${noOdo}\n\n${await scooterStatus(true)}`;
+    return recordCharge({ kwh: energy, odo: r.odo, hours: hours ? num(hours[1]) : null, note: t.slice(0, 200) });
   }
 
   if (READING_START_RE.test(t)) {
@@ -90,6 +85,39 @@ export async function applyScooterCommand(text: string): Promise<string | null> 
   }
 
   return null;
+}
+
+/**
+ * Grava uma carga. Se já há uma carga nas últimas 12 h (ex: a tomada mandou o
+ * kWh e depois ele digitou o ODO, ou o contrário), completa essa em vez de
+ * criar outra — assim não conta a mesma carga duas vezes.
+ */
+export async function recordCharge(c: { kwh: number | null; odo?: number | null; hours?: number | null; note: string; at?: Date }): Promise<string> {
+  const recent = await prisma.scooterLog.findFirst({ where: { kind: "carga", at: { gte: new Date(Date.now() - 12 * 3_600_000) } }, orderBy: { at: "desc" } });
+  let odo = c.odo ?? null;
+  let usedLast = false;
+  if (odo === null && !recent?.odo) {
+    odo = await lastOdo();
+    usedLast = odo !== null;
+  }
+  const saved = recent
+    ? await prisma.scooterLog.update({
+        where: { id: recent.id },
+        data: {
+          kwh: c.kwh ?? recent.kwh,
+          odo: c.odo ?? recent.odo ?? odo,
+          hours: c.hours ?? recent.hours,
+          note: `${recent.note} | ${c.note}`.slice(0, 400),
+        },
+      })
+    : await prisma.scooterLog.create({ data: { kind: "carga", at: c.at ?? new Date(), odo, kwh: c.kwh, hours: c.hours ?? null, note: c.note } });
+  const head = `🔌 Carga ${recent ? "atualizada" : "anotada"}${saved.kwh != null ? `: ${fmt(saved.kwh, 2)} kWh` : ""}${saved.hours != null ? ` em ${fmt(saved.hours, 1)} h` : ""}${saved.odo != null ? ` com ${fmt(saved.odo, 1)} km` : ""}.`;
+  const tips = [
+    saved.kwh == null && "💡 Quando puder, manda o kWh que a tomada mostrou (ex: *carreguei 1,8 kWh*) — é com ele que eu calculo o consumo real.",
+    saved.odo == null && "💡 Me manda o ODO de agora (ex: *scooter 43 km*) para eu contar os km desde esta carga.",
+    usedLast && `💡 Usei o último ODO que você mandou (${fmt(odo!, 1)} km). Se rodou depois disso, responda *scooter corrigir X km*.`,
+  ].filter(Boolean);
+  return `${head}${tips.length ? `\n${tips.join("\n")}` : ""}\n\n${await scooterStatus(true)}`;
 }
 
 async function lastOdo(): Promise<number | null> {
