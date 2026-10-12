@@ -41,3 +41,8 @@ next-env.d.ts
 *.db-shm
 *.db-wal
 /data/
+
+# capturas do playwright-cli (prints das telas, com dados pessoais) — nunca no repositório
+.playwright-cli/
+.playwright-mcp/
+/*.png
