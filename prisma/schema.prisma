@@ -389,13 +389,16 @@ model WorkContact {
 model ScooterLog {
   id        String   @id @default(cuid())
   at        DateTime @default(now())
-  /// "leitura" (painel) ou "carga" (até o verde)
+  /// "leitura" (painel), "carga" (até o verde) ou "pneu" (calibragem)
   kind      String
   odo       Float?
   volts     Float?
   bars      Int?
   kwh       Float?
   hours     Float?
+  /// Calibragem (kind "pneu"): pressão em PSI.
+  psiFront  Float?
+  psiRear   Float?
   note      String   @default("")
   createdAt DateTime @default(now())
 
