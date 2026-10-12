@@ -381,3 +381,21 @@ model WorkContact {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
+
+/// Diário da scooter elétrica do dono: leituras do painel e cargas (kWh da
+/// tomada). Daqui sai o consumo real (Wh/km) e quando recarregar com folga.
+model ScooterLog {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  /// "leitura" (painel) ou "carga" (até o verde)
+  kind      String
+  odo       Float?
+  volts     Float?
+  bars      Int?
+  kwh       Float?
+  hours     Float?
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([at])
+}

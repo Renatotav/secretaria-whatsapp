@@ -931,6 +931,9 @@ export async function buildDailyDigest(): Promise<string> {
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
   const due = await dueBetween(dayRange(tomorrow).gte, dayRange(tomorrow).lte);
   lines.push(due.length ? `📅 Amanhã:\n${due.join("\n")}` : "📅 Amanhã: nada vencendo.");
+  const { scooterDigestLine } = await import("./scooter");
+  const scooter = await scooterDigestLine();
+  if (scooter) lines.push(scooter);
   const { workDigestLine } = await import("./work");
   const work = await workDigestLine();
   if (work) lines.push(work);
@@ -1669,7 +1672,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   // fora do histórico da conversa (dado do Tribunal não passa pela IA).
   const { applyWorkCommand } = await import("./work-commands");
   const { attachPendingWorkChat } = await import("./work-phone");
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText));
+  const { applyScooterCommand } = await import("./scooter");
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyScooterCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
