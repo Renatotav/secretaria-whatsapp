@@ -284,7 +284,7 @@ function SnippetsEditor() {
       <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
         Digite o atalho em qualquer campo (Assyst, WhatsApp Web, e-mail, Redmine) e ele vira o texto. Campos automáticos: <code>{"{chamado}"}</code> nº do chamado
         aberto · <code>{"{saudacao}"}</code> Bom dia/Boa tarde/Boa noite · <code>{"{data}"}</code> · <code>{"{hora}"}</code> · <code>{"{campo:Nome do usuário}"}</code>{" "}
-        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica.
+        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica. Pode colar atalhos do Text Blaze ({"{time}"}, {"{formtext}"}, {"{if}"}): a extensão entende. Campo "Pronome" vira botões Sr./Sra./Dr./Dra./Sem título.
       </p>
       {rows === null && <div style={{ fontSize: 12 }}>Carregando…</div>}
       {rows?.map((r, i) => (
