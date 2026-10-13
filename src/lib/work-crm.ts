@@ -81,3 +81,13 @@ export async function dueContactReminders(): Promise<string[]> {
   }
   return msgs;
 }
+
+/** Resumo para marcar a lista de conversas: só o que aparece na tela. */
+export async function listContactTags() {
+  const rows = await prisma.workContact.findMany({
+    select: { key: true, labels: true, tickets: true, reminderAt: true },
+    orderBy: { updatedAt: "desc" },
+    take: 2000,
+  });
+  return rows.filter((r) => r.labels.length || r.tickets.length || r.reminderAt);
+}

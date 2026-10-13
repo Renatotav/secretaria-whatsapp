@@ -6,7 +6,14 @@ import { getSituations } from "@/lib/work-situations";
 // CRM do WhatsApp Web (extensão, chave da extensão).
 export async function GET(request: Request) {
   if (!(await checkWorkToken(request))) return NextResponse.json({ error: "Chave inválida" }, { status: 401 });
-  const key = new URL(request.url).searchParams.get("key") || "";
+  const url = new URL(request.url);
+  // ?all=1: resumo de todos os contatos (etiquetas, chamados, lembrete) para
+  // a extensão marcar a lista de conversas do WhatsApp Web. Sem as notas.
+  if (url.searchParams.get("all")) {
+    const { listContactTags } = await import("@/lib/work-crm");
+    return NextResponse.json({ contacts: await listContactTags() });
+  }
+  const key = url.searchParams.get("key") || "";
   const r = await getContact(key);
   if (!r) return NextResponse.json({ error: "Conversa sem nome" }, { status: 400 });
   return NextResponse.json({ ...r, situations: await getSituations() });
