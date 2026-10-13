@@ -16,7 +16,8 @@ export function maskPersonalData(text: string): string {
     .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "[e-mail removido]")
     // CPF com ou sem pontos/traço/espaços; o ponto final da frase não impede a máscara.
       .replace(/(?<!\d)(?<!\d[.-])\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2}(?!\d)(?![.-]\d)/g, "xxx.xxx.xxx-xx")
-    .replace(/(\+?55\s?)?\(?\b\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b/g, "[telefone removido]");
+    // Telefone: aceita "85 98768 -5641", "(85) 98768-5641", "+55 85 9…" e o número colado "558598765641".
+    .replace(/(?<!\d)(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?9?\d{4}[\s.-]{0,3}\d{4}(?!\d)/g, "[telefone removido]");
   return t.replace(/\u0000(\d+)\u0000/g, (_m, i) => saved[Number(i)]);
 }
 

@@ -33,7 +33,9 @@ async function planFor(question: string): Promise<Plan | null> {
   const res = await client.chat.completions.create({
     model: config.workAiModel || "anthropic/claude-sonnet-5.5",
     temperature: 0,
-    max_tokens: 300,
+    // Com raciocínio ligado, 300 tokens acabavam antes do JSON sair.
+    max_tokens: 2500,
+    ...({ reasoning: { max_tokens: 1024 } } as object),
     messages: [
       {
         role: "system",

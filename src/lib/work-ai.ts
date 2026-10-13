@@ -98,7 +98,10 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   const res = await client.chat.completions.create({
     model,
     temperature: 0.2,
-    max_tokens: 2500,
+    // O modelo "pensa" antes de responder: sem limitar o raciocínio, textos
+    // longos (Redmine) gastavam tudo pensando e não sobrava resposta.
+    max_tokens: 6000,
+    ...({ reasoning: { max_tokens: 1024 } } as object),
     messages: [
       {
         role: "system",
@@ -123,7 +126,7 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
 
 /** Sistema do chamado pelo texto (para escolher modelos do mesmo tipo). */
 const SYSTEMS: { tag: string; re: RegExp }[] = [
-  { tag: "SAJMP / Ministério Público", re: /\b(sajmp|saj\s*-?\s*mp|mpce|minist[eé]rio\s+p[uú]blico|promotor|promotoria)\b/i },
+  { tag: "SAJMP / Ministério Público", re: /\b(sajmp|saj\s*[-/]?\s*mp|mpce|minist[eé]rio\s+p[uú]blico|promotor|promotoria)\b/i },
   { tag: "MNI / integração", re: /\b(mni|intercomunica[cç][aã]o|webservice|web\s*service|soap|soapui|integra[cç][aã]o)\b/i },
   { tag: "Defensoria", re: /\b(defensoria|defensor)\b/i },
 ];
@@ -146,7 +149,11 @@ async function redmineModels(input: string): Promise<string> {
   return (
     `\n\n### Modelos reais de abertura do Renato${same.length ? ` — sistema: ${tag}` : ""}\n` +
     "Siga a estrutura, o tom e o vocabulário destes exemplos (são como ele abre Redmine na prática). " +
-    "NÃO copie deles fatos, números de processo, datas, IDs de documento ou nomes: use só os dados do chamado recebido.\n\n" +
+    "NÃO copie deles fatos, números de processo, datas, IDs de documento ou nomes: use só os dados do chamado recebido." +
+    (same.length && tag !== "PJe"
+      ? ` Neste sistema (${tag}), a resposta é SÓ o texto no formato dos modelos — cabeçalho (Chamado, Nome, Papel principal, Lotação, CPF) e as seções 1. Situação Identificada, 2. Testes e Verificações, 3. Correção a Ser Aplicada — sem título [PJE1G]/[PJE2G], sem tabela comparativa, sem selos ou conferências no fim e sem markdown (#, **). Esta regra vence o formato das instruções acima.`
+      : "") +
+    "\n\n" +
     ex
   );
 }
