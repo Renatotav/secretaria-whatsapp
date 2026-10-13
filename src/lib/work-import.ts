@@ -22,6 +22,7 @@ const COLUMNS: { field: string; test: (h: string) => boolean }[] = [
   { field: "origin", test: (h) => h.startsWith("ORIGEM") },
   { field: "errorType", test: (h) => h.startsWith("TIPO DO ERRO") || h.startsWith("TIPO DE ERRO") },
   { field: "resolution", test: (h) => h.startsWith("DESCRICAO DA RESOLUCAO") || h === "RESOLUCAO" },
+  { field: "redmineText", test: (h) => h.startsWith("ABERTURA DO REDMINE") || h.startsWith("ABERTURA REDMINE") || h.startsWith("TEXTO DO REDMINE") },
 ];
 
 /** Data da planilha (número do Excel, Date ou "dd/mm/aaaa") → ISO. */
@@ -84,6 +85,7 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
             errorType: col.errorType !== undefined ? String(r[col.errorType] ?? "") : undefined,
             origin: origin.includes("EXTERNO") ? "externo" : origin.includes("INTERNO") ? "interno" : undefined,
             resolution: resolution || undefined,
+            redmineText: col.redmineText !== undefined ? String(r[col.redmineText] ?? "").trim() || undefined : undefined,
             // Com resolução preenchida, o chamado está resolvido (o upsert nunca rebaixa um Redmine).
             status: resolution ? "resolvido" : undefined,
             // A planilha não tem data de resolução: usa a de abertura (o atendimento é no

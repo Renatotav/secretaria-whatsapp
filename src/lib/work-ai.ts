@@ -89,6 +89,10 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
       context = `\n\nContexto (só para você entender; NÃO copie nem corrija isto na resposta) — dados do chamado ${t.ticketId} na Central: status ${t.status}${t.errorType ? `, tipo ${t.errorType}` : ""}${t.origin ? `, usuário ${t.origin}` : ""}${t.queue ? `, fila ${t.queue}` : ""}${t.redmine ? `, Redmine ${t.redmine}${t.redmineStatus ? ` (${t.redmineStatus})` : ""}` : ""}.`;
   }
 
+  // Redmine: junta 2–3 aberturas reais dele (coluna "ABERTURA DO REDMINE" da
+  // planilha) do mesmo sistema, como modelo de estilo — SAJMP/MP, MNI, PJe…
+  if (key === "redmine") context += await redmineModels(input);
+
   const model = config.workAiModel || "anthropic/claude-sonnet-5.5";
   const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1" });
   const res = await client.chat.completions.create({
@@ -115,4 +119,34 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   const out = res.choices[0]?.message?.content?.trim() || "";
   if (!out) throw new Error("A IA não devolveu texto. Tente de novo.");
   return { skill: key, text: out, model, tokens: { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 } };
+}
+
+/** Sistema do chamado pelo texto (para escolher modelos do mesmo tipo). */
+const SYSTEMS: { tag: string; re: RegExp }[] = [
+  { tag: "SAJMP / Ministério Público", re: /\b(sajmp|saj\s*-?\s*mp|mpce|minist[eé]rio\s+p[uú]blico|promotor|promotoria)\b/i },
+  { tag: "MNI / integração", re: /\b(mni|intercomunica[cç][aã]o|webservice|web\s*service|soap|soapui|integra[cç][aã]o)\b/i },
+  { tag: "Defensoria", re: /\b(defensoria|defensor)\b/i },
+];
+export const systemOf = (t: string) => SYSTEMS.find((x) => x.re.test(t))?.tag ?? "PJe";
+
+async function redmineModels(input: string): Promise<string> {
+  const rows = await prisma.workTicket.findMany({
+    where: { redmineText: { not: "" } },
+    select: { ticketId: true, errorType: true, description: true, redmineText: true },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  });
+  if (!rows.length) return "";
+  const tag = systemOf(input);
+  const same = rows.filter((r) => systemOf(`${r.redmineText} ${r.errorType} ${r.description}`) === tag);
+  const picked = (same.length ? same : rows).slice(0, 3);
+  const ex = picked
+    .map((r, i) => `--- Modelo ${i + 1}${r.errorType ? ` (tipo: ${r.errorType})` : ""}:\n${r.redmineText.slice(0, 1800)}`)
+    .join("\n\n");
+  return (
+    `\n\n### Modelos reais de abertura do Renato${same.length ? ` — sistema: ${tag}` : ""}\n` +
+    "Siga a estrutura, o tom e o vocabulário destes exemplos (são como ele abre Redmine na prática). " +
+    "NÃO copie deles fatos, números de processo, datas, IDs de documento ou nomes: use só os dados do chamado recebido.\n\n" +
+    ex
+  );
 }

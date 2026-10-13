@@ -18,6 +18,8 @@ export interface WorkTicketInput {
   resolution?: string;
   redmine?: string;
   description?: string;
+  /** Texto de abertura do Redmine (planilha) — modelo para a skill do Redmine. */
+  redmineText?: string;
   /** Quando foi resolvido (importação de histórico). Sem isso, fechar agora = resolvido agora. */
   resolvedAt?: string | null;
   /** Quando chegou para ele (planilha). Só preenche se ainda estiver vazio — o ajuste manual vence. */
@@ -56,6 +58,7 @@ export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" 
     ...(clean(input.resolution) !== undefined ? { resolution: clean(input.resolution) } : {}),
     ...(clean(input.redmine, 50) !== undefined ? { redmine: clean(input.redmine, 50) } : {}),
     ...(clean(input.description, 8000) !== undefined ? { description: clean(input.description, 8000) } : {}),
+    ...(clean(input.redmineText, 8000) ? { redmineText: clean(input.redmineText, 8000) } : {}),
     ...(closing ? { resolvedAt: pastDate(input.resolvedAt) ?? new Date() } : {}),
   };
   const saved = await prisma.workTicket.upsert({
