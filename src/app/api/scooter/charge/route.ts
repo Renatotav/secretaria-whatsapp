@@ -29,6 +29,16 @@ export async function POST(request: Request) {
     hours: startedAt && !Number.isNaN(startedAt.getTime()) ? (endedAt.getTime() - startedAt.getTime()) / 3_600_000 : null,
     note: `automático (tomada)${maxW ? ` · pico ${Math.round(maxW)} W` : ""}${Number.isFinite(lastW) ? ` · desligou com ${Math.round(lastW)} W` : ""}`,
   });
+  // Em casa, a Alexa também avisa (fora do horário de silêncio).
+  try {
+    const { scooterNumbers } = await import("@/lib/scooter");
+    const { alexaFalar } = await import("@/lib/alexa");
+    const n = await scooterNumbers();
+    const kwhFalado = kwh.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+    await alexaFalar(`Renato, a carga da scooter terminou. ${kwhFalado} quilowatts-hora.${n ? ` Dá para rodar uns ${Math.round(n.rangeKm)} quilômetros.` : ""}`);
+  } catch (err) {
+    console.error("[scooter] aviso na Alexa falhou", err);
+  }
   try {
     const { notifyOwner } = await import("@/lib/message-handlers");
     const config = await prisma.agentConfig.findFirst();
