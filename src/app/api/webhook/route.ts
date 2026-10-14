@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       const vm = rawMessage.videoMessage as Record<string, unknown>;
       const seconds = Number(vm.seconds) || 0;
       const size = Number(vm.fileLength) || 0;
-      if (seconds > 90 || size > 20_000_000) {
+      if (seconds > 90 || size > 64_000_000) {
         await notifyOwner(config, "🎥 Vídeo grande demais para ler o painel. Grave só a hora de ligar a scooter (uns 10 segundos).");
         return NextResponse.json({ ok: true });
       }
