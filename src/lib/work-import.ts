@@ -22,8 +22,20 @@ const COLUMNS: { field: string; test: (h: string) => boolean }[] = [
   { field: "origin", test: (h) => h.startsWith("ORIGEM") },
   { field: "errorType", test: (h) => h.startsWith("TIPO DO ERRO") || h.startsWith("TIPO DE ERRO") },
   { field: "resolution", test: (h) => h.startsWith("DESCRICAO DA RESOLUCAO") || h === "RESOLUCAO" },
+  // "STATUS" (ENCERRADO, PENDENTE, AGUARDANDO ABERTURA DE REDMINE, RELÓGIO PARADO…)
+  { field: "sheetStatus", test: (h) => h === "STATUS" || h.startsWith("STATUS DO CHAMADO") },
   { field: "redmineText", test: (h) => h.startsWith("ABERTURA DO REDMINE") || h.startsWith("ABERTURA REDMINE") || h.startsWith("TEXTO DO REDMINE") },
 ];
+
+/** "✅ ENCERRADO" → "ENCERRADO"; "🔴 AGUARDANDO ABERTURA\nDE REDMINE" → "AGUARDANDO ABERTURA DE REDMINE". */
+export function sheetStatusText(v: unknown): string {
+  return String(v ?? "")
+    .replace(/[^\p{L}\p{N}\s/-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase()
+    .slice(0, 60);
+}
 
 /** Data da planilha (número do Excel, Date ou "dd/mm/aaaa") → ISO. */
 function toISO(v: unknown): string | null {
@@ -85,6 +97,8 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
             errorType: col.errorType !== undefined ? String(r[col.errorType] ?? "") : undefined,
             origin: origin.includes("EXTERNO") ? "externo" : origin.includes("INTERNO") ? "interno" : undefined,
             resolution: resolution || undefined,
+            // Sem os emojis/ícones da célula (✅, 🔴…): só o texto, como na planilha.
+            sheetStatus: col.sheetStatus !== undefined ? sheetStatusText(r[col.sheetStatus]) : undefined,
             redmineText: col.redmineText !== undefined ? String(r[col.redmineText] ?? "").trim() || undefined : undefined,
             // Com resolução preenchida, o chamado está resolvido (o upsert nunca rebaixa um Redmine).
             status: resolution ? "resolvido" : undefined,

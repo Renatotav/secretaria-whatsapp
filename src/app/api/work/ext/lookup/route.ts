@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const digits = [...new Set(ids.map((id) => id.replace(/^[A-Z]/, "")))];
   const rows = await prisma.workTicket.findMany({
     where: { OR: digits.flatMap((d) => [{ ticketId: d }, { ticketId: { endsWith: d } }]) },
-    select: { ticketId: true, status: true, errorType: true, origin: true, resolution: true, redmine: true, redmineStatus: true, queue: true, lastAction: true, receivedAt: true, slaOverride: true, situation: true, situationSince: true, pausedMs: true, openedAt: true, resolvedAt: true, updatedAt: true },
+    select: { ticketId: true, status: true, errorType: true, origin: true, resolution: true, redmine: true, redmineStatus: true, queue: true, lastAction: true, receivedAt: true, slaOverride: true, sheetStatus: true, situation: true, situationSince: true, pausedMs: true, openedAt: true, resolvedAt: true, updatedAt: true },
   });
   const tickets: Record<string, unknown> = {};
   for (const id of ids) {

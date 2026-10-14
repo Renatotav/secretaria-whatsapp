@@ -24,6 +24,8 @@ export interface WorkTicketInput {
   resolvedAt?: string | null;
   /** Quando chegou para ele (planilha). Só preenche se ainda estiver vazio — o ajuste manual vence. */
   receivedAt?: string | null;
+  /** STATUS da planilha, como está lá (o Assyst mostra na coluna Alertas). */
+  sheetStatus?: string;
 }
 
 /** Data válida e não futura (para não inventar "resolvido hoje" ao importar histórico). */
@@ -59,6 +61,7 @@ export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" 
     ...(clean(input.redmine, 50) !== undefined ? { redmine: clean(input.redmine, 50) } : {}),
     ...(clean(input.description, 8000) !== undefined ? { description: clean(input.description, 8000) } : {}),
     ...(clean(input.redmineText, 8000) ? { redmineText: clean(input.redmineText, 8000) } : {}),
+    ...(input.sheetStatus !== undefined ? { sheetStatus: clean(input.sheetStatus, 60) ?? "" } : {}),
     ...(closing ? { resolvedAt: pastDate(input.resolvedAt) ?? new Date() } : {}),
   };
   const saved = await prisma.workTicket.upsert({

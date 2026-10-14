@@ -319,6 +319,8 @@ model WorkTicket {
   /// Texto que ele usou para abrir o Redmine (coluna "ABERTURA DO REDMINE" da
   /// planilha, CPF mascarado). Serve de modelo para a skill "Preparar Redmine".
   redmineText String    @default("")
+  /// STATUS da planilha dele, como está lá (ENCERRADO, PENDENTE, AGUARDANDO ABERTURA DE REDMINE, RELÓGIO PARADO…)
+  sheetStatus String    @default("")
   /// "painel", "extensao", "whatsapp" ou "escala" (importado do sistema de escala, só leitura).
   source      String    @default("painel")
   resolvedAt  DateTime?
