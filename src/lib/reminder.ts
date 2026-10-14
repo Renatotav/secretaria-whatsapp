@@ -75,6 +75,13 @@ export async function checkDueReminders(
         `⏰ *Lembrete*\n📋 ${item.title}${details}`
       );
       await prisma.agendaItem.update({ where: { id: item.id }, data: { reminded: true } });
+      // Em casa, a Alexa também fala o lembrete (fora do horário de silêncio).
+      try {
+        const { alexaFalar } = await import("./alexa");
+        await alexaFalar(`Renato, lembrete: ${item.title}.`);
+      } catch {
+        // o WhatsApp já foi
+      }
     } catch {
       // tenta de novo no próximo ciclo
     }

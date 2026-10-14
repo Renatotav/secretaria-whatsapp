@@ -3408,3 +3408,31 @@ export async function handleOwnerReply(joinedText: string, meta: OwnerReplyMeta)
   // O próprio dono às vezes é quem fecha o horário ("fechado, amanhã às 7").
   if (!meta.isGroup) await checkCommitment(phone, conv.contactName || contactName, conv.id, config);
 }
+
+/**
+ * Frase curta para a Alexa: contas vencidas, que vencem hoje ou amanhã (a
+ * fatura de cada cartão numa frase). "" = nada para falar.
+ */
+export async function billsDueSpeech(): Promise<string> {
+  const today = todayBRT();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const DAY = 86400000;
+  const pending = await prisma.financeEntry.findMany({
+    where: { status: "pending", date: { lte: new Date(start.getTime() + 2 * DAY - 1) }, OR: [{ type: "expense" }, { type: "income", paymentMethod: "cartão" }] },
+    orderBy: { date: "asc" },
+  });
+  const grupos = new Map<string, { nome: string; valor: number; dia: number }>();
+  for (const e of pending) {
+    const dia = Math.floor((new Date(e.date.getFullYear(), e.date.getMonth(), e.date.getDate()).getTime() - start.getTime()) / DAY);
+    const nome = e.paymentMethod === "cartão" ? `a fatura do cartão${e.card ? ` ${e.card}` : ""}` : `${e.description.replace(/\s*\((previsto|recorrente)\)/gi, "").replace(/\s*-\s*Parcela.*$/i, "").trim() || e.category}`;
+    const k = `${nome}|${dia}`;
+    const g = grupos.get(k) ?? { nome, valor: 0, dia };
+    g.valor += e.type === "income" ? -e.amount : e.amount;
+    grupos.set(k, g);
+  }
+  const itens = [...grupos.values()].filter((g) => g.valor > 0.5).slice(0, 3);
+  if (!itens.length) return "";
+  const quando = (d: number) => (d < 0 ? "está vencida" : d === 0 ? "vence hoje" : "vence amanhã");
+  const frases = itens.map((g) => `${g.nome}, de ${Math.round(g.valor)} reais, ${quando(g.dia)}`);
+  return `Renato, lembrete de contas: ${frases.join("; ")}.`;
+}

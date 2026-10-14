@@ -183,6 +183,15 @@ export function startScheduler(): void {
         lastFinanceReminderDate = todayDate;
         try {
           const msg = await buildBillsDue("reminder");
+          // A Alexa fala só o que vence hoje/amanhã ou já venceu (frase curta).
+          try {
+            const { billsDueSpeech } = await import("./message-handlers");
+            const { alexaFalar } = await import("./alexa");
+            const fala = await billsDueSpeech();
+            if (fala) await alexaFalar(fala);
+          } catch (err) {
+            console.error("[alexa] aviso de contas falhou", err);
+          }
           if (msg) {
             await sendTextWithTyping(
               evolutionConfig.evolutionUrl,
