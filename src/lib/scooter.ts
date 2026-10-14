@@ -222,3 +222,52 @@ export async function scooterDigestLine(): Promise<string> {
   if (n.daysSince !== null && n.daysSince >= 7) parts.push(`${n.daysSince} dias da última carga`);
   return `🛵 Scooter: ${parts.join(" · ")}${tireDue ? `\n${tireDue}` : ""}`;
 }
+
+/**
+ * Vídeo do painel (inicialização): o ODO aparece por poucos segundos, por isso
+ * vídeo e não foto. O Gemini assiste ao vídeo inteiro e devolve os números.
+ */
+export async function readScooterVideo(base64: string, mimetype: string, caption = ""): Promise<string> {
+  const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true } });
+  if (!config?.openrouterApiKey) return "⚠️ Sem chave do OpenRouter para ler o vídeo. Manda em texto: *scooter 50 km 79v 6 barras*.";
+  const prompt =
+    "Vídeo do painel de uma scooter elétrica ANGIE (sistema 72 V, bateria LiFePO4) sendo ligada. Na sequência de inicialização aparece primeiro \"72V\" " +
+    "(nominal, IGNORE), depois o ODO (km total, ex: 00043) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
+    "indicador de bateria com até 6 barras. Leia: o ODO, a tensão real (nunca 72) e quantas barras estão acesas. Se não for o painel de uma scooter, " +
+    'diga painel=false. Responda SÓ JSON: {"painel":true|false,"odo":number|null,"volts":number|null,"barras":number|null,"trip":number|null}';
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.openrouterApiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      temperature: 0,
+      max_tokens: 400,
+      messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "video_url", video_url: { url: `data:${mimetype || "video/mp4"};base64,${base64}` } }] }],
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!res.ok) throw new Error(`OpenRouter ${res.status}`);
+  const data = await res.json();
+  const txt: string = data.choices?.[0]?.message?.content ?? "";
+  let r: { painel?: boolean; odo?: number | null; volts?: number | null; barras?: number | null };
+  try {
+    r = JSON.parse(txt.match(/\{[\s\S]*\}/)?.[0] ?? "{}");
+  } catch {
+    r = {};
+  }
+  if (r.painel === false) return "🎥 Não reconheci o painel da scooter nesse vídeo. Se era ele, grava de perto a hora de ligar.";
+  const odo = Number(r.odo);
+  const volts = Number(r.volts);
+  const barras = Number(r.barras);
+  if (!(odo > 0)) {
+    const extra = volts > 50 ? ` Vi ${fmt(volts, 1)} V${barras >= 0 && barras <= 6 ? ` e ${barras}/6 barras` : ""}.` : "";
+    return `🎥 Não consegui ver o ODO no vídeo.${extra} Me manda o km em texto: *scooter 50 km*.`;
+  }
+  const last = await lastOdo();
+  if (last !== null && (odo < last || odo > last + 400)) {
+    return `🎥 Li ODO ${fmt(odo, 1)} km, mas o último registrado é ${fmt(last, 1)} km. Parece leitura errada — confere e manda em texto: *scooter X km*.`;
+  }
+  const partes = [`scooter ${odo} km`, volts > 50 && volts < 95 ? `${volts}v` : "", barras >= 0 && barras <= 6 ? `${barras} barras` : ""].filter(Boolean).join(" ");
+  const out = await applyScooterCommand(partes);
+  return `🎥 Li no vídeo: ${partes.replace("scooter ", "")}${caption.trim() ? ` (${caption.trim().slice(0, 60)})` : ""}.\n\n${out ?? ""}`.trim();
+}

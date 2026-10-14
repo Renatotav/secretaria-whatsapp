@@ -139,6 +139,27 @@ export async function POST(request: Request) {
 
     // Foto/print de extrato OU nota fiscal: lida por visão em vez de texto —
     // cobre PDFs sem texto extraível e quem já manda print direto ou nota fiscal.
+    // Vídeo do painel da scooter (o ODO só aparece uns segundos ao ligar):
+    // a IA assiste e anota ODO, tensão e barras no diário da scooter.
+    if (isSelfChat && rawMessage.videoMessage) {
+      const vm = rawMessage.videoMessage as Record<string, unknown>;
+      const seconds = Number(vm.seconds) || 0;
+      const size = Number(vm.fileLength) || 0;
+      if (seconds > 90 || size > 20_000_000) {
+        await notifyOwner(config, "🎥 Vídeo grande demais para ler o painel. Grave só a hora de ligar a scooter (uns 10 segundos).");
+        return NextResponse.json({ ok: true });
+      }
+      try {
+        const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "videoMessage", "video/mp4");
+        const { readScooterVideo } = await import("@/lib/scooter");
+        await notifyOwner(config, base64 ? await readScooterVideo(base64, mimetype, String(vm.caption || "")) : "⚠️ Não consegui baixar o vídeo. Tenta mandar de novo.");
+      } catch (err) {
+        console.error("[webhook] falha ao ler vídeo", err);
+        await notifyOwner(config, "⚠️ Não consegui ler o vídeo agora. Manda em texto: *scooter 50 km 79v 6 barras*.");
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     if (isSelfChat && rawMessage.imageMessage) {
       const caption = ((rawMessage.imageMessage as Record<string, string>).caption || "").toLowerCase();
       // "fatura"/"extrato" = fatura do cartão ou extrato → leitor de extrato

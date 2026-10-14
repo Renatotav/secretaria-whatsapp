@@ -128,7 +128,7 @@ export async function downloadIncomingMedia(
   evo: { evolutionUrl: string; evolutionApiKey: string; instanceId: string },
   messageId: string,
   message: Record<string, unknown>,
-  field: "documentMessage" | "imageMessage",
+  field: "documentMessage" | "imageMessage" | "videoMessage",
   defaultMimetype: string
 ): Promise<{ base64: string; mimetype: string }> {
   const mediaMessage = (message[field] as Record<string, unknown>) ?? {};
