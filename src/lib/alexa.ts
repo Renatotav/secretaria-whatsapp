@@ -4,6 +4,11 @@ import { prisma } from "./prisma";
 // pelo Voice Monkey (skill da Alexa). Fora do horário de silêncio; nunca trava
 // o resto: se a Alexa falhar, o aviso continua indo pelo WhatsApp.
 //   "alexa token <chave>" · "alexa dispositivo <id>" · "alexa silêncio 22-7" · "alexa teste"
+// Ele quase não fica em casa: antes de falar, ela vê se ele está FORA —
+//   · usou a extensão do trabalho nos últimos 45 min (está no trabalho), ou
+//   · mandou "saí" no WhatsApp (vale até "cheguei" ou por 14 h).
+// Fora de casa, o aviso fica guardado (até 5, por 12 h) e é falado num resumo
+// quando ele manda "cheguei". O WhatsApp continua recebendo tudo como sempre.
 
 const API = "https://api-v3.voicemonkey.io/announce";
 
@@ -15,11 +20,64 @@ function quieto(faixa: string): boolean {
   return de > ate ? h >= de || h < ate : h >= de && h < ate;
 }
 
-/** Fala o texto num Echo Dot. Devolve se falou (false = sem configuração, silêncio ou erro). */
+const TRABALHO_MIN = 45;
+const FORA_MAX_H = 14;
+const FILA_MAX = 5;
+const FILA_H = 12;
+
+type Presenca = { fora: boolean; motivo: string };
+type Fila = { at: string; texto: string }[];
+
+/** Ele está fora de casa? (no trabalho pela extensão, ou "saí" no WhatsApp) */
+export async function presenca(): Promise<Presenca> {
+  const cfg = await prisma.agentConfig.findFirst({ select: { alexaAwayUntil: true, workSeenAt: true } });
+  const agora = Date.now();
+  if (cfg?.alexaAwayUntil && cfg.alexaAwayUntil.getTime() > agora) return { fora: true, motivo: "você avisou que saiu" };
+  if (cfg?.workSeenAt && agora - cfg.workSeenAt.getTime() < TRABALHO_MIN * 60_000) return { fora: true, motivo: "você está usando a Central no trabalho" };
+  return { fora: false, motivo: "" };
+}
+
+/** A extensão do trabalho falou com a secretária: ele está no trabalho (grava no máx. 1x/min). */
+export async function marcarNoTrabalho(): Promise<void> {
+  const cfg = await prisma.agentConfig.findFirst({ select: { id: true, workSeenAt: true } });
+  if (!cfg || (cfg.workSeenAt && Date.now() - cfg.workSeenAt.getTime() < 60_000)) return;
+  await prisma.agentConfig.update({ where: { id: cfg.id }, data: { workSeenAt: new Date() } }).catch(() => {});
+}
+
+const lerFila = (raw: string): Fila => {
+  try {
+    const f = JSON.parse(raw || "[]");
+    return Array.isArray(f) ? f.filter((x) => x && typeof x.texto === "string" && Date.now() - new Date(x.at).getTime() < FILA_H * 3600_000) : [];
+  } catch {
+    return [];
+  }
+};
+
+async function guardar(texto: string): Promise<void> {
+  const cfg = await prisma.agentConfig.findFirst({ select: { id: true, alexaQueue: true } });
+  if (!cfg) return;
+  const fila = lerFila(cfg.alexaQueue).filter((x) => x.texto !== texto);
+  fila.push({ at: new Date().toISOString(), texto });
+  await prisma.agentConfig.update({ where: { id: cfg.id }, data: { alexaQueue: JSON.stringify(fila.slice(-FILA_MAX)) } });
+}
+
+/**
+ * Fala o texto num Echo Dot. Devolve se falou (false = sem configuração,
+ * silêncio, fora de casa ou erro). Fora de casa, guarda para o "cheguei".
+ */
 export async function alexaFalar(texto: string, ignorarSilencio = false): Promise<boolean> {
   const cfg = await prisma.agentConfig.findFirst({ select: { alexaToken: true, alexaDevice: true, alexaQuiet: true } });
   if (!cfg?.alexaToken || !cfg.alexaDevice) return false;
+  if (!ignorarSilencio && (await presenca()).fora) {
+    await guardar(texto).catch(() => {});
+    return false;
+  }
   if (!ignorarSilencio && quieto(cfg.alexaQuiet)) return false;
+  return enviar(cfg.alexaToken, cfg.alexaDevice, texto);
+}
+
+async function enviar(token: string, device: string, texto: string): Promise<boolean> {
+  const cfg = { alexaToken: token, alexaDevice: device };
   try {
     const r = await fetch(API, {
       method: "POST",
@@ -35,9 +93,43 @@ export async function alexaFalar(texto: string, ignorarSilencio = false): Promis
   }
 }
 
+const SAI_RE = /^\s*(sa[ií](ndo)?|t[oô] saindo|vou sair)(\s+de\s+casa)?\s*[.!]*\s*$/i;
+const CHEGUEI_RE = /^\s*(cheguei|t[oô] em casa|estou em casa|em casa)(\s+em\s+casa)?\s*[.!]*\s*$/i;
+
+/** "saí" / "cheguei" / "alexa casa?" pelo WhatsApp. null = não é isso. */
+async function comandoCasa(t: string): Promise<string | null> {
+  const cfg = await prisma.agentConfig.findFirst({ select: { id: true, alexaToken: true, alexaDevice: true, alexaQueue: true, alexaQuiet: true } });
+  if (!cfg?.alexaToken || !cfg.alexaDevice) return null; // sem Alexa, "cheguei" segue o fluxo normal
+  if (SAI_RE.test(t)) {
+    await prisma.agentConfig.update({ where: { id: cfg.id }, data: { alexaAwayUntil: new Date(Date.now() + FORA_MAX_H * 3600_000) } });
+    return "🏃 Beleza! A Alexa fica quieta até você mandar *cheguei* (os avisos continuam aqui no WhatsApp).";
+  }
+  if (CHEGUEI_RE.test(t)) {
+    const fila = lerFila(cfg.alexaQueue);
+    await prisma.agentConfig.update({ where: { id: cfg.id }, data: { alexaAwayUntil: null, workSeenAt: null, alexaQueue: "[]" } });
+    // Resumo falado: o que ficou guardado + contas de hoje/amanhã.
+    const { billsDueSpeech } = await import("./message-handlers");
+    const contas = await billsDueSpeech().catch(() => "");
+    const partes = fila.map((x) => x.texto.replace(/^Renato,\s*/i, ""));
+    if (contas && !partes.some((p) => p.includes("lembrete de contas"))) partes.push(contas.replace(/^Renato,\s*/i, ""));
+    if (!partes.length) return "🏠 Bem-vindo! Nada guardado para a Alexa falar.";
+    if (quieto(cfg.alexaQuiet)) return `🏠 Bem-vindo! Tinha ${partes.length} aviso(s), mas é horário de silêncio: ficam só aqui.\n• ${partes.join("\n• ")}`;
+    const ok = await enviar(cfg.alexaToken, cfg.alexaDevice, `Bem-vindo, Renato. ${partes.join(" ")}`);
+    return ok ? `🏠 Bem-vindo! A Alexa está falando ${partes.length} aviso(s) que guardei.` : `🏠 Bem-vindo! A Alexa não respondeu; os avisos eram:\n• ${partes.join("\n• ")}`;
+  }
+  if (/^\s*alexa\s+casa\s*\??\s*$/i.test(t)) {
+    const p = await presenca();
+    const n = lerFila(cfg.alexaQueue).length;
+    return p.fora ? `🏃 Para a Alexa você está *fora* (${p.motivo}). ${n} aviso(s) guardado(s) para o *cheguei*.` : "🏠 Para a Alexa você está *em casa*: ela fala os avisos (fora do silêncio).";
+  }
+  return null;
+}
+
 /** Comandos de configuração pelo WhatsApp. null = não é sobre a Alexa. */
 export async function applyAlexaCommand(text: string): Promise<string | null> {
   const t = text.trim();
+  const casa = await comandoCasa(t);
+  if (casa) return casa;
   const m = t.match(/^\s*alexa\s+(token|chave|dispositivo|aparelho|device|sil[eê]ncio|teste)\s*:?\s*(.*)$/i);
   if (!m) return null;
   const campo = m[1].toLowerCase();

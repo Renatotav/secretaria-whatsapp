@@ -53,7 +53,11 @@ Arquivos-chave:
 7. Datas: o container roda em **UTC**; "hoje" do dono é **horário de Brasília** → use `todayBRT()`.
 8. Respostas ao dono: português simples, curtas, com emoji moderado.
 
-## 5. Como rodar
+## 5. Design
+
+Regras visuais do painel em [DESIGN.md](DESIGN.md) e contexto do produto em [PRODUCT.md](PRODUCT.md) — as skills de design devem segui-los.
+
+## 6. Como rodar
 
 ```bash
 npm ci                 # dependências (não altera o package-lock)
