@@ -47,9 +47,30 @@ function readingFrom(text: string) {
 /** Comando da scooter, ou null se a mensagem não é sobre ela. */
 export async function applyScooterCommand(text: string): Promise<string | null> {
   const t = text.trim();
-  if (!t || t.length > 200 || MONEY_RE.test(t)) return null;
+  if (!t || t.length > 200 || (MONEY_RE.test(t) && !/^\s*tarifa\b/i.test(t))) return null;
 
   if (STATUS_RE.test(t)) return scooterStatus();
+
+  // Tomada pelo WhatsApp: o vigia do servidor busca o comando e executa (uns 10 s).
+  const plug = t.match(/^\s*(liga|ligar|desliga|desligar)\s+(?:a\s+)?tomada\b/i);
+  const plugStatus = /^\s*(?:(?:a|e a)\s+)?tomada\s*\??\s*$|^\s*como\s+est[aá]\s+a\s+tomada\s*\??\s*$/i.test(t);
+  if (plug || plugStatus) {
+    const cmd = plugStatus ? "status" : /^lig/i.test(plug![1]) ? "on" : "off";
+    const cfg = await prisma.agentConfig.findFirst({ select: { id: true } });
+    if (!cfg) return null;
+    await prisma.agentConfig.update({ where: { id: cfg.id }, data: { plugCommand: `${cmd}|${Date.now()}` } });
+    return cmd === "status" ? "🔌 Vou olhar a tomada… (uns 10 s)" : `🔌 Ok, ${cmd === "on" ? "ligando" : "desligando"} a tomada… (uns 10 s)`;
+  }
+
+  // "tarifa da luz 0,92": R$/kWh para o custo das cargas.
+  const tarifa = t.match(/^\s*tarifa\s+(?:da\s+)?(?:luz|energia)\s*:?\s*(?:r\$\s*)?(\d+[.,]\d+)\s*$/i);
+  if (tarifa) {
+    const v = num(tarifa[1]);
+    if (!(v > 0.2 && v < 3)) return "⚡ Essa tarifa parece fora do normal (costuma ficar entre R$ 0,70 e R$ 1,20 por kWh). Manda de novo, ex: *tarifa da luz 0,92*.";
+    const cfg = await prisma.agentConfig.findFirst({ select: { id: true } });
+    if (cfg) await prisma.agentConfig.update({ where: { id: cfg.id }, data: { kwhPrice: v } });
+    return `⚡ Tarifa anotada: R$ ${fmt(v, 2)} por kWh. Uso nas contas da scooter.\n\n${await scooterStatus()}`;
+  }
 
   // "calibrei o pneu 34 36" / "calibrei os pneus" (dianteiro, traseiro).
   if (/\bcalibr(?:ei|ado|ados|ou|ar)\b/i.test(t) && /\bpneus?\b/i.test(t)) {
@@ -126,7 +147,8 @@ export async function recordCharge(c: { kwh: number | null; odo?: number | null;
         },
       })
     : await prisma.scooterLog.create({ data: { kind: "carga", at: c.at ?? new Date(), odo, kwh: c.kwh, hours: c.hours ?? null, note: c.note } });
-  const head = `🔌 Carga ${recent ? "atualizada" : "anotada"}${saved.kwh != null ? `: ${fmt(saved.kwh, 2)} kWh` : ""}${saved.hours != null ? ` em ${fmt(saved.hours, 1)} h` : ""}${saved.odo != null ? ` com ${fmt(saved.odo, 1)} km` : ""}.`;
+  const price = (await prisma.agentConfig.findFirst({ select: { kwhPrice: true } }))?.kwhPrice ?? 0.95;
+  const head = `🔌 Carga ${recent ? "atualizada" : "anotada"}${saved.kwh != null ? `: ${fmt(saved.kwh, 2)} kWh (R$ ${fmt(saved.kwh * price, 2)})` : ""}${saved.hours != null ? ` em ${fmt(saved.hours, 1)} h` : ""}${saved.odo != null ? ` com ${fmt(saved.odo, 1)} km` : ""}.`;
   const tips = [
     saved.kwh == null && "💡 Quando puder, manda o kWh que a tomada mostrou (ex: *carreguei 1,8 kWh*) — é com ele que eu calculo o consumo real.",
     saved.odo == null && "💡 Me manda o ODO de agora (ex: *scooter 43 km*) para eu contar os km desde esta carga.",
@@ -165,7 +187,14 @@ export async function scooterNumbers() {
   const lastReading = [...logs].reverse().find((l) => l.kind === "leitura") ?? null;
   const lastTire = [...logs].reverse().find((l) => l.kind === "pneu") ?? null;
   const tireDays = lastTire ? Math.floor((Date.now() - lastTire.at.getTime()) / 86_400_000) : null;
-  return { whKm, rangeKm, safeKm, measured: recent.length, kmSince, daysSince, odoNow, lastCharge, lastReading, lastTire, tireDays };
+  const price = (await prisma.agentConfig.findFirst({ select: { kwhPrice: true } }))?.kwhPrice ?? 0.95;
+  const inicioMes = new Date(Date.now() - 3 * 3600_000);
+  const mesKwh = charges
+    .filter((c) => c.kwh != null && new Date(c.at.getTime() - 3 * 3600_000).getUTCMonth() === inicioMes.getUTCMonth() && new Date(c.at.getTime() - 3 * 3600_000).getUTCFullYear() === inicioMes.getUTCFullYear())
+    .reduce((s, c) => s + (c.kwh ?? 0), 0);
+  // Custo por km pelo que a TOMADA mediu (é o que aparece na conta de luz).
+  const custoKm = whKm ? (whKm / CHARGER_EFF / 1000) * price : null;
+  return { whKm, rangeKm, safeKm, measured: recent.length, kmSince, daysSince, odoNow, lastCharge, lastReading, lastTire, tireDays, price, mesKwh, custoKm };
 }
 
 export async function scooterStatus(short = false): Promise<string> {
@@ -191,6 +220,9 @@ export async function scooterStatus(short = false): Promise<string> {
         ? `⚡ Consumo real: ${fmt(n.whKm, 1)} Wh/km (${n.measured} ciclo(s)) → autonomia estimada ~${fmt(n.rangeKm)} km.`
         : `⚡ Autonomia: usando ~${DEFAULT_RANGE_KM} km (sua estimativa) até ter 2 cargas com kWh e ODO.`
     );
+    if (n.custoKm) {
+      lines.push(`💰 Custo: R$ ${fmt(n.custoKm * 100, 2)} a cada 100 km · este mês R$ ${fmt(n.mesKwh * n.price, 2)} (${fmt(n.mesKwh, 2)} kWh, já entra na conta de luz) · tarifa R$ ${fmt(n.price, 2)}/kWh`);
+    }
     if (n.lastReading) {
       const r = n.lastReading;
       const bits = [r.odo != null && `${fmt(r.odo, 1)} km`, r.volts != null && `${fmt(r.volts, 1)} V`, r.bars != null && `${r.bars}/6`].filter(Boolean);
