@@ -4,7 +4,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 
 // /api/work/ingest e /api/work/ext/*: extensão do trabalho, protegidas por chave própria (não pelo login).
 // /api/scooter/charge: programinha do notebook (tomada da scooter), também com chave própria.
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook", "/api/work/ingest", "/api/work/ext/", "/api/scooter/charge", "/api/scooter/status", "/api/scooter/command"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook", "/api/work/ingest", "/api/work/ext/", "/api/scooter/charge", "/api/scooter/status", "/api/scooter/command", "/api/presence"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
