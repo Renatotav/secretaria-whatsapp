@@ -75,6 +75,9 @@ function getEvoConfig(config: AgentConfig) {
 }
 
 export async function notifyOwner(config: AgentConfig, text: string): Promise<void> {
+  // Pedido por voz (skill da Alexa): guarda a resposta para ela falar também.
+  const { replyCapture } = await import("./reply-capture");
+  replyCapture.getStore()?.push(text);
   if (!config.ownerPhone || !config.evolutionUrl) return;
   const evo = getEvoConfig(config);
   await sendTextWithTyping(

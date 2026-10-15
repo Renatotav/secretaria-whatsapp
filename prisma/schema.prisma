@@ -77,6 +77,8 @@ model AgentConfig {
   alexaQueue       String  @default("[]")
   /// Resumo da manhã falado pela Alexa, de segunda a sexta ("06:50"; "" = desligado)
   alexaMorning     String  @default("06:50")
+  /// ID da skill particular "minha secretária" (amzn1.ask.skill...); só ela é atendida
+  alexaSkillId     String  @default("")
   /// Celular dele no Wi-Fi de casa (vigia do Tailscale no servidor); null = sem sinal
   phoneHome        Boolean?
   /// Quando o vigia do celular mandou o último sinal

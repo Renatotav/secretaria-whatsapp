@@ -194,6 +194,14 @@ export async function applyAlexaCommand(text: string): Promise<string | null> {
   const t = text.trim();
   const casa = await comandoCasa(t);
   if (casa) return casa;
+  const sk = t.match(/^\s*alexa\s+skill\s*:?\s*(\S+)\s*$/i);
+  if (sk) {
+    if (!/^amzn1\.ask\.skill\.[0-9a-f-]{20,}$/i.test(sk[1])) return "🔊 Mande o *Skill ID* como aparece no console da Alexa (começa com amzn1.ask.skill.).";
+    const c = await prisma.agentConfig.findFirst({ select: { id: true } });
+    if (!c) return null;
+    await prisma.agentConfig.update({ where: { id: c.id }, data: { alexaSkillId: sk[1] } });
+    return "🔊 Skill guardada! Agora é só falar: *Alexa, pede pra minha secretária anotar 30 reais de mercado no pix*.";
+  }
   const bd = t.match(/^\s*alexa\s+bom\s*dia\s*:?\s*(.*)$/i);
   if (bd) {
     const cfg0 = await prisma.agentConfig.findFirst({ select: { id: true, alexaMorning: true } });
