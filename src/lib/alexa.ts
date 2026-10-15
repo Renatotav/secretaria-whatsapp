@@ -96,6 +96,52 @@ async function enviar(token: string, device: string, texto: string): Promise<boo
 const SAI_RE = /^\s*(sa[ií](ndo)?|t[oô] saindo|vou sair)(\s+de\s+casa)?\s*[.!]*\s*$/i;
 const CHEGUEI_RE = /^\s*(cheguei|t[oô] em casa|estou em casa|em casa)(\s+em\s+casa)?\s*[.!]*\s*$/i;
 
+const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/** Texto do resumo da manhã: agenda de hoje, contas de hoje/amanhã e a scooter. */
+export async function resumoManha(): Promise<string> {
+  const brt = new Date(Date.now() - 3 * 3600_000);
+  const partes = [`Bom dia, Renato. Hoje é ${DIAS[brt.getUTCDay()]}, ${brt.getUTCDate()} de ${MESES[brt.getUTCMonth()]}.`];
+  // Agenda: o que vence hoje (horário de Brasília), até 3 itens.
+  const ini = new Date(Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate(), 3));
+  const fim = new Date(ini.getTime() + 86_400_000);
+  const itens = await prisma.agendaItem.findMany({ where: { done: false, dueDate: { gte: ini, lt: fim } }, orderBy: { dueDate: "asc" }, take: 3 });
+  if (itens.length) {
+    const hora = (d: Date) => {
+      const b = new Date(d.getTime() - 3 * 3600_000);
+      const h = b.getUTCHours(), m = b.getUTCMinutes();
+      return h === 0 && m === 0 ? "" : ` às ${h}${m ? ` e ${m}` : " horas"}`;
+    };
+    partes.push(`Na agenda: ${itens.map((i) => `${i.title.replace(/[*_]/g, "").slice(0, 80)}${i.dueDate ? hora(i.dueDate) : ""}`).join("; ")}.`);
+  } else partes.push("Nada marcado na agenda para hoje.");
+  try {
+    const { billsDueSpeech } = await import("./message-handlers");
+    const contas = (await billsDueSpeech()).replace(/^Renato,\s*lembrete de contas:\s*/i, "");
+    if (contas) partes.push(`Contas: ${contas}`);
+  } catch {}
+  try {
+    const { scooterNumbers } = await import("./scooter");
+    const n = await scooterNumbers();
+    if (n && n.kmSince !== null) {
+      const folga = Math.round(n.safeKm - n.kmSince);
+      if (folga <= 0) partes.push("Scooter: carregue hoje, já passou do ponto seguro.");
+      else if (folga <= 8) partes.push(`Scooter: dá uns ${folga} quilômetros, é bom carregar hoje.`);
+      else partes.push(`Scooter com folga de uns ${folga} quilômetros.`);
+    }
+    if (n?.lastTire && (n.tireDays ?? 0) >= 7) partes.push("E calibre os pneus.");
+  } catch {}
+  return partes.join(" ");
+}
+
+/** Agendador: fala o resumo da manhã (seg–sex, no horário escolhido). Fala mesmo no "silêncio" — ele escolheu a hora. */
+export async function falarResumoManha(): Promise<boolean> {
+  const cfg = await prisma.agentConfig.findFirst({ select: { alexaToken: true, alexaDevice: true, alexaAwayUntil: true } });
+  if (!cfg?.alexaToken || !cfg.alexaDevice) return false;
+  if (cfg.alexaAwayUntil && cfg.alexaAwayUntil.getTime() > Date.now()) return false; // avisou que saiu (dormiu fora)
+  return enviar(cfg.alexaToken, cfg.alexaDevice, await resumoManha());
+}
+
 /** "saí" / "cheguei" / "alexa casa?" pelo WhatsApp. null = não é isso. */
 async function comandoCasa(t: string): Promise<string | null> {
   const cfg = await prisma.agentConfig.findFirst({ select: { id: true, alexaToken: true, alexaDevice: true, alexaQueue: true, alexaQuiet: true } });
@@ -130,6 +176,23 @@ export async function applyAlexaCommand(text: string): Promise<string | null> {
   const t = text.trim();
   const casa = await comandoCasa(t);
   if (casa) return casa;
+  const bd = t.match(/^\s*alexa\s+bom\s*dia\s*:?\s*(.*)$/i);
+  if (bd) {
+    const cfg0 = await prisma.agentConfig.findFirst({ select: { id: true, alexaMorning: true } });
+    if (!cfg0) return null;
+    const v = bd[1].trim();
+    if (/^(desliga|desligar|off|n[aã]o|nenhum)/i.test(v)) {
+      await prisma.agentConfig.update({ where: { id: cfg0.id }, data: { alexaMorning: "" } });
+      return "🔊 Resumo da manhã desligado. Para voltar: *alexa bom dia 6:50*.";
+    }
+    if (/^(agora|teste|testar)$/i.test(v)) return (await falarResumoManha()) ? "🔊 A Alexa está falando o resumo da manhã agora." : "⚠️ A Alexa não falou (confira *alexa teste* ou se você mandou *saí*).";
+    const h = v.match(/^(\d{1,2})\s*(?:[:h]\s*(\d{2}))?$/i);
+    if (!v) return cfg0.alexaMorning ? `🔊 Resumo da manhã: seg a sex às ${cfg0.alexaMorning}. Mude com *alexa bom dia 7:10*, desligue com *alexa bom dia desliga*, ouça já com *alexa bom dia agora*.` : "🔊 Resumo da manhã desligado. Ligue com *alexa bom dia 6:50*.";
+    if (!h || Number(h[1]) > 23 || Number(h[2] ?? 0) > 59) return "🔊 Mande assim: *alexa bom dia 6:50*.";
+    const hhmm = `${String(Number(h[1])).padStart(2, "0")}:${h[2] ?? "00"}`;
+    await prisma.agentConfig.update({ where: { id: cfg0.id }, data: { alexaMorning: hhmm } });
+    return `🔊 Combinado: de segunda a sexta, às ${hhmm}, a Alexa fala a agenda, as contas e a scooter.`;
+  }
   const m = t.match(/^\s*alexa\s+(token|chave|dispositivo|aparelho|device|sil[eê]ncio|teste)\s*:?\s*(.*)$/i);
   if (!m) return null;
   const campo = m[1].toLowerCase();

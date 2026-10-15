@@ -13,6 +13,7 @@ let lastMonthClosingDate = "";
 let lastWishCheckDate = "";
 let lastReminderHour = -1;
 let lastWorkBriefDate = "";
+let lastMorningDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
 let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai uma vez só)
@@ -174,6 +175,18 @@ export function startScheduler(): void {
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
         } catch (err) {
           console.error("Erro nos alertas do trabalho:", err);
+        }
+      }
+
+      // Resumo da manhã na Alexa (seg–sex, no horário de "alexa bom dia", padrão 06:50).
+      const wd = brtDate.getUTCDay();
+      if (wd >= 1 && wd <= 5 && config.alexaMorning && hhmm === config.alexaMorning && lastMorningDate !== todayDate) {
+        lastMorningDate = todayDate;
+        try {
+          const { falarResumoManha } = await import("./alexa");
+          await falarResumoManha();
+        } catch (err) {
+          console.error("[alexa] resumo da manhã falhou", err);
         }
       }
 

@@ -75,6 +75,8 @@ model AgentConfig {
   alexaAwayUntil   DateTime?
   /// Avisos guardados enquanto ele estava fora (JSON [{at, texto}]); falados no "cheguei"
   alexaQueue       String  @default("[]")
+  /// Resumo da manhã falado pela Alexa, de segunda a sexta ("06:50"; "" = desligado)
+  alexaMorning     String  @default("06:50")
   /// Última vez que a extensão do trabalho falou com a secretária (= ele está no trabalho)
   workSeenAt       DateTime?
   /// Modelo do OpenRouter usado pelos botões de IA da Central do Atendente.
