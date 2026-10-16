@@ -1,0 +1,431 @@
+{
+ "nodes": [
+  {
+   "id": "g-entrada",
+   "type": "group",
+   "x": -40,
+   "y": -40,
+   "width": 380,
+   "height": 1180,
+   "label": "📥 Entradas",
+   "color": "5"
+  },
+  {
+   "id": "whats",
+   "type": "text",
+   "x": 0,
+   "y": 0,
+   "width": 300,
+   "height": 120,
+   "text": "## 📱 WhatsApp\nVocê manda texto, áudio, foto de nota, print de fatura, vídeo do painel da scooter.",
+   "color": "5"
+  },
+  {
+   "id": "evo",
+   "type": "text",
+   "x": 0,
+   "y": 180,
+   "width": 300,
+   "height": 120,
+   "text": "## Evolution API\nPonte do WhatsApp. Avisa a secretária a cada mensagem (webhook com chave)."
+  },
+  {
+   "id": "ext",
+   "type": "text",
+   "x": 0,
+   "y": 360,
+   "width": 300,
+   "height": 150,
+   "text": "## 🧩 Extensão Central do Atendente\nAssyst, WhatsApp Web, Redmine.\ncontent · corretor · atalhos · crm · atualizar · background · popup",
+   "color": "6"
+  },
+  {
+   "id": "escala",
+   "type": "text",
+   "x": 0,
+   "y": 570,
+   "width": 300,
+   "height": 120,
+   "text": "## 🔄 Escala (sistema da equipe)\nCópia automática às 11h e 16h: status, Redmine, fila, última ação."
+  },
+  {
+   "id": "planilha",
+   "type": "text",
+   "x": 0,
+   "y": 750,
+   "width": 300,
+   "height": 120,
+   "text": "## 📊 Planilha (Excel/SharePoint)\nImportada pelo popup: tipo, resolução, STATUS, abertura do Redmine."
+  },
+  {
+   "id": "alexa-in",
+   "type": "text",
+   "x": 0,
+   "y": 930,
+   "width": 300,
+   "height": 100,
+   "text": "## 🗣️ Alexa (skill particular, em teste)\n\"Alexa, pede pra minha secretária…\""
+  },
+  {
+   "id": "g-servidor",
+   "type": "group",
+   "x": 440,
+   "y": -40,
+   "width": 760,
+   "height": 1180,
+   "label": "🖥️ Secretária (Next.js 16 + Prisma, EasyPanel)",
+   "color": "4"
+  },
+  {
+   "id": "webhook",
+   "type": "text",
+   "x": 480,
+   "y": 0,
+   "width": 300,
+   "height": 120,
+   "text": "## /api/webhook\nRecebe do WhatsApp, junta mensagens seguidas (debounce) e escolhe o caminho."
+  },
+  {
+   "id": "handlers",
+   "type": "text",
+   "x": 480,
+   "y": 180,
+   "width": 300,
+   "height": 140,
+   "text": "## message-handlers\nFinanceiro, nota fiscal, fatura, agenda, diário, scooter, Alexa, comandos do trabalho, alertas."
+  },
+  {
+   "id": "router",
+   "type": "text",
+   "x": 480,
+   "y": 380,
+   "width": 300,
+   "height": 120,
+   "text": "## personal-router\nA IA classifica a mensagem (gasto, agenda, diário, simulação…)."
+  },
+  {
+   "id": "workapi",
+   "type": "text",
+   "x": 820,
+   "y": 360,
+   "width": 340,
+   "height": 140,
+   "text": "## /api/work/ext/*\nChave da extensão. lookup · ai · contact · snippets · sync · ping.",
+   "color": "6"
+  },
+  {
+   "id": "workai",
+   "type": "text",
+   "x": 820,
+   "y": 540,
+   "width": 340,
+   "height": 150,
+   "text": "## work-ai (skills)\nRedmine, resumo, registro de conversa, corretores, melhorar escrita.\nTrava de processos em código (cnj-check).",
+   "color": "6"
+  },
+  {
+   "id": "privacy",
+   "type": "text",
+   "x": 820,
+   "y": 740,
+   "width": 340,
+   "height": 120,
+   "text": "## work-privacy (LGPD)\nCPF mascarado, telefone/e-mail fora; corretores usam ⟦1⟧ e restauram.",
+   "color": "1"
+  },
+  {
+   "id": "scheduler",
+   "type": "text",
+   "x": 480,
+   "y": 560,
+   "width": 300,
+   "height": 150,
+   "text": "## ⏰ scheduler (a cada minuto)\nBriefing 8h · relatório de segunda · contas 9h · lembretes · alertas do trabalho · resumo da manhã na Alexa.",
+   "color": "3"
+  },
+  {
+   "id": "painel",
+   "type": "text",
+   "x": 480,
+   "y": 760,
+   "width": 300,
+   "height": 130,
+   "text": "## 🖥️ Painel web\nAgenda, Financeiro, Diário, Trabalho (Produtividade clicável, Pergunte aos seus chamados)."
+  },
+  {
+   "id": "mcp",
+   "type": "text",
+   "x": 480,
+   "y": 940,
+   "width": 300,
+   "height": 120,
+   "text": "## 🔌 /api/mcp/<chave>\nConector só leitura para o app do Claude: chamados, financeiro, agenda, scooter.",
+   "color": "6"
+  },
+  {
+   "id": "db",
+   "type": "text",
+   "x": 820,
+   "y": 920,
+   "width": 340,
+   "height": 150,
+   "text": "## 🐘 PostgreSQL\nFinanceEntry · AgendaItem · WorkTicket · WorkContact · ScooterLog · AgentConfig…\nBackup diário 03:30 (14 dias).",
+   "color": "4"
+  },
+  {
+   "id": "g-ia",
+   "type": "group",
+   "x": 1260,
+   "y": -40,
+   "width": 380,
+   "height": 520,
+   "label": "🧠 IA (OpenRouter)",
+   "color": "2"
+  },
+  {
+   "id": "fable",
+   "type": "text",
+   "x": 1300,
+   "y": 0,
+   "width": 300,
+   "height": 120,
+   "text": "## Claude Fable 5.1\nSkills pesadas: Redmine, resumo, melhorar escrita.",
+   "color": "2"
+  },
+  {
+   "id": "sonnet",
+   "type": "text",
+   "x": 1300,
+   "y": 160,
+   "width": 300,
+   "height": 120,
+   "text": "## Claude Sonnet 5.5\nCorretores (rápido), classificação, perguntas sobre chamados."
+  },
+  {
+   "id": "gemini",
+   "type": "text",
+   "x": 1300,
+   "y": 320,
+   "width": 300,
+   "height": 120,
+   "text": "## Gemini (Flash/Pro)\nNotas fiscais, prints, vídeo da scooter, vídeos do YouTube."
+  },
+  {
+   "id": "g-casa",
+   "type": "group",
+   "x": 1260,
+   "y": 540,
+   "width": 380,
+   "height": 600,
+   "label": "🏠 Casa (Tailscale)",
+   "color": "3"
+  },
+  {
+   "id": "firetv",
+   "type": "text",
+   "x": 1300,
+   "y": 580,
+   "width": 300,
+   "height": 120,
+   "text": "## 📺 Fire TV\nRoteador do Tailscale para a tomada (só ela).",
+   "color": "3"
+  },
+  {
+   "id": "tapo",
+   "type": "text",
+   "x": 1300,
+   "y": 740,
+   "width": 300,
+   "height": 120,
+   "text": "## 🔌 Tomada Tapo\nVigia no servidor: início/fim da carga, liga/desliga pelo WhatsApp."
+  },
+  {
+   "id": "celular",
+   "type": "text",
+   "x": 1300,
+   "y": 900,
+   "width": 300,
+   "height": 110,
+   "text": "## 📱 Celular no Wi-Fi\nVigia do Tailscale: em casa ou fora → a Alexa fala ou guarda."
+  },
+  {
+   "id": "echo",
+   "type": "text",
+   "x": 1300,
+   "y": 1030,
+   "width": 300,
+   "height": 90,
+   "text": "## 🔊 Echo Dot (Voice Monkey)\nFala carga pronta, lembretes, contas e o resumo das 6:50."
+  }
+ ],
+ "edges": [
+  {
+   "id": "whats-evo",
+   "fromNode": "whats",
+   "toNode": "evo",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "mensagem"
+  },
+  {
+   "id": "evo-webhook",
+   "fromNode": "evo",
+   "toNode": "webhook",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "webhook"
+  },
+  {
+   "id": "webhook-handlers",
+   "fromNode": "webhook",
+   "toNode": "handlers",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": ""
+  },
+  {
+   "id": "handlers-router",
+   "fromNode": "handlers",
+   "toNode": "router",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "classificar"
+  },
+  {
+   "id": "router-sonnet",
+   "fromNode": "router",
+   "toNode": "sonnet",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "IA"
+  },
+  {
+   "id": "handlers-gemini",
+   "fromNode": "handlers",
+   "toNode": "gemini",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "foto/vídeo"
+  },
+  {
+   "id": "ext-workapi",
+   "fromNode": "ext",
+   "toNode": "workapi",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "Bearer"
+  },
+  {
+   "id": "workapi-workai",
+   "fromNode": "workapi",
+   "toNode": "workai",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "skills"
+  },
+  {
+   "id": "workai-privacy",
+   "fromNode": "workai",
+   "toNode": "privacy",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "antes da IA"
+  },
+  {
+   "id": "workai-fable",
+   "fromNode": "workai",
+   "toNode": "fable",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "Redmine"
+  },
+  {
+   "id": "escala-db",
+   "fromNode": "escala",
+   "toNode": "db",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "11h/16h"
+  },
+  {
+   "id": "planilha-workapi",
+   "fromNode": "planilha",
+   "toNode": "workapi",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "importar"
+  },
+  {
+   "id": "alexa-in-handlers",
+   "fromNode": "alexa-in",
+   "toNode": "handlers",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "voz → texto"
+  },
+  {
+   "id": "scheduler-echo",
+   "fromNode": "scheduler",
+   "toNode": "echo",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "falar"
+  },
+  {
+   "id": "scheduler-whats",
+   "fromNode": "scheduler",
+   "toNode": "whats",
+   "fromSide": "left",
+   "toSide": "right",
+   "label": "avisos"
+  },
+  {
+   "id": "tapo-scheduler",
+   "fromNode": "tapo",
+   "toNode": "scheduler",
+   "fromSide": "left",
+   "toSide": "right",
+   "label": "carga"
+  },
+  {
+   "id": "firetv-tapo",
+   "fromNode": "firetv",
+   "toNode": "tapo",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": ""
+  },
+  {
+   "id": "celular-echo",
+   "fromNode": "celular",
+   "toNode": "echo",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "label": "em casa?"
+  },
+  {
+   "id": "handlers-db",
+   "fromNode": "handlers",
+   "toNode": "db",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "grava"
+  },
+  {
+   "id": "painel-db",
+   "fromNode": "painel",
+   "toNode": "db",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "lê/edita"
+  },
+  {
+   "id": "mcp-db",
+   "fromNode": "mcp",
+   "toNode": "db",
+   "fromSide": "right",
+   "toSide": "left",
+   "label": "só leitura"
+  }
+ ]
+}
