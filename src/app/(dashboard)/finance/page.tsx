@@ -904,10 +904,11 @@ export default function FinancePage() {
       ? `${baseDesc} - Parcela 1/${totalParcelas} ${compraTag}`.trim()
       : baseDesc;
 
-    await fetch("/api/finance", {
+    const send = (force: boolean) => fetch("/api/finance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        force,
         type: form.type,
         amount: Number(form.amount),
         category: form.category,
@@ -924,6 +925,16 @@ export default function FinancePage() {
         mood: form.mood,
       }),
     });
+    let res = await send(false);
+    if (res.status === 409) {
+      const dup = await res.json().catch(() => ({}));
+      const onde = dup.source === "whatsapp" ? " (veio pelo WhatsApp)" : "";
+      if (!confirm(`Já existe um lançamento igual neste dia${onde}: mesmo valor e descrição.\n\nLançar mesmo assim?`)) {
+        setSaving(false);
+        return;
+      }
+      res = await send(true);
+    }
     setForm(EMPTY_FORM);
     setStatusTouched(false);
     setSaving(false);

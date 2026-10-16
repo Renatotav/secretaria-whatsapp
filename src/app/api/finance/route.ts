@@ -89,13 +89,46 @@ export const POST = withErrorHandling(async (request: Request) => {
     config?.creditCardDueDay || 10,
     config?.creditCardBestDay || 5
   );
+  const description = body.description?.trim() ?? "";
+  const amount = Number(body.amount) || 0;
+
+  // Já tem um igual (mesmo valor, descrição e dia da compra)? Pergunta antes
+  // de gravar — o painel reenvia com force:true se o dono confirmar.
+  if (!body.force && description) {
+    const day = auto.purchaseDate || auto.date;
+    const start = new Date(day); start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + 86_400_000);
+    const twin = await prisma.financeEntry.findFirst({
+      where: {
+        type: body.type,
+        amount,
+        description: { equals: description, mode: "insensitive" },
+        OR: [{ purchaseDate: { gte: start, lt: end } }, { purchaseDate: null, date: { gte: start, lt: end } }],
+      },
+      select: { source: true },
+    });
+    if (twin) return NextResponse.json({ duplicate: true, source: twin.source }, { status: 409 });
+  }
+
+  // Sem categoria: usa a da última vez com a mesma descrição (memória por loja).
+  let category = body.category?.trim() ?? "";
+  let subcategory = body.subcategory?.trim() ?? "";
+  if (!category && description) {
+    const last = await prisma.financeEntry.findFirst({
+      where: { description: { equals: description, mode: "insensitive" }, NOT: { category: "" } },
+      orderBy: { createdAt: "desc" },
+      select: { category: true, subcategory: true },
+    });
+    if (last) { category = last.category; subcategory = subcategory || last.subcategory || ""; }
+  }
+
   const entry = await prisma.financeEntry.create({
     data: {
       type: body.type,
-      amount: Number(body.amount) || 0,
-      category: body.category?.trim() ?? "",
-      subcategory: body.subcategory?.trim() ?? "",
-      description: body.description?.trim() ?? "",
+      amount,
+      category,
+      subcategory,
+      description,
       date: auto.date,
       purchaseDate: auto.purchaseDate,
       paymentMethod: body.paymentMethod || "pix",
