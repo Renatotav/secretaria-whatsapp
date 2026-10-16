@@ -108,10 +108,17 @@ export async function workStats() {
   });
   const monthTickets = await prisma.workTicket.findMany({
     where: { OR: [{ openedAt: { gte: starts.month } }, { openedAt: null, createdAt: { gte: starts.month } }, { resolvedAt: { gte: starts.month } }] },
-    select: { errorType: true, origin: true, errorGroup: true },
+    select: { ticketId: true, errorType: true, origin: true, errorGroup: true },
   });
+  // Sem tipo = não está na planilha (o tipo vem de lá): diz o porquê em vez de "(sem)".
+  const vazio = (t: { ticketId: string }, key: string) =>
+    key === "errorType" ? (/^[RS]/i.test(t.ticketId) ? "Requisição/serviço (R/S)" : "Fora da planilha") : "(sem)";
   const tally = (key: "errorType" | "origin" | "errorGroup") =>
-    Object.entries(monthTickets.reduce<Record<string, number>>((acc, t) => ((acc[t[key] || "(sem)"] = (acc[t[key] || "(sem)"] || 0) + 1), acc), {}))
+    Object.entries(monthTickets.reduce<Record<string, number>>((acc, t) => {
+      const nome = t[key] || vazio(t, key);
+      acc[nome] = (acc[nome] || 0) + 1;
+      return acc;
+    }, {}))
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([name, n]) => ({ name, n }));
