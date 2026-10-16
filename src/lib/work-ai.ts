@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { prisma } from "./prisma";
 import { normalizeTicketId } from "./work-privacy";
+import { conferirInicial, conferirFinal } from "./cnj-check";
 
 // IA da Central do Atendente: os botões das skills na extensão respondem ali
 // mesmo. Usa a chave do OpenRouter que já está na secretária (a chave nunca
@@ -100,8 +101,25 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
   if (input.length > MAX_TEXT) throw new Error(`Texto grande demais (máx. ${MAX_TEXT.toLocaleString("pt-BR")} caracteres).`);
 
-  const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true } });
+  const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true, workAiModelSmart: true } });
   if (!config?.openrouterApiKey) throw new Error("A secretária está sem chave do OpenRouter (Configurações).");
+
+  // Redmine: a trava dos números de processo é feita AQUI, em código (dígito
+  // verificador e sobra do modelo) — antes a skill mandava a IA rodar um script
+  // que ela não tem, e a conta saía "de cabeça".
+  const conferencia = key === "redmine" ? conferirInicial(input) : null;
+  if (conferencia?.status === "INCONSISTENTE") {
+    return {
+      skill: key,
+      model: "conferência automática",
+      tokens: { input: 0, output: 0 },
+      text:
+        "⚠️ ALERTA DE INCONSISTÊNCIA PROCESSUAL\nForam identificados números de processo inconsistentes no chamado.\n" +
+        `Números encontrados: ${conferencia.processos.join(", ")}\n` +
+        `Número(s) com problema:\n${conferencia.problemas.map((p) => "- " + p).join("\n")}\n` +
+        "Revisão bloqueada para evitar erro jurídico. Solicite conferência.",
+    };
+  }
   const skill = await prisma.workSkill.findUnique({ where: { key } });
   const instructions = skill?.prompt || FALLBACK[key];
   if (!instructions) throw new Error(`A skill "${WORK_SKILLS[key]}" ainda não foi cadastrada.`);
@@ -123,15 +141,25 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
   // planilha) do mesmo sistema, como modelo de estilo — SAJMP/MP, MNI, PJe…
   if (key === "redmine") context += await redmineModels(input);
 
-  const model = config.workAiModel || "anthropic/claude-sonnet-5.5";
+  if (conferencia)
+    context +=
+      `\n\n### Conferência dos processos (já feita pelo sistema, resultado exato)\n` +
+      (conferencia.status === "SEM_PROCESSO" ? "Não há número de processo no texto." : `Resultado: OK. Processos: ${conferencia.processos.join(", ")}.`) +
+      " NÃO rode scripts nem refaça a conta: as etapas 0 e final já são conferidas pelo sistema. Mantenha todos esses números, dígito por dígito, e não acrescente outros. Não escreva a linha final de conferência (o sistema põe).";
+
+  // Skills que pensam mais vão no modelo mais inteligente (ele pediu: sem
+  // economizar); os corretores, que rodam o tempo todo, no rápido.
+  const SMART = new Set(["redmine", "resumo", "whatsapp", "escrever"]);
+  const inteligente = SMART.has(key);
+  const model = (inteligente ? config.workAiModelSmart : config.workAiModel) || "anthropic/claude-sonnet-5.5";
   const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1" });
-  const res = await client.chat.completions.create({
+  const pedir = (extra = "") => client.chat.completions.create({
     model,
     temperature: 0.2,
     // O modelo "pensa" antes de responder: sem limitar o raciocínio, textos
     // longos (Redmine) gastavam tudo pensando e não sobrava resposta.
-    max_tokens: 6000,
-    ...({ reasoning: { max_tokens: 1024 } } as object),
+    max_tokens: inteligente ? 12000 : 6000,
+    ...({ reasoning: { max_tokens: inteligente ? 4000 : 1024 } } as object),
     messages: [
       {
         role: "system",
@@ -144,14 +172,37 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
           "Responda direto com o resultado final em português, pronto para copiar. Não faça perguntas; se faltar informação, indique entre colchetes no próprio texto. " +
           "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto." +
           (usesContext && ticketRaw ? `\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +
-          context,
+          context +
+          extra,
       },
       { role: "user", content: input },
     ],
   });
-  const out = res.choices[0]?.message?.content?.trim() || "";
+  let res = await pedir();
+  let out = res.choices[0]?.message?.content?.trim() || "";
   if (!out) throw new Error("A IA não devolveu texto. Tente de novo.");
-  return { skill: key, text: out, model, tokens: { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 } };
+  const tokens = { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 };
+
+  if (conferencia && conferencia.status === "OK") {
+    // Etapa final, em código: título + corpo (sem o comparativo, que copia o original).
+    const corpo = (t: string) => t.split(/\n\s*\|/)[0].split(/PARTE 3|Comparativo/i)[0];
+    let fim = conferirFinal(input, corpo(out));
+    if (!fim.ok) {
+      const motivo = [fim.faltando.length ? `faltou/mudou: ${fim.faltando.join(", ")}` : "", fim.sobrando.length ? `apareceu sem estar no original: ${fim.sobrando.join(", ")}` : ""].filter(Boolean).join("; ");
+      res = await pedir(`\n\nATENÇÃO: na sua resposta anterior os números de processo não bateram com o original (${motivo}). Refaça mantendo exatamente: ${conferencia.processos.join(", ")}.`);
+      const nova = res.choices[0]?.message?.content?.trim() || "";
+      tokens.input += res.usage?.prompt_tokens ?? 0;
+      tokens.output += res.usage?.completion_tokens ?? 0;
+      if (nova) out = nova;
+      fim = conferirFinal(input, corpo(out));
+    }
+    out = out.replace(/\n*.*PROCESSO CONFERIDO.*$/gim, "").replace(/\n*.*BLOQUEIO DE SEGURANÇA[\s\S]*?Corrija antes de responder\.?/gi, "").trim();
+    out = fim.ok
+      ? `${out}\n\n✅ PROCESSO CONFERIDO PELO SISTEMA — ENVIO SEGURO`
+      : `⚠️ BLOQUEIO DE SEGURANÇA\nO número de processo do texto revisado NÃO corresponde ao do original (${[...fim.faltando.map((p) => "faltando " + p), ...fim.sobrando.map((p) => "a mais " + p)].join("; ")}).\nENVIO PROIBIDO. Corrija antes de usar.\n\n${out}`;
+  } else if (conferencia) out = out.replace(/\n*.*PROCESSO CONFERIDO.*$/gim, "").trim() + "\n\n✅ Sem número de processo no chamado.";
+
+  return { skill: key, text: out, model, tokens };
 }
 
 /** Sistema do chamado pelo texto (para escolher modelos do mesmo tipo). */
