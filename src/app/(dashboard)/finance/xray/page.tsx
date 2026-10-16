@@ -44,13 +44,13 @@ function XRayContent() {
   });
   const [todos, setTodos] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pag, setPag] = useState<Pag | null>(null); // null = tudo
+  const [pag, setPag] = useState<Pag[]>([]); // vazio = tudo; pode marcar mais de um (ex.: VR + cartão)
   const somaPag = useMemo(() => {
     const s: Record<Pag, number> = { vr: 0, cartao: 0, outros: 0 };
     todos.forEach((i) => (s[pagDe(i.financeEntry)] += i.amount));
     return s;
   }, [todos]);
-  const items = useMemo(() => (pag ? todos.filter((i) => pagDe(i.financeEntry) === pag) : todos), [todos, pag]);
+  const items = useMemo(() => (pag.length ? todos.filter((i) => pag.includes(pagDe(i.financeEntry))) : todos), [todos, pag]);
 
   useEffect(() => {
     setLoading(true);
@@ -112,27 +112,29 @@ function XRayContent() {
         </div>
       ) : (
         <>
-          {/* VR × cartão × outros: tocar filtra o Raio-X inteiro; tocar de novo volta para tudo */}
+          {/* VR × cartão × outros: tocar marca/desmarca (dá para juntar dois); nenhum marcado = tudo */}
           <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", marginBottom: 12 }}>
             {PAGS.map((p) => {
-              const ativo = pag === p.k;
+              const ativo = pag.includes(p.k);
               return (
                 <button
                   key={p.k}
                   type="button"
-                  onClick={() => setPag(ativo ? null : p.k)}
+                  onClick={() => setPag((atual) => (atual.includes(p.k) ? atual.filter((x) => x !== p.k) : [...atual, p.k]))}
+                  aria-pressed={ativo}
                   style={{ textAlign: "left", cursor: "pointer", background: ativo ? "var(--accent-dim)" : "var(--bg-card)", border: `1px solid ${ativo ? "var(--accent-border)" : "var(--border)"}`, borderLeft: `4px solid ${p.cor}`, borderRadius: 12, padding: "10px 12px", color: "var(--text)" }}
                 >
-                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{p.label}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{ativo ? "☑ " : "☐ "}{p.label}</div>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{somaPag[p.k].toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                 </button>
               );
             })}
           </div>
-          {pag && (
+          {pag.length > 0 && (
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>
-              Mostrando só: <b style={{ color: "var(--text)" }}>{PAGS.find((p) => p.k === pag)!.label}</b> ·{" "}
-              <button type="button" onClick={() => setPag(null)} style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, fontSize: 13 }}>ver tudo</button>
+              Mostrando só: <b style={{ color: "var(--text)" }}>{PAGS.filter((p) => pag.includes(p.k)).map((p) => p.label).join(" + ")}</b> ·{" "}
+              {items.reduce((a, i) => a + i.amount, 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} ·{" "}
+              <button type="button" onClick={() => setPag([])} style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, fontSize: 13 }}>ver tudo</button>
             </div>
           )}
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", marginBottom: 20 }}>
