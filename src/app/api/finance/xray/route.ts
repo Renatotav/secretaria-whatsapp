@@ -32,7 +32,9 @@ export const GET = withErrorHandling(async (request: Request) => {
         select: {
           date: true,
           category: true,
-          description: true
+          description: true,
+          paymentMethod: true,
+          account: true
         }
       }
     },

@@ -15,7 +15,23 @@ interface InvoiceItem {
     date: string;
     category: string;
     description: string;
+    paymentMethod?: string;
+    account?: string;
   }
+}
+
+// Forma de pagamento da nota: VR (ticket), cartão de crédito ou o resto.
+type Pag = "vr" | "cartao" | "outros";
+const PAGS: { k: Pag; label: string; cor: string }[] = [
+  { k: "vr", label: "🍽️ VR", cor: "var(--success)" },
+  { k: "cartao", label: "💳 Cartão de crédito", cor: "var(--accent)" },
+  { k: "outros", label: "💸 Pix, débito e outros", cor: "var(--warning)" },
+];
+function pagDe(e: InvoiceItem["financeEntry"]): Pag {
+  const m = (e.paymentMethod || "").toLowerCase();
+  if (m === "ticket" || /^vr$/i.test(e.account || "")) return "vr";
+  if (m === "cartão" || m === "cartao" || m === "credito" || m === "crédito") return "cartao";
+  return "outros";
 }
 
 function XRayContent() {
@@ -26,15 +42,22 @@ function XRayContent() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [todos, setTodos] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pag, setPag] = useState<Pag | null>(null); // null = tudo
+  const somaPag = useMemo(() => {
+    const s: Record<Pag, number> = { vr: 0, cartao: 0, outros: 0 };
+    todos.forEach((i) => (s[pagDe(i.financeEntry)] += i.amount));
+    return s;
+  }, [todos]);
+  const items = useMemo(() => (pag ? todos.filter((i) => pagDe(i.financeEntry) === pag) : todos), [todos, pag]);
 
   useEffect(() => {
     setLoading(true);
     fetch(`/api/finance/xray?month=${month}`)
       .then(res => res.json())
       .then(data => {
-        setItems(data);
+        setTodos(Array.isArray(data) ? data : []);
         setLoading(false);
       });
   }, [month]);
@@ -83,12 +106,35 @@ function XRayContent() {
 
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Carregando dados estruturais...</div>
-      ) : items.length === 0 ? (
+      ) : todos.length === 0 ? (
         <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", background: "var(--bg-card)", borderRadius: 12, border: "1px solid var(--border)" }}>
           Nenhuma nota fiscal detalhada encontrada para este mês. Mande uma nota no WhatsApp com a legenda "mercado" ou "nota".
         </div>
       ) : (
         <>
+          {/* VR × cartão × outros: tocar filtra o Raio-X inteiro; tocar de novo volta para tudo */}
+          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", marginBottom: 12 }}>
+            {PAGS.map((p) => {
+              const ativo = pag === p.k;
+              return (
+                <button
+                  key={p.k}
+                  type="button"
+                  onClick={() => setPag(ativo ? null : p.k)}
+                  style={{ textAlign: "left", cursor: "pointer", background: ativo ? "var(--accent-dim)" : "var(--bg-card)", border: `1px solid ${ativo ? "var(--accent-border)" : "var(--border)"}`, borderLeft: `4px solid ${p.cor}`, borderRadius: 12, padding: "10px 12px", color: "var(--text)" }}
+                >
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{p.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{somaPag[p.k].toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
+                </button>
+              );
+            })}
+          </div>
+          {pag && (
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>
+              Mostrando só: <b style={{ color: "var(--text)" }}>{PAGS.find((p) => p.k === pag)!.label}</b> ·{" "}
+              <button type="button" onClick={() => setPag(null)} style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, fontSize: 13 }}>ver tudo</button>
+            </div>
+          )}
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", marginBottom: 20 }}>
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Total (Raio-X)</p>
