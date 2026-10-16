@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { alertsFor, DEFAULT_SITUATIONS, type Situation } from "@/lib/work-sla";
 import { useWidth } from "@/lib/use-width";
+import { InsightPanel, AskBox, type Selecao } from "./insight-panel";
 
 type Ticket = {
   id: string;
@@ -438,6 +439,7 @@ export default function WorkPage() {
   const [guideUrl, setGuideUrl] = useState("");
   const [links, setLinks] = useState<Links>({ ticket: "", redmine: "" });
   const [prod, setProd] = useState<Prod | null>(null);
+  const [sel, setSel] = useState<Selecao>(null); // barra clicada na Produtividade
   const [situations, setSituations] = useState<Situation[]>(DEFAULT_SITUATIONS);
   const [showSituations, setShowSituations] = useState(false);
   const [showSnippets, setShowSnippets] = useState(false);
@@ -697,6 +699,8 @@ export default function WorkPage() {
         </div>
       )}
 
+      <AskBox links={links} />
+
       {prod && <ProductivityChart p={prod} />}
 
       {stats && !!stats.gruposDoMes?.length && (
@@ -705,7 +709,7 @@ export default function WorkPage() {
           {stats.gruposDoMes.map((g) => {
             const max = stats.gruposDoMes![0].n || 1;
             return (
-              <div key={g.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 4 }}>
+              <div key={g.name} role="button" title="Clique para ver os chamados e como você resolveu" onClick={() => setSel({ recorte: "grupo", valor: g.name })} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 4, cursor: "pointer" }}>
                 <span style={{ flex: "0 0 45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
                 <span style={{ flex: 1, height: 8, background: "var(--bg-hover)", borderRadius: 4 }}>
                   <span style={{ display: "block", height: "100%", width: `${(g.n / max) * 100}%`, background: "var(--success)", borderRadius: 4 }} />
@@ -723,7 +727,7 @@ export default function WorkPage() {
           {stats.tiposDoMes.map((t) => {
             const max = stats.tiposDoMes[0].n || 1;
             return (
-              <div key={t.name} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 4 }}>
+              <div key={t.name} role="button" title="Clique para ver os chamados e como você resolveu" onClick={() => setSel({ recorte: "tipo", valor: t.name })} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 4, cursor: "pointer" }}>
                 <span style={{ flex: "0 0 45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
                 <span style={{ flex: 1, height: 8, background: "var(--bg-hover)", borderRadius: 4 }}>
                   <span style={{ display: "block", height: "100%", width: `${(t.n / max) * 100}%`, background: "var(--accent)", borderRadius: 4 }} />
@@ -734,6 +738,8 @@ export default function WorkPage() {
           })}
         </div>
       )}
+
+      <InsightPanel sel={sel} onClose={() => setSel(null)} links={links} />
 
       <form onSubmit={add} style={{ ...box, display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
         <input placeholder="Nº do chamado (ex: R1234567)" value={form.ticketId} onChange={(e) => setForm((f) => ({ ...f, ticketId: e.target.value }))} style={{ flex: "1 1 160px" }} />

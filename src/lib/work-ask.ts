@@ -7,7 +7,7 @@ import { alertsFor } from "./work-sla";
 // setembro?"). A IA só TRADUZ a pergunta em filtros (JSON); a conta é feita
 // aqui no banco. Nenhum texto de chamado vai para a IA — só a pergunta.
 
-interface Plan {
+export interface Plan {
   metric: "contar" | "tempo_medio" | "listar";
   status: "fechados" | "resolvido" | "escalado" | "abertos" | "todos";
   data: "fechamento" | "recebimento";
@@ -25,7 +25,7 @@ const brtDay = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().s
 const WEEKDAYS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-async function planFor(question: string): Promise<Plan | null> {
+export async function planFor(question: string): Promise<Plan | null> {
   const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true } });
   if (!config?.openrouterApiKey) return null;
   const today = brtDay(new Date());
@@ -59,15 +59,14 @@ async function planFor(question: string): Promise<Plan | null> {
   }
 }
 
-function describe(p: Plan): string {
+export function describe(p: Plan): string {
   const st = { fechados: "fechados", resolvido: "resolvidos", escalado: "que viraram Redmine", abertos: "em aberto", todos: "" }[p.status];
   const per = p.de && p.ate ? ` de ${p.de.split("-").reverse().join("/")} a ${p.ate.split("-").reverse().join("/")}` : p.de ? ` desde ${p.de.split("-").reverse().join("/")}` : "";
   return [st && `chamados ${st}`, p.grupo && `grupo "${p.grupo}"`, p.texto && `com "${p.texto}"`, p.origem && `usuário ${p.origem}`].filter(Boolean).join(", ") + per;
 }
 
-export async function answerWorkQuestion(question: string): Promise<string | null> {
-  const p = await planFor(question);
-  if (!p || !p.entendi) return null;
+/** Chamados que atendem ao plano (o painel usa para listar; o WhatsApp, para contar). */
+export async function rowsFor(p: Plan) {
   // "Virou Redmine" = marcado como Redmine OU com nº de Redmine (vem do escala).
   const statusIn =
     p.status === "fechados" || p.status === "escalado" ? ["resolvido", "escalado"] : p.status === "resolvido" ? ["resolvido"] : p.status === "abertos" ? ["aberto", "pendente"] : undefined;
@@ -92,6 +91,14 @@ export async function answerWorkQuestion(question: string): Promise<string | nul
       return d && (!from || d >= from) && (!to || d < to);
     });
   }
+  return rows;
+}
+
+export async function answerWorkQuestion(question: string, plano?: Plan): Promise<string | null> {
+  const p = plano ?? (await planFor(question));
+  if (!p || !p.entendi) return null;
+  const rows = await rowsFor(p);
+  const dateField = p.status === "abertos" || p.data === "recebimento" ? "receivedAt" : "resolvedAt";
   const label = describe(p);
   if (!rows.length) return `💼 Nenhum chamado encontrado (${label}).`;
 
