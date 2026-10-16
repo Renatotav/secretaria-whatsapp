@@ -441,3 +441,13 @@ model ScooterLog {
 
   @@index([at])
 }
+
+/// Versões da extensão Central do Atendente guardadas na secretária: a extensão
+/// confere e se atualiza daqui (sem zip). files = JSON [{p: caminho, b: base64}].
+model ExtRelease {
+  id        String   @id @default(cuid())
+  version   String   @unique
+  files     String
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+}
