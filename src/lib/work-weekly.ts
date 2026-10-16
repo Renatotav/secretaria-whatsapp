@@ -40,7 +40,8 @@ async function numerosDa(de: Date, ate: Date) {
     fechados: fechados.length,
     redmine: fechados.filter((t) => t.status === "escalado" || (t.redmine || "").trim()).length,
     chegaram,
-    tempoMedio: tempos.length ? tempos.reduce((a, b) => a + b, 0) / tempos.length : null,
+    // Mediana: um chamado antigo fechado de uma vez não distorce o "típico".
+    tempoMedio: tempos.length ? [...tempos].sort((a, b) => a - b)[Math.floor((tempos.length - 1) / 2)] : null,
     grupos,
   };
 }
@@ -69,9 +70,9 @@ export async function buildWeeklyWorkReport(): Promise<string> {
 
   return [
     `📊 *Sua semana no trabalho* (${fmtDia(passada)} a ${fmtDia(new Date(estaSegunda.getTime() - DAY))})`,
-    `✅ ${s.fechados} fechado(s): ${s.fechados - s.redmine} resolvido(s) · ${s.redmine} viraram Redmine — semana anterior: ${seta(s.fechados, a.fechados)}`,
+    `✅ ${s.fechados} fechado(s): ${s.fechados - s.redmine} resolvido(s) · ${s.redmine} com Redmine — semana anterior: ${seta(s.fechados, a.fechados)}`,
     `📥 ${s.chegaram} chegaram — antes: ${a.chegaram}`,
-    `⏱️ Tempo médio até fechar: ${tempo(s.tempoMedio)}${a.tempoMedio !== null ? ` (antes ${tempo(a.tempoMedio)})` : ""}${melhorou}`,
+    `⏱️ Tempo típico até fechar (mediana): ${tempo(s.tempoMedio)}${a.tempoMedio !== null ? ` (antes ${tempo(a.tempoMedio)})` : ""}${melhorou}`,
     topGrupos.length ? `🗂️ O que mais apareceu: ${topGrupos.join(" · ")}` : "",
     parados.length ? `⚠️ ${parados.length} parado(s) além do prazo: ${parados.slice(0, 6).map((x) => `${x.id} (${x.al.days}d)`).join(", ")}` : "👌 Nenhum chamado parado além do prazo.",
     `📂 ${abertos.length} em aberto agora.`,
