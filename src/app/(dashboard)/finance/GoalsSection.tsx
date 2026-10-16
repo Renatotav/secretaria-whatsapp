@@ -7,6 +7,9 @@ type SavingsGoal = {
   name: string;
   targetAmount: number;
   currentAmount: number;
+  /** Reserva: guardado antes do mês e o que o mês corrente já tirou/somou (o currentAmount já vem com isso). */
+  guardado?: number;
+  mesAteAgora?: number;
   deadline: string | null;
   color: string;
 };
@@ -125,6 +128,11 @@ export function GoalsSection() {
                 <span>R$ {g.currentAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                 <span>R$ {g.targetAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
               </div>
+              {typeof g.mesAteAgora === "number" && (
+                <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 4 }}>
+                  Guardado R$ {g.guardado!.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} · este mês até agora {g.mesAteAgora < 0 ? "−" : "+"}R$ {Math.abs(g.mesAteAgora).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (conta corrente, já pago)
+                </div>
+              )}
               <div style={{ height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden", marginBottom: g.deadline && !conquered ? 6 : 12 }}>
                 <div style={{ height: "100%", background: g.color, width: `${percent}%`, transition: "width 0.3s" }} />
               </div>

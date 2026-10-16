@@ -8,7 +8,11 @@ export async function GET(request: Request) {
     const goals = await prisma.savingsGoal.findMany({
       orderBy: { createdAt: "asc" },
     });
-    return NextResponse.json(goals);
+    // Reserva: mostra o valor de AGORA (guardado + o que o mês já tirou/somou na conta corrente).
+    const { reserveNow } = await import("@/lib/message-handlers");
+    const reserva = goals.find((g) => /reserva/i.test(g.name));
+    const agora = reserva ? await reserveNow(reserva) : null;
+    return NextResponse.json(goals.map((g) => (g === reserva && agora && agora.mes !== 0 ? { ...g, guardado: g.currentAmount, mesAteAgora: agora.mes, currentAmount: agora.agora } : g)));
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

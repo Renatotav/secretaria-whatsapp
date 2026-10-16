@@ -479,7 +479,7 @@ async function simulateFinance(
 
   let verdict = "";
   if (purchaseTotal > 0) {
-    const fromReserve = worstAfter < 0 && reserve ? ` Isso sairia da ${reserve.name} (hoje ${brl(reserve.currentAmount)}).` : "";
+    const fromReserve = worstAfter < 0 && reserve ? ` Isso sairia da ${reserve.name} (agora ${brl((await reserveNow(reserve))?.agora ?? reserve.currentAmount)}).` : "";
     if (worstBefore < 0 && worstAfter < 0) verdict = `❌ *Melhor não:* ${worstMonth} já fecha no vermelho mesmo sem essa compra.${fromReserve}`;
     else if (worstAfter < 0) verdict = `❌ *Não recomendo agora:* ${worstMonth} fica ${brl(Math.abs(worstAfter))} no vermelho por causa dessa compra.${fromReserve}`;
     else if (burstsBudget) verdict = "⚠️ *Cabe no mês, mas estoura o teto da categoria.* Se for necessário, compensa cortando em outra.";
@@ -1032,7 +1032,14 @@ async function monthForecastLine(year: number, monthIndex: number): Promise<stri
   if (f >= 300) return `\n📊 Previsão de ${month}: sobra ${brl(f)}.`;
   if (f >= 0) return `\n🟡 Previsão de ${month}: sobra só ${brl(f)} — segura os gastos.`;
   const reserve = await findReserveGoal();
-  const fromReserve = reserve ? ` → sai da ${reserve.name} no dia 1º (hoje ${brl(reserve.currentAmount)})` : "";
+  const agoraR = reserve ? await reserveNow(reserve) : null;
+  const hojeBrt = new Date(Date.now() - 3 * 3600_000);
+  const mesAtual = hojeBrt.getUTCFullYear() === year && hojeBrt.getUTCMonth() === monthIndex;
+  const fromReserve = reserve
+    ? mesAtual
+      ? ` → já saiu da ${reserve.name} (agora ${brl(agoraR?.agora ?? reserve.currentAmount)})`
+      : ` → sai da ${reserve.name} no dia 1º (agora ${brl(agoraR?.agora ?? reserve.currentAmount)})`
+    : "";
   // Tudo (ou quase) já pago: não é "falta pagar", é o mês que já fechou no vermelho.
   if (Math.abs(pending) < 1 && done < 0) {
     const extra = budgetRest >= 1 ? ` Se usar o resto dos tetos, mais ${brl(budgetRest)}.` : "";
@@ -1362,6 +1369,32 @@ const SAVINGS_REPLY_MARK = "Responda *guarda*";
 async function findReserveGoal() {
   const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
   return goals.find((g) => /reserva/i.test(g.name)) ?? null;
+}
+
+/**
+ * Reserva AGORA: o guardado + o resultado do mês corrente que já passou pela
+ * conta corrente (só o pago; VR fora). Ele pediu que o desconto fosse na hora,
+ * não só no fechamento do dia 1º. O fechamento continua gravando o mês inteiro
+ * (e aí este "mês até agora" zera), sem descontar duas vezes.
+ */
+export async function reserveNow(reserve?: { currentAmount: number } | null): Promise<{ agora: number; mes: number } | null> {
+  const r = reserve === undefined ? await findReserveGoal() : reserve;
+  if (!r) return null;
+  const brt = new Date(Date.now() - 3 * 3600_000);
+  const y = brt.getUTCFullYear(), m = brt.getUTCMonth();
+  const key = `${y}-${String(m + 1).padStart(2, "0")}`;
+  const cfg = await prisma.agentConfig.findFirst({ select: { reserveSyncedMonth: true } });
+  if (cfg && cfg.reserveSyncedMonth >= key) return { agora: r.currentAmount, mes: 0 };
+  const entries = await prisma.financeEntry.findMany({
+    where: {
+      status: "paid",
+      date: { gte: new Date(y, m, 1), lte: new Date(y, m + 1, 0, 23, 59, 59) },
+      NOT: { OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
+    },
+    select: { type: true, amount: true, paymentMethod: true },
+  });
+  const mes = Math.round(entries.filter((e) => e.paymentMethod !== "ticket").reduce((s, e) => s + (e.type === "income" ? e.amount : -e.amount), 0) * 100) / 100;
+  return { agora: Math.max(0, Math.round((r.currentAmount + mes) * 100) / 100), mes };
 }
 
 /**
