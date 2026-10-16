@@ -130,6 +130,14 @@ export function startScheduler(): void {
         }
       }
 
+      // Base de conhecimento: resolvido com resolução vira artigo (2 por minuto).
+      try {
+        const { writePendingKb } = await import("./work-kb");
+        await writePendingKb(2);
+      } catch (err) {
+        console.error("Erro na base de conhecimento:", err);
+      }
+
       // Grupo do erro dos chamados com texto (Jev, poucos por minuto).
       try {
         const { classifyPendingGroups } = await import("./work-groups");

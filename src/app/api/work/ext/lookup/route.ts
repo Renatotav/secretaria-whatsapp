@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const digits = [...new Set(ids.map((id) => id.replace(/^[A-Z]/, "")))];
   const rows = await prisma.workTicket.findMany({
     where: { OR: digits.flatMap((d) => [{ ticketId: d }, { ticketId: { endsWith: d } }]) },
-    select: { ticketId: true, status: true, errorType: true, origin: true, resolution: true, redmine: true, redmineStatus: true, queue: true, lastAction: true, receivedAt: true, slaOverride: true, sheetStatus: true, situation: true, situationSince: true, pausedMs: true, openedAt: true, resolvedAt: true, updatedAt: true },
+    select: { errorGroup: true, ticketId: true, status: true, errorType: true, origin: true, resolution: true, redmine: true, redmineStatus: true, queue: true, lastAction: true, receivedAt: true, slaOverride: true, sheetStatus: true, situation: true, situationSince: true, pausedMs: true, openedAt: true, resolvedAt: true, updatedAt: true },
   });
   const tickets: Record<string, unknown> = {};
   for (const id of ids) {
@@ -31,6 +31,23 @@ export async function GET(request: Request) {
       rows.find((r) => r.ticketId === id) ??
       rows.find((r) => r.ticketId.replace(/^[A-Z]/, "") === d && (!letter || !/^[A-Z]/.test(r.ticketId)));
     if (hit) tickets[id] = hit;
+  }
+  // Abertos ganham "como resolvi parecidos": 2 resolvidos do mesmo grupo de erro
+  // (o artigo da base quando existe; senão a resolução), já sem dado pessoal.
+  const grupos = [...new Set(Object.values(tickets).map((t) => t as { status: string; errorGroup: string }).filter((t) => (t.status === "aberto" || t.status === "pendente") && t.errorGroup && !["Sem grupo", "Outros"].includes(t.errorGroup)).map((t) => t.errorGroup))];
+  const porGrupo: Record<string, { ticketId: string; texto: string }[]> = {};
+  for (const g of grupos.slice(0, 10)) {
+    const r = await prisma.workTicket.findMany({
+      where: { errorGroup: g, status: { in: ["resolvido", "escalado"] }, resolution: { not: "" } },
+      select: { ticketId: true, resolution: true, kbArticle: true },
+      orderBy: { resolvedAt: "desc" },
+      take: 2,
+    });
+    porGrupo[g] = r.map((x) => ({ ticketId: x.ticketId, texto: (x.kbArticle && x.kbArticle !== "-" ? x.kbArticle : x.resolution).slice(0, 300) }));
+  }
+  for (const [id, t] of Object.entries(tickets) as [string, { ticketId: string; status: string; errorGroup: string }][]) {
+    const p = porGrupo[t.errorGroup]?.filter((x) => x.ticketId !== t.ticketId);
+    if (p?.length && (t.status === "aberto" || t.status === "pendente")) (tickets[id] as Record<string, unknown>).parecidos = p;
   }
   const { getSituations } = await import("@/lib/work-situations");
   return NextResponse.json({ tickets, situations: await getSituations() });

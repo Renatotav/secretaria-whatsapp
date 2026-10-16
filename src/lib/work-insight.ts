@@ -55,7 +55,7 @@ export async function insight(recorte: Recorte, valor: string) {
       ? []
       : await prisma.workTicket.findMany({
           where: { ...filtroDe(recorte, valor), resolution: { not: "" } },
-          select: { ticketId: true, resolution: true, errorType: true, resolvedAt: true },
+          select: { ticketId: true, resolution: true, kbArticle: true, errorType: true, resolvedAt: true },
           orderBy: { resolvedAt: "desc" },
           take: 3,
         });
@@ -77,6 +77,7 @@ export async function insight(recorte: Recorte, valor: string) {
       redmineStatus: t.redmineStatus,
       dias: alertsFor(t).days,
     })),
-    resolucoes: resolucoes.map((r) => ({ ticketId: r.ticketId, tipo: r.errorType, quando: r.resolvedAt, texto: (r.resolution || "").slice(0, 400) })),
+    // O artigo da base (Problema · Causa · Solução) quando já existe; senão a resolução.
+    resolucoes: resolucoes.map((r) => ({ ticketId: r.ticketId, tipo: r.errorType, quando: r.resolvedAt, texto: (r.kbArticle && r.kbArticle !== "-" ? r.kbArticle : r.resolution || "").slice(0, 600) })),
   };
 }

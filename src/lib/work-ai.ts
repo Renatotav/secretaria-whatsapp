@@ -220,6 +220,16 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
       : `⚠️ BLOQUEIO DE SEGURANÇA\nO número de processo do texto revisado NÃO corresponde ao do original (${[...fim.faltando.map((p) => "faltando " + p), ...fim.sobrando.map((p) => "a mais " + p)].join("; ")}).\nENVIO PROIBIDO. Corrija antes de usar.\n\n${out}`;
   } else if (conferencia) out = out.replace(/\n*.*PROCESSO CONFERIDO.*$/gim, "").trim() + "\n\n✅ Sem número de processo no chamado.";
 
+  // Redmine repetido: avisa no fim (fora do que o botão "📋 Corpo" copia).
+  if (key === "redmine" && conferencia) {
+    const { redminesParecidos } = await import("./work-similar");
+    const par = await redminesParecidos(input).catch(() => []);
+    if (par.length)
+      out += `\n\n🔁 Antes de abrir, confira se não é repetido — parecidos que já têm Redmine:\n${par
+        .map((x) => `• Redmine ${x.redmine}${x.redmineStatus ? ` (${x.redmineStatus})` : ""} — chamado ${x.ticketId}${x.tipo ? `: ${x.tipo.slice(0, 90)}` : ""} · ${x.parecenca}% parecido`)
+        .join("\n")}`;
+  }
+
   return { skill: key, text: restaurar(out), model, tokens };
 }
 
