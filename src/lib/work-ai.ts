@@ -99,6 +99,23 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
     }
   }
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
+  // Corretores e "melhorar a escrita": a IA não vê CPF/telefone/e-mail
+  // (viram ⟦1⟧…) e eles voltam idênticos no texto final.
+  const protege = key === "corrigir" || key === "corrigir-whatsapp" || key === "escrever";
+  let restaurar = (t: string) => t;
+  if (protege) {
+    const { protectPersonalData } = await import("./work-privacy");
+    const p = protectPersonalData(input);
+    if (p.count) {
+      input = p.text;
+      restaurar = p.restore;
+    }
+  }
+  // Redmine: telefone e e-mail não entram (nem vão para a IA); o CPF fica.
+  if (key === "redmine") {
+    const { stripContacts } = await import("./work-privacy");
+    input = stripContacts(input);
+  }
   if (input.length > MAX_TEXT) throw new Error(`Texto grande demais (máx. ${MAX_TEXT.toLocaleString("pt-BR")} caracteres).`);
 
   const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true, workAiModelSmart: true } });
@@ -171,6 +188,7 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
           }Você está sendo usado por um botão da extensão do navegador (não há conversa: é um pedido só). ` +
           "Responda direto com o resultado final em português, pronto para copiar. Não faça perguntas; se faltar informação, indique entre colchetes no próprio texto. " +
           "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto." +
+          (protege ? " Marcadores como ⟦1⟧, ⟦2⟧ substituem dados pessoais: mantenha cada um exatamente como está, no mesmo lugar." : "") +
           (usesContext && ticketRaw ? `\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +
           context +
           extra,
@@ -202,7 +220,7 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
       : `⚠️ BLOQUEIO DE SEGURANÇA\nO número de processo do texto revisado NÃO corresponde ao do original (${[...fim.faltando.map((p) => "faltando " + p), ...fim.sobrando.map((p) => "a mais " + p)].join("; ")}).\nENVIO PROIBIDO. Corrija antes de usar.\n\n${out}`;
   } else if (conferencia) out = out.replace(/\n*.*PROCESSO CONFERIDO.*$/gim, "").trim() + "\n\n✅ Sem número de processo no chamado.";
 
-  return { skill: key, text: out, model, tokens };
+  return { skill: key, text: restaurar(out), model, tokens };
 }
 
 /** Sistema do chamado pelo texto (para escolher modelos do mesmo tipo). */
