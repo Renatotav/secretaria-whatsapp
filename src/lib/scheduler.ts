@@ -150,6 +150,16 @@ export function startScheduler(): void {
           const msg = await buildWorkBriefing(true);
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
           sent = true;
+          // Segunda: logo depois, o relatório da semana que passou.
+          if (brtDate.getUTCDay() === 1) {
+            try {
+              const { buildWeeklyWorkReport } = await import("./work-weekly");
+              const semana = await buildWeeklyWorkReport();
+              if (semana) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, semana, 20, 5);
+            } catch (err) {
+              console.error("Erro no relatório semanal do trabalho:", err);
+            }
+          }
           // Só marca o dia depois de enviar: se o ENVIO falhar, tenta de novo no próximo minuto da janela.
           await prisma.agentConfig.update({ where: { id: config.id }, data: { workBriefDate: todayDate } });
         } catch (err) {
@@ -171,7 +181,11 @@ export function startScheduler(): void {
         try {
           const { buildWorkNewAlerts } = await import("./work");
           const fresh = await buildWorkNewAlerts();
-          const msg = fresh || (askedByHim ? "🔄 Escala atualizado. Nada novo nos seus chamados. 👍" : "");
+          // Alertas que ele definiu ("alerta MNI passar de 5 na semana"…).
+          const { checkAlertRules } = await import("./work-alert-rules");
+          const dele = await checkAlertRules().catch(() => "");
+          const juntos = [fresh, dele].filter(Boolean).join("\n\n");
+          const msg = juntos || (askedByHim ? "🔄 Escala atualizado. Nada novo nos seus chamados. 👍" : "");
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
         } catch (err) {
           console.error("Erro nos alertas do trabalho:", err);

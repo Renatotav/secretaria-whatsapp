@@ -1677,7 +1677,9 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   const { attachPendingWorkChat } = await import("./work-phone");
   const { applyScooterCommand } = await import("./scooter");
   const { applyAlexaCommand } = await import("./alexa");
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText));
+  const { applyAlertRuleCommand } = await import("./work-alert-rules");
+  const { applyMcpCommand } = await import("./mcp-tools");
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;

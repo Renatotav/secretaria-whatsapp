@@ -91,6 +91,12 @@ model AgentConfig {
   workAiModelSmart String  @default("anthropic/claude-fable-5.1")
   /// Alertas do trabalho já avisados no WhatsApp (JSON: ["U:2154585","A:2099736","E:2016229"]), para não repetir.
   workAlerted      String  @default("[]")
+  /// Alertas que ele definiu pelo WhatsApp (JSON [{id, tipo, grupo?, limite?, dias?}])
+  workAlertRules   String  @default("[]")
+  /// Alertas já disparados (JSON [chave]), para não repetir
+  workAlertFired   String  @default("[]")
+  /// Chave do conector MCP para o app do Claude (gerada com "mcp chave"; vazio = desligado)
+  mcpToken         String  @default("")
   /// Modelo de decisão do OpenRouter (Jev): classificações rápidas e baratas.
   decisionModel    String  @default("typesafe/jev-1.13")
   /// Pedido de "atualizar do escala agora" (botão do painel/extensão/WhatsApp); o vigia do servidor roda a cópia.
