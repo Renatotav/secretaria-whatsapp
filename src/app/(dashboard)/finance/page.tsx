@@ -50,7 +50,7 @@ const EMPTY_FORM: FormState = {
   category: "",
   subcategory: "",
   description: "",
-  date: new Date().toISOString().slice(0, 10),
+  date: "",
   purchaseDate: "",
   paymentMethod: "pix",
   account: "Principal",
@@ -157,8 +157,11 @@ function niceMax(max: number): number {
   return niceNormalized * magnitude;
 }
 
+// Dia de hoje no relógio de quem usa o painel (toISOString seria UTC: depois
+// das 21h em Brasília já viraria amanhã).
 function currentDay() {
-  return new Date().toISOString().split("T")[0];
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
 
@@ -708,6 +711,8 @@ export default function FinancePage() {
   const [previousBalance, setPreviousBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
+  // A data de hoje sai do relógio do navegador (o servidor roda em UTC).
+  useEffect(() => setForm((f) => (f.date ? f : { ...f, date: currentDay() })), []);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditForm>(EMPTY_FORM);
@@ -935,7 +940,7 @@ export default function FinancePage() {
       }
       res = await send(true);
     }
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, date: currentDay() });
     setStatusTouched(false);
     setSaving(false);
     load();
