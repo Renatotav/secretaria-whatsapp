@@ -2292,7 +2292,7 @@ export async function projectAndInsertFinanceEntries(
   entries: StatementEntry[],
   source: "whatsapp" | "dashboard" = "whatsapp",
   creditCardDueDay?: number
-): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number; matchedManual: StatementEntry[] }> {
+): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number; matchedManual: StatementEntry[]; adjusted: { description: string; from: number; to: number }[]; touchedIds: string[] }> {
   entries = await applyMerchantMemory(entries);
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
   // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
@@ -2394,9 +2394,15 @@ export async function projectAndInsertFinanceEntries(
         lte: new Date(Math.max(...realCard.map((c) => c.date.getTime())) + 40 * 86400000),
       },
     },
-    select: { id: true, amount: true, date: true, purchaseDate: true, type: true },
+    select: { id: true, amount: true, date: true, purchaseDate: true, type: true, description: true, status: true },
   });
   const usedManual = new Set<string>();
+  // Previsão ou valor de cabeça (ex.: "FLEXPAG *ENELCE (previsto)" R$ 341,98)
+  // com o mesmo nome da linha da fatura, na mesma fatura: troca pelo valor real.
+  const nameKey = (d: string) =>
+    d.replace(/\((?:previsto|estimado|recorrente)\)/gi, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const adjusted: { description: string; from: number; to: number }[] = [];
+  const byName: (typeof candidates)[number][] = [];
   const matchedManual: StatementEntry[] = [];
   // A fatura é a fonte confiável: o lançamento que já existia recebe o nome,
   // a data e o meio de pagamento do cartão (a categoria dele é mantida).
@@ -2448,9 +2454,37 @@ export async function projectAndInsertFinanceEntries(
         matchedManual.push(c.entry);
         continue;
       }
+      // Sem valor igual: tenta pelo nome depois que todos os valores iguais já casaram.
+      byName.push(c);
+      continue;
     }
     if (isProjection) projected++;
     toInsert.push(c.entry);
+  }
+
+  // Valor diferente, mesmo nome: só se houver UM pendente com esse nome nessa
+  // fatura e o valor não for muito diferente (até 30% ou R$ 5) — senão almoços
+  // de valores parecidos no mesmo lugar se misturariam.
+  for (const c of byName) {
+    const key = nameKey(c.entry.description);
+    const sameName = key
+      ? manualCard.filter((m) =>
+          !usedManual.has(m.id) &&
+          m.type === c.entry.type &&
+          m.status === "pending" &&
+          nameKey(m.description) === key &&
+          Math.abs(m.date.getTime() - c.date.getTime()) <= 20 * DAY_MS &&
+          Math.abs(m.amount - c.entry.amount) <= Math.max(5, m.amount * 0.3)
+        )
+      : [];
+    if (sameName.length === 1) {
+      const m = sameName[0];
+      usedManual.add(m.id);
+      updates.push({ id: m.id, entry: c.entry });
+      adjusted.push({ description: c.entry.description, from: m.amount, to: c.entry.amount });
+    } else {
+      toInsert.push(c.entry);
+    }
   }
 
   for (const u of updates) {
@@ -2485,20 +2519,25 @@ export async function projectAndInsertFinanceEntries(
     });
   }
 
-  return { toInsert, duplicates, projected, matchedManual };
+  return { toInsert, duplicates, projected, matchedManual, adjusted, touchedIds: updates.map((u) => u.id) };
 }
 
-export async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<void> {
+export async function saveStatementEntries(config: AgentConfig, entries: StatementEntry[], sourceLabel: string): Promise<{ touchedIds: string[] }> {
   if (entries.length === 0) {
     await notifyOwner(config, `⚠️ Recebi ${sourceLabel} mas não consegui identificar nenhuma transação.`);
-    return;
+    return { touchedIds: [] };
   }
 
-  const { toInsert, duplicates, projected, matchedManual } = await projectAndInsertFinanceEntries(entries, "whatsapp", config.creditCardDueDay);
+  const { toInsert, duplicates, projected, matchedManual, adjusted, touchedIds } = await projectAndInsertFinanceEntries(entries, "whatsapp", config.creditCardDueDay);
+  const adjustedText = adjusted.length
+    ? `\n🔄 Troquei ${adjusted.length === 1 ? "a previsão" : `${adjusted.length} previsões`} pelo valor real da fatura:\n${adjusted
+        .map((a) => `• ${a.description}: ${brl(a.from)} → ${brl(a.to)} (${a.to >= a.from ? "+" : "−"}${brl(Math.abs(a.to - a.from))})`)
+        .join("\n")}`
+    : "";
 
   if (toInsert.length === 0) {
-    await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já estavam lançadas (importadas antes ou anotadas por você).`);
-    return;
+    await notifyOwner(config, `⚠️ Recebi ${sourceLabel}, mas todas as transações já estavam lançadas (importadas antes ou anotadas por você).${adjustedText}`);
+    return { touchedIds };
   }
 
   const real = toInsert.length - projected;
@@ -2513,8 +2552,10 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
     const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — ${brl(e.amount)}`).join("\n");
     response += `\n✍️ ${matchedManual.length} você já tinha anotado — não dupliquei; atualizei com o nome e a data do cartão (sua categoria ficou):\n${list}${matchedManual.length > 15 ? "\n…" : ""}`;
   }
+  response += adjustedText;
   response += await budgetAlertsAfterImport([...toInsert, ...matchedManual].filter((e) => !e.description.includes("(previsto)")));
   await notifyOwner(config, response);
+  return { touchedIds };
 }
 
 /**
@@ -2590,7 +2631,8 @@ ${piece}`;
     entries.push(...(mine ? parsed : parsed.map((e) => ({ ...e, description: `${e.description} · cartão final ${sec.last4}`.slice(0, 200) }))));
   }
   console.log(`[statement:pdf] ${chosen.length} cartão(ões) importado(s), ${entries.length} transações`);
-  await saveStatementEntries(config, entries, "o PDF");
+  const started = new Date();
+  const { touchedIds } = await saveStatementEntries(config, entries, "o PDF");
   if (entries.length === 0) return;
 
   const read = entries.reduce((sum, e) => sum + (e.type === "expense" ? e.amount : -e.amount), 0);
@@ -2602,7 +2644,35 @@ ${piece}`;
       ? `\n🧮 Conferi: ${brl(read)} = ${total !== null ? "total da fatura" : "subtotal da fatura"} ✅`
       : `\n🧮 Conferi: li ${brl(read)}, mas a fatura diz ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
   }
+  if (due) check += await cardBillAfterImport(due, started, touchedIds);
   await notifyOwner(config, check);
+}
+
+/**
+ * Depois de importar a fatura: o valor real do cartão nesse vencimento (o que
+ * o app vai cobrar) e o que ficou no app sem aparecer na fatura — previsão que
+ * não veio, gasto anotado à mão com valor errado ou repetido. Não apaga nada.
+ */
+async function cardBillAfterImport(due: Date, started: Date, touchedIds: string[]): Promise<string> {
+  const from = new Date(due.getTime() - 12 * 3600_000), to = new Date(due.getTime() + 36 * 3600_000);
+  const bill = await prisma.financeEntry.findMany({
+    where: { paymentMethod: "cartão", card: "", date: { gte: from, lt: to } },
+    select: { id: true, type: true, amount: true, description: true, category: true, createdAt: true },
+  });
+  if (!bill.length) return "";
+  const total = bill.reduce((acc, e) => acc + (e.type === "expense" ? e.amount : -e.amount), 0);
+  const touched = new Set(touchedIds);
+  // Ficou de fora: já existia antes desta importação e nenhuma linha da fatura casou com ele.
+  const left = bill.filter((e) => e.createdAt < started && !touched.has(e.id) && !/Parcela \d+\/\d+|\(recorrente\)/.test(e.description) && e.category !== "Assinaturas");
+  const dueTxt = `${String(due.getDate()).padStart(2, "0")}/${String(due.getMonth() + 1).padStart(2, "0")}`;
+  let out = `\n💳 *Fatura de ${dueTxt} no app: ${brl(total)}* (valor real, já com o que eu troquei).`;
+  if (left.length) {
+    out += `\n🔎 ${left.length} lançamento(s) do app não apareceram na fatura — confira se são repetidos ou de outro mês:\n${left
+      .slice(0, 10)
+      .map((e) => `• ${e.description} — ${brl(e.amount)}`)
+      .join("\n")}${left.length > 10 ? "\n…" : ""}`;
+  }
+  return out;
 }
 
 const MONTHS_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
