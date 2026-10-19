@@ -920,9 +920,20 @@ export async function cardLimitLine(): Promise<string> {
     select: { id: true },
   });
   const note = estimate ? " (com o salário estimado)" : "";
-  return left >= 1
+  // Vales (VR de agora + saldo de vale antigo): comida que não sai do salário.
+  const valeEntries = await prisma.financeEntry.findMany({
+    where: { status: "paid", OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
+    select: { account: true, type: true, amount: true },
+  });
+  const porConta = new Map<string, number>();
+  for (const e of valeEntries) porConta.set(e.account, (porConta.get(e.account) ?? 0) + (e.type === "income" ? e.amount : -e.amount));
+  const saldo = [...porConta].map(([account, v]) => ({ account, saldo: v })).filter((v) => v.saldo >= 0.01);
+  const comida = saldo.length
+    ? `\n🍔 Para comida, sem mexer no salário: ${brl(saldo.reduce((a, v) => a + v.saldo, 0))}${saldo.length > 1 ? ` (${saldo.map((v) => `${v.account} ${brl(v.saldo)}`).join(" + ")})` : ""} — use primeiro.`
+    : "";
+  return (left >= 1
     ? `💳 Pode gastar no cartão até ${formatDayMonth(close)}: ${brl(left)} (≈ ${brl(left / days)}/dia) — é o que sobra do salário de ${month}${note}.`
-    : `🔴 ${month[0].toUpperCase()}${month.slice(1)} já passou do salário em ${brl(-left)}${note}. Até ${formatDayMonth(close)}, cada compra no cartão aumenta isso — comida, no VR.`;
+    : `🔴 ${month[0].toUpperCase()}${month.slice(1)} já passou do salário em ${brl(-left)}${note}. Até ${formatDayMonth(close)}, cada compra no cartão aumenta isso — comida, no VR.`) + comida;
 }
 
 /** Resumo do dia (21h): o que gastou hoje, tetos, previsão do mês, VR e o que vence amanhã. */
