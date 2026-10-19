@@ -21,6 +21,8 @@ const DEFAULT_RANGE_KM = 45;
 const SAFE_FRACTION = 0.7;
 /** Calibrar os pneus de quanto em quanto tempo (pedido dele). */
 export const TIRE_DAYS = 7;
+/** Pressão certa dos pneus (pedido dele, 19/10/2026): dianteiro / traseiro. */
+export const TIRE_PSI = { front: 29, rear: 33 };
 
 const NUM = "(\\d+(?:[.,]\\d+)?)";
 const num = (s: string) => Number(s.replace(",", "."));
@@ -75,13 +77,13 @@ export async function applyScooterCommand(text: string): Promise<string | null> 
   // "calibrei o pneu 34 36" / "calibrei os pneus" (dianteiro, traseiro).
   if (/\bcalibr(?:ei|ado|ados|ou|ar)\b/i.test(t) && /\bpneus?\b/i.test(t)) {
     const psi = [...t.matchAll(/\b(\d{2})(?:[.,]\d)?\s*(?:psi|lb|libras)?\b/gi)].map((m) => Number(m[1])).filter((n) => n >= 20 && n <= 50);
-    const last = await prisma.scooterLog.findFirst({ where: { kind: "pneu" }, orderBy: { at: "desc" } });
-    // Sem números ("calibrei os pneus"): repete a pressão da última vez.
-    const front = psi[0] ?? last?.psiFront ?? null;
-    const rear = psi[1] ?? psi[0] ?? last?.psiRear ?? null;
+    // Sem números ("calibrei os pneus"): é a pressão certa (29 dianteiro / 33 traseiro).
+    const front = psi[0] ?? TIRE_PSI.front;
+    const rear = psi[1] ?? (psi[0] != null ? psi[0] : TIRE_PSI.rear);
     await prisma.scooterLog.create({ data: { kind: "pneu", psiFront: front, psiRear: rear, note: t.slice(0, 200) } });
     const when = new Date(Date.now() + TIRE_DAYS * 86_400_000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
-    return `🛞 Calibragem anotada${front != null ? `: ${fmt(front)} PSI dianteiro / ${fmt(rear ?? front)} PSI traseiro` : ""}. Te lembro de calibrar de novo em ${when}.`;
+    const off = front !== TIRE_PSI.front || rear !== TIRE_PSI.rear ? `\n⚠️ O certo é ${TIRE_PSI.front} PSI na frente e ${TIRE_PSI.rear} PSI atrás.` : "";
+    return `🛞 Calibragem anotada: ${fmt(front)} PSI dianteiro / ${fmt(rear)} PSI traseiro.${off} Te lembro de calibrar de novo em ${when}.`;
   }
 
   // "scooter desfazer": apaga o último registro. "scooter corrigir 43 km": troca o ODO dele.
@@ -238,7 +240,7 @@ export async function scooterStatus(short = false): Promise<string> {
 function tireLine(t: { at: Date; psiFront: number | null; psiRear: number | null }, days: number): string {
   const d = t.at.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
   const psi = t.psiFront != null ? ` (${fmt(t.psiFront)} diant. / ${fmt(t.psiRear ?? t.psiFront)} tras. PSI)` : "";
-  return days >= TIRE_DAYS ? `🛞 *Calibre os pneus*: a última foi em ${d}${psi}, há ${days} dias.` : `🛞 Pneus calibrados em ${d}${psi} · próxima em ${TIRE_DAYS - days} dia(s).`;
+  return days >= TIRE_DAYS ? `🛞 *Calibre os pneus* (${TIRE_PSI.front} frente / ${TIRE_PSI.rear} atrás): a última foi em ${d}${psi}, há ${days} dias.` : `🛞 Pneus calibrados em ${d}${psi} · próxima em ${TIRE_DAYS - days} dia(s).`;
 }
 
 export async function scooterDigestLine(): Promise<string> {

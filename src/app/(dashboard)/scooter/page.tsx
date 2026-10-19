@@ -19,6 +19,7 @@ type Dados = {
   custoKm: number | null;
   kmDia: number | null;
   tireEvery: number;
+  tirePsi: { front: number; rear: number };
   tireDays: number | null;
   cargas: Carga[];
   leituras: Leitura[];
@@ -129,7 +130,7 @@ function Painel({ d }: { d: Dados }) {
             {pneu.front != null && ` (${n(pneu.front)} / ${n(pneu.rear ?? pneu.front)} PSI)`}
           </span>
           <span style={{ fontSize: 13, color: (d.tireDays ?? 0) >= d.tireEvery ? "var(--warning)" : "var(--text-muted)" }}>
-            {(d.tireDays ?? 0) >= d.tireEvery ? `calibrar: faz ${d.tireDays} dias` : `próxima em ${d.tireEvery - (d.tireDays ?? 0)} dia(s)`}
+            {(d.tireDays ?? 0) >= d.tireEvery ? `calibrar: faz ${d.tireDays} dias` : `próxima em ${d.tireEvery - (d.tireDays ?? 0)} dia(s)`} · certo: {d.tirePsi.front} / {d.tirePsi.rear} PSI
           </span>
         </div>
       )}

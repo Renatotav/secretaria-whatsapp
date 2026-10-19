@@ -133,7 +133,7 @@ export async function resumoManha(): Promise<string> {
       else if (folga <= 8) partes.push(`Scooter: dá uns ${folga} quilômetros, é bom carregar hoje.`);
       else partes.push(`Scooter com folga de uns ${folga} quilômetros.`);
     }
-    if (n?.lastTire && (n.tireDays ?? 0) >= 7) partes.push("E calibre os pneus.");
+    if (n?.lastTire && (n.tireDays ?? 0) >= 7) partes.push("E calibre os pneus: 29 na frente e 33 atrás.");
   } catch {}
   return partes.join(" ");
 }
