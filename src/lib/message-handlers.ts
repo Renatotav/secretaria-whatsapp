@@ -900,6 +900,31 @@ async function vrBalanceShort(): Promise<string> {
   return `🍔 VR: ${brl(balance)}${next ? ` (${brl(Math.max(0, balance) / days)}/dia até ${formatDayMonth(next.date)})` : ""}`;
 }
 
+/**
+ * Limite do cartão (pedido dele: "não quero mais passar do meu salário"):
+ * o que sobra do salário no mês da fatura aberta — tudo que passar no cartão
+ * até o fechamento cai nela. VR fica de fora (comida vai no VR).
+ */
+export async function cardLimitLine(): Promise<string> {
+  const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
+  const due = config?.creditCardDueDay || 10, best = config?.creditCardBestDay || 5;
+  const today = todayBRT();
+  const bill = creditCardBillDate(today, due, best);
+  const close = new Date(bill.getFullYear(), bill.getMonth() - (best > due ? 1 : 0), best - 1, 12);
+  const days = Math.max(1, Math.round((close.getTime() - today.getTime()) / 86400000) + 1);
+  const { done, pending } = await monthForecastParts(bill.getFullYear(), bill.getMonth());
+  const left = done + pending;
+  const month = MONTH_NAMES[bill.getMonth()];
+  const estimate = await prisma.financeEntry.findFirst({
+    where: { type: "income", description: { contains: "(previsto)" }, category: "Salário", date: { gte: new Date(bill.getFullYear(), bill.getMonth(), 1), lte: new Date(bill.getFullYear(), bill.getMonth() + 1, 0, 23, 59) } },
+    select: { id: true },
+  });
+  const note = estimate ? " (com o salário estimado)" : "";
+  return left >= 1
+    ? `💳 Pode gastar no cartão até ${formatDayMonth(close)}: ${brl(left)} (≈ ${brl(left / days)}/dia) — é o que sobra do salário de ${month}${note}.`
+    : `🔴 ${month[0].toUpperCase()}${month.slice(1)} já passou do salário em ${brl(-left)}${note}. Até ${formatDayMonth(close)}, cada compra no cartão aumenta isso — comida, no VR.`;
+}
+
 /** Resumo do dia (21h): o que gastou hoje, tetos, previsão do mês, VR e o que vence amanhã. */
 export async function buildDailyDigest(): Promise<string> {
   const today = todayBRT();
@@ -917,6 +942,7 @@ export async function buildDailyDigest(): Promise<string> {
     if (touched.length) lines.push(`🎯 Tetos: ${touched.map((b) => `${budgetIcon((b.spent / b.limit) * 100)} ${b.category} ${((b.spent / b.limit) * 100).toFixed(0)}%`).join(" · ")}`);
   }
   lines.push((await monthForecastLine(today.getFullYear(), today.getMonth())).trim());
+  lines.push(await cardLimitLine());
   const vr = await vrBalanceShort();
   if (vr) {
     lines.push(vr);
