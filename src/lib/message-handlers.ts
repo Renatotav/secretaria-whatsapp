@@ -2958,9 +2958,11 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
   let calculatedTotal = sumOf(invoice);
   const diff = Number((invoice.total - calculatedTotal).toFixed(2));
 
-  // Se a diferença for de até R$ 15.00 (ex: descontos de itens/nota ou pequenos arredondamentos),
-  // insere automaticamente um item de desconto/ajuste para fechar a conta perfeitamente.
-  if (Math.abs(diff) >= 0.01 && Math.abs(diff) <= 15.0) {
+  // Desconto de até R$ 15 (total menor que a soma) ou arredondamento de
+  // centavos: insere um item de ajuste para fechar a conta. Total MAIOR que a
+  // soma quase sempre é o total lido errado (ex.: 113,84 lido como 119,64) ou
+  // item que faltou — aí pergunta em vez de inventar um "acréscimo".
+  if ((diff <= -0.01 && diff >= -15.0) || (diff >= 0.01 && diff <= 0.1)) {
     invoice.items.push({
       name: diff < 0 ? "Desconto da Nota" : "Ajuste / Acréscimo Nota",
       category: "Desconto / Ajuste",
@@ -2969,15 +2971,16 @@ export async function handleInvoiceImage(base64: string, mimetype: string, capti
       amount: diff
     });
     calculatedTotal = invoice.total;
-  } else if (Math.abs(calculatedTotal - invoice.total) > 2.0) {
+  } else if (Math.abs(diff) >= 0.01) {
     // Não grava sozinha: pergunta. O dinheiro que saiu é o total da nota; o
     // que faltou ler vira um item "Itens não lidos".
     console.log(`[invoice] conta não fechou: total ${invoice.total}, soma ${calculatedTotal.toFixed(2)} em ${invoice.items.length} itens`);
     pendingInvoiceDraft = { invoice, caption, at: Date.now() };
     await notifyOwner(
       config,
-      `⚠️ *Conta não fechou.* Li ${invoice.items.length} itens somando ${brl(calculatedTotal)}, mas o total da nota parece ser ${brl(invoice.total)} (faltou ler ${brl(invoice.total - calculatedTotal)}).\n\n` +
+      `⚠️ *Conta não fechou.* Li ${invoice.items.length} itens somando ${brl(calculatedTotal)}, mas o total da nota parece ser ${brl(invoice.total)} (${diff > 0 ? `diferença de ${brl(diff)} — total lido errado ou item que faltou` : `${brl(-diff)} a mais nos itens`}).\n\n` +
         `• *sim* → salvo com o total ${brl(invoice.total)} (a diferença vira "Itens não lidos")\n` +
+        `• *soma* → o total certo é a soma dos itens (${brl(calculatedTotal)})\n` +
         `• mande o *total certo* (ex: 145,19) se eu li o total errado\n` +
         `• *não* → descarto`
     );
@@ -3033,10 +3036,12 @@ async function applyInvoiceDraftReply(text: string, config: AgentConfig): Promis
     return "👍 Ok, descartei essa nota.";
   }
   const m = t.match(/^(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{1,2})?)$/i);
-  if (!CONFIRM_YES_RE.test(t) && !m) return null;
+  const useSum = /^(?:a\s+)?soma(?:\s+dos\s+itens)?[.!]?$/i.test(t);
+  if (!CONFIRM_YES_RE.test(t) && !m && !useSum) return null;
   const inv = draft.invoice;
   const sum = inv.items.reduce((acc, i) => acc + (i.amount || i.quantity * i.unitPrice), 0);
-  if (m) {
+  if (useSum) inv.total = Math.round(sum * 100) / 100;
+  else if (m) {
     const total = Number(m[1].replace(/\.(?=\d{3})/g, "").replace(",", "."));
     // "2" (resposta do pix/cartão de outro gasto) não é o total da nota.
     if (!(total >= sum * 0.5 && total <= sum * 2)) return null;
