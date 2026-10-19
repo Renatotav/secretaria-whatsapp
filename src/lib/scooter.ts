@@ -14,13 +14,13 @@ const BATTERY_WH = 2304;
 /** Energia que dá para usar com segurança (o BMS corta antes do zero). */
 const USABLE = 0.85;
 /** Perda do carregador: a tomada mede mais do que entra na bateria. */
-const CHARGER_EFF = 0.88;
+export const CHARGER_EFF = 0.88;
 /** Antes de ter dados: a estimativa dele (anunciado 60 km, ele acha ~45). */
 const DEFAULT_RANGE_KM = 45;
 /** Recarregar ao chegar nesta fração da autonomia estimada. */
 const SAFE_FRACTION = 0.7;
 /** Calibrar os pneus de quanto em quanto tempo (pedido dele). */
-const TIRE_DAYS = 7;
+export const TIRE_DAYS = 7;
 
 const NUM = "(\\d+(?:[.,]\\d+)?)";
 const num = (s: string) => Number(s.replace(",", "."));

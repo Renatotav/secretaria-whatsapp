@@ -13,6 +13,7 @@ const NAV = [
   { href: "/finance", icon: "💰", label: "Financeiro" },
   { href: "/work", icon: "💼", label: "Trabalho" },
   { href: "/wishlist", icon: "🛍️", label: "Desejos" },
+  { href: "/scooter", icon: "🛵", label: "Scooter" },
   { href: "/diary", icon: "📓", label: "Diário" },
   { href: "/daily-summary", icon: "📋", label: "Resumo do dia" },
   { href: "/weekly-report", icon: "📊", label: "Rel. Semanal" },
