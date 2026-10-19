@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { todayBRT } from "./dates";
 
 // Diário da scooter (ANGIE AG11-4, LiFePO4 76,8 V / 30 Ah / 2304 Wh). O dono
 // manda pelo WhatsApp a leitura do painel e a energia de cada carga (tomada
@@ -20,7 +21,22 @@ const DEFAULT_RANGE_KM = 45;
 /** Recarregar ao chegar nesta fração da autonomia estimada. */
 const SAFE_FRACTION = 0.7;
 /** Calibrar os pneus de quanto em quanto tempo (pedido dele). */
-export const TIRE_DAYS = 7;
+/** Calibra no fim de semana (pedido dele): só lembra no sábado/domingo, com pelo menos estes dias desde a última. */
+const TIRE_MIN_DAYS = 5;
+const ddmm = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+/** Dia da próxima calibragem: o primeiro sábado com pelo menos TIRE_MIN_DAYS desde a última (ou hoje, se já é fim de semana e passou o prazo). */
+export function tireSchedule(lastAt: Date | null): { due: boolean; next: Date } {
+  const today = todayBRT();
+  const weekend = today.getDay() === 6 || today.getDay() === 0;
+  const lastDay = lastAt ? new Date(lastAt.getTime() - 3 * 3600_000) : null;
+  const last = lastDay ? new Date(lastDay.getUTCFullYear(), lastDay.getUTCMonth(), lastDay.getUTCDate(), 12) : null;
+  const days = last ? Math.round((today.getTime() - last.getTime()) / 86_400_000) : Infinity;
+  if (weekend && days >= TIRE_MIN_DAYS) return { due: true, next: today };
+  const next = new Date(Math.max(today.getTime(), last ? last.getTime() + TIRE_MIN_DAYS * 86_400_000 : 0));
+  while (next.getDay() !== 6) next.setDate(next.getDate() + 1);
+  return { due: false, next };
+}
 /** Pressão certa dos pneus (pedido dele, 19/10/2026): dianteiro / traseiro. */
 export const TIRE_PSI = { front: 29, rear: 33 };
 
@@ -81,7 +97,7 @@ export async function applyScooterCommand(text: string): Promise<string | null> 
     const front = psi[0] ?? TIRE_PSI.front;
     const rear = psi[1] ?? (psi[0] != null ? psi[0] : TIRE_PSI.rear);
     await prisma.scooterLog.create({ data: { kind: "pneu", psiFront: front, psiRear: rear, note: t.slice(0, 200) } });
-    const when = new Date(Date.now() + TIRE_DAYS * 86_400_000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
+    const when = `sábado ${ddmm(tireSchedule(new Date()).next)}`;
     const off = front !== TIRE_PSI.front || rear !== TIRE_PSI.rear ? `\n⚠️ O certo é ${TIRE_PSI.front} PSI na frente e ${TIRE_PSI.rear} PSI atrás.` : "";
     return `🛞 Calibragem anotada: ${fmt(front)} PSI dianteiro / ${fmt(rear)} PSI traseiro.${off} Te lembro de calibrar de novo em ${when}.`;
   }
@@ -189,6 +205,7 @@ export async function scooterNumbers() {
   const lastReading = [...logs].reverse().find((l) => l.kind === "leitura") ?? null;
   const lastTire = [...logs].reverse().find((l) => l.kind === "pneu") ?? null;
   const tireDays = lastTire ? Math.floor((Date.now() - lastTire.at.getTime()) / 86_400_000) : null;
+  const tire = tireSchedule(lastTire?.at ?? null);
   const price = (await prisma.agentConfig.findFirst({ select: { kwhPrice: true } }))?.kwhPrice ?? 0.95;
   const inicioMes = new Date(Date.now() - 3 * 3600_000);
   const mesKwh = charges
@@ -196,7 +213,7 @@ export async function scooterNumbers() {
     .reduce((s, c) => s + (c.kwh ?? 0), 0);
   // Custo por km pelo que a TOMADA mediu (é o que aparece na conta de luz).
   const custoKm = whKm ? (whKm / CHARGER_EFF / 1000) * price : null;
-  return { whKm, rangeKm, safeKm, measured: recent.length, kmSince, daysSince, odoNow, lastCharge, lastReading, lastTire, tireDays, price, mesKwh, custoKm };
+  return { whKm, rangeKm, safeKm, measured: recent.length, kmSince, daysSince, odoNow, lastCharge, lastReading, lastTire, tireDays, tireDue: tire.due, tireNext: tire.next, price, mesKwh, custoKm };
 }
 
 export async function scooterStatus(short = false): Promise<string> {
@@ -215,7 +232,7 @@ export async function scooterStatus(short = false): Promise<string> {
     lines.push("🔌 Ainda sem carga registrada: na próxima, manda *carreguei X kWh* (com o ODO, se lembrar).");
   }
   if (n.daysSince !== null && n.daysSince >= 7) lines.push(`📅 Faz ${n.daysSince} dias da última carga.`);
-  if (n.lastTire) lines.push(tireLine(n.lastTire, n.tireDays ?? 0));
+  if (n.lastTire) lines.push(tireLine(n.lastTire, n.tireDays ?? 0, n.tireDue, n.tireNext));
   if (!short) {
     lines.push(
       n.whKm
@@ -237,16 +254,18 @@ export async function scooterStatus(short = false): Promise<string> {
 }
 
 /** Linha do resumo do dia (só quando já há registros e algo a dizer). */
-function tireLine(t: { at: Date; psiFront: number | null; psiRear: number | null }, days: number): string {
+function tireLine(t: { at: Date; psiFront: number | null; psiRear: number | null }, days: number, due: boolean, next: Date): string {
   const d = t.at.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" });
   const psi = t.psiFront != null ? ` (${fmt(t.psiFront)} diant. / ${fmt(t.psiRear ?? t.psiFront)} tras. PSI)` : "";
-  return days >= TIRE_DAYS ? `🛞 *Calibre os pneus* (${TIRE_PSI.front} frente / ${TIRE_PSI.rear} atrás): a última foi em ${d}${psi}, há ${days} dias.` : `🛞 Pneus calibrados em ${d}${psi} · próxima em ${TIRE_DAYS - days} dia(s).`;
+  return due
+    ? `🛞 *Calibre os pneus hoje* (${TIRE_PSI.front} frente / ${TIRE_PSI.rear} atrás): a última foi em ${d}${psi}, há ${days} dias.`
+    : `🛞 Pneus calibrados em ${d}${psi} · próxima no sábado ${ddmm(next)} (${TIRE_PSI.front}/${TIRE_PSI.rear} PSI).`;
 }
 
 export async function scooterDigestLine(): Promise<string> {
   const n = await scooterNumbers().catch(() => null);
   if (!n) return "";
-  const tireDue = n.lastTire && (n.tireDays ?? 0) >= TIRE_DAYS ? tireLine(n.lastTire, n.tireDays ?? 0) : "";
+  const tireDue = n.lastTire && n.tireDue ? tireLine(n.lastTire, n.tireDays ?? 0, true, n.tireNext) : "";
   if (n.kmSince === null && (n.daysSince ?? 0) < 7) return tireDue;
   const parts: string[] = [];
   if (n.kmSince !== null) {

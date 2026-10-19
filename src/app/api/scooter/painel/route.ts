@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { scooterNumbers, CHARGER_EFF, TIRE_DAYS, TIRE_PSI } from "@/lib/scooter";
+import { scooterNumbers, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
 
 /** Dados da aba Scooter: números de agora + histórico de cargas e leituras. */
 export const GET = withErrorHandling(async (request: Request) => {
@@ -46,7 +46,6 @@ export const GET = withErrorHandling(async (request: Request) => {
   return NextResponse.json({
     ...n,
     kmDia,
-    tireEvery: TIRE_DAYS,
     tirePsi: TIRE_PSI,
     cargas: cargas.reverse(),
     leituras,
