@@ -110,15 +110,22 @@ export const POST = withErrorHandling(async (request: Request) => {
     if (twin) return NextResponse.json({ duplicate: true, source: twin.source }, { status: 409 });
   }
 
-  // Sem categoria: usa a da última vez com a mesma descrição (memória por loja).
+  // Sem categoria: usa a de um lançamento com a mesma descrição (memória por loja) —
+  // o de valor mais parecido, porque o mesmo nome pode ter duas linhas na fatura
+  // (ex.: ANTHROPIC 115,65 em Assinaturas e o IOF de 4,05 em Impostos).
   let category = body.category?.trim() ?? "";
   let subcategory = body.subcategory?.trim() ?? "";
   if (!category && description) {
-    const last = await prisma.financeEntry.findFirst({
-      where: { description: { equals: description, mode: "insensitive" }, NOT: { category: "" } },
+    const iguais = await prisma.financeEntry.findMany({
+      where: {
+        OR: [description, `${description} (previsto)`].map((d) => ({ description: { equals: d, mode: "insensitive" as const } })),
+        NOT: { category: "" },
+      },
       orderBy: { createdAt: "desc" },
-      select: { category: true, subcategory: true },
+      take: 30,
+      select: { category: true, subcategory: true, amount: true },
     });
+    const last = iguais.sort((x, y) => Math.abs(x.amount - amount) - Math.abs(y.amount - amount))[0];
     if (last) { category = last.category; subcategory = subcategory || last.subcategory || ""; }
   }
 
