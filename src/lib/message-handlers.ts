@@ -2390,34 +2390,12 @@ async function applyMerchantMemory(entries: StatementEntry[]): Promise<Statement
   });
 }
 
-/**
- * IOF de compra internacional vem numa linha separada com o MESMO nome (ex.:
- * ANTHROPIC* CLAUDE SUB SA 115,82 + 4,05). Pedido dele: fica junto da compra —
- * a assinatura de cada mês vale o total (119,87) e não vira duas séries.
- */
-function mergeIofIntoPurchase(entries: StatementEntry[]): StatementEntry[] {
-  const key = (e: StatementEntry) => `${e.description.replace(/\s*\(previsto\)/i, "").trim().toLowerCase()}|${e.purchaseDate || e.date}`;
-  const out: StatementEntry[] = [];
-  for (const e of entries) {
-    const irmao = e.type === "expense" && e.paymentMethod === "cartão" ? out.find((o) => o.type === "expense" && key(o) === key(e)) : undefined;
-    const [maior, menor] = irmao ? (irmao.amount >= e.amount ? [irmao, e] : [e, irmao]) : [null, null];
-    // IOF = 2% a 7% da compra (hoje 3,5%).
-    if (maior && menor && menor.amount >= maior.amount * 0.02 && menor.amount <= maior.amount * 0.07) {
-      const total = Math.round((maior.amount + menor.amount) * 100) / 100;
-      Object.assign(irmao!, maior === irmao ? { amount: total } : { ...e, amount: total });
-      continue;
-    }
-    out.push(e);
-  }
-  return out;
-}
-
 export async function projectAndInsertFinanceEntries(
   entries: StatementEntry[],
   source: "whatsapp" | "dashboard" = "whatsapp",
   creditCardDueDay?: number
 ): Promise<{ toInsert: StatementEntry[]; duplicates: number; projected: number; matchedManual: StatementEntry[]; adjusted: { description: string; from: number; to: number }[]; touchedIds: string[] }> {
-  entries = mergeIofIntoPurchase(await applyMerchantMemory(entries));
+  entries = await applyMerchantMemory(entries);
   // Junta as parcelas restantes (ex: Parcela 6/10 vira também 7/10..10/10 em
   // meses futuros) e assinaturas recorrentes (categoria "Assinaturas" sem
   // parcela — ex: Anthropic, Netflix) com as entradas reais desse extrato,
@@ -2540,7 +2518,7 @@ export async function projectAndInsertFinanceEntries(
   const seenThisBatch = new Set<string>();
 
   // Previsão que já existe com o mesmo nome no mesmo mês (o valor muda com o
-  // dólar, o IOF…): não cria outra — a regra da fatura troca pelo valor real depois.
+  // dólar): não cria outra — a regra da fatura troca pelo valor real depois.
   const previstos = await prisma.financeEntry.findMany({
     where: { status: "pending", description: { contains: "(previsto)" } },
     select: { description: true, date: true },
