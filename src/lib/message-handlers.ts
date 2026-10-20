@@ -2602,7 +2602,7 @@ export async function projectAndInsertFinanceEntries(
   }
 
   for (const u of updates) {
-    const antes = await prisma.financeEntry.findUnique({ where: { id: u.id }, select: { description: true, date: true } });
+    const antes = await prisma.financeEntry.findUnique({ where: { id: u.id }, select: { description: true, date: true, card: true } });
     await prisma.financeEntry.update({
       where: { id: u.id },
       data: {
@@ -2623,7 +2623,8 @@ export async function projectAndInsertFinanceEntries(
     const novo = serie(u.entry.description);
     if (velho && novo && velho.nome && velho.total === novo.total && velho.nome !== novo.nome) {
       const futuras = await prisma.financeEntry.findMany({
-        where: { status: "pending", date: { gt: parseLocalDate(u.entry.date) }, description: { startsWith: velho.nome } },
+        // Só a mesma série: mesmo cartão (o do Bruno é outro) e o mesmo nome antigo.
+        where: { status: "pending", card: antes?.card ?? "", date: { gt: parseLocalDate(u.entry.date) }, description: { startsWith: velho.nome } },
         select: { id: true, description: true },
       });
       for (const f of futuras) {
