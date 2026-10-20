@@ -2602,6 +2602,7 @@ export async function projectAndInsertFinanceEntries(
   }
 
   for (const u of updates) {
+    const antes = await prisma.financeEntry.findUnique({ where: { id: u.id }, select: { description: true, date: true } });
     await prisma.financeEntry.update({
       where: { id: u.id },
       data: {
@@ -2613,6 +2614,24 @@ export async function projectAndInsertFinanceEntries(
         status: u.entry.status || "pending",
       },
     });
+    // Parcela que ele anotou com outro nome ("Amazon — Tênis… Parcela 1/6") casou com a
+    // da fatura ("AMAZON MARKETPLACE - Parcela 1/6"): as próximas da série ficam com o
+    // nome da fatura também, para a série toda aparecer igual.
+    // Nome da série = o que vem antes de "- Parcela X/Y" (o resto muda de parcela para parcela).
+    const serie = (d: string) => { const m = d.match(/^(.*?)\s*-?\s*Parcela (\d+)\/(\d+)/); return m ? { nome: m[1].trim(), total: Number(m[3]) } : null; };
+    const velho = antes ? serie(antes.description) : null;
+    const novo = serie(u.entry.description);
+    if (velho && novo && velho.nome && velho.total === novo.total && velho.nome !== novo.nome) {
+      const futuras = await prisma.financeEntry.findMany({
+        where: { status: "pending", date: { gt: parseLocalDate(u.entry.date) }, description: { startsWith: velho.nome } },
+        select: { id: true, description: true },
+      });
+      for (const f of futuras) {
+        const sf = serie(f.description);
+        if (!sf || sf.nome !== velho.nome || sf.total !== velho.total) continue;
+        await prisma.financeEntry.update({ where: { id: f.id }, data: { description: novo.nome + f.description.slice(f.description.indexOf(velho.nome) + velho.nome.length) } });
+      }
+    }
   }
 
   if (toInsert.length > 0) {
