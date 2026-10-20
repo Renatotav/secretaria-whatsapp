@@ -35,7 +35,9 @@ export async function POST(request: Request) {
     const { alexaFalar } = await import("@/lib/alexa");
     const n = await scooterNumbers();
     const kwhFalado = kwh.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-    await alexaFalar(`Renato, a carga da scooter terminou. ${kwhFalado} quilowatts-hora.${n ? ` Dá para rodar uns ${Math.round(n.rangeKm)} quilômetros.` : ""}`);
+    const custo = n ? kwh * n.price : null;
+    const custoFalado = custo != null ? (custo < 1 ? `${Math.round(custo * 100)} centavos` : `${custo.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} reais`) : "";
+    await alexaFalar(`Renato, a carga da scooter terminou. ${kwhFalado} quilowatts-hora${custoFalado ? `, custou ${custoFalado}` : ""}.${n ? ` Dá para rodar uns ${Math.round(n.rangeKm)} quilômetros.` : ""}`);
   } catch (err) {
     console.error("[scooter] aviso na Alexa falhou", err);
   }

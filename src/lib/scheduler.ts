@@ -14,6 +14,8 @@ let lastWishCheckDate = "";
 let lastReminderHour = -1;
 let lastWorkBriefDate = "";
 let lastMorningDate = "";
+let lastTireDate = "";
+let lastInvoiceEveDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
 let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai uma vez só)
@@ -209,6 +211,32 @@ export function startScheduler(): void {
           await falarResumoManha();
         } catch (err) {
           console.error("[alexa] resumo da manhã falhou", err);
+        }
+      }
+
+      // Sábado/domingo 09:00: dia de calibrar os pneus (só se venceu o prazo).
+      if ((wd === 6 || wd === 0) && hhmm === "09:00" && lastTireDate !== todayDate) {
+        lastTireDate = todayDate;
+        try {
+          const { falarPneus } = await import("./alexa");
+          await falarPneus();
+        } catch (err) {
+          console.error("[alexa] aviso dos pneus falhou", err);
+        }
+      }
+
+      // Véspera da fatura (19:30): a Alexa avisa o valor (fora de casa, guarda para o "cheguei").
+      if (hhmm === "19:30" && lastInvoiceEveDate !== todayDate) {
+        lastInvoiceEveDate = todayDate;
+        try {
+          const { invoiceEveSpeech } = await import("./message-handlers");
+          const fala = await invoiceEveSpeech();
+          if (fala) {
+            const { alexaFalar } = await import("./alexa");
+            await alexaFalar(fala);
+          }
+        } catch (err) {
+          console.error("[alexa] véspera da fatura falhou", err);
         }
       }
 

@@ -135,7 +135,19 @@ export async function resumoManha(): Promise<string> {
     }
     if (n?.lastTire && n.tireDue) partes.push("E calibre os pneus: 29 na frente e 33 atrás.");
   } catch {}
+  try {
+    const { cardLimitSpeech } = await import("./message-handlers");
+    partes.push(await cardLimitSpeech());
+  } catch {}
   return partes.join(" ");
+}
+
+/** Sábado/domingo de manhã: dia de calibrar (só se já passou o prazo e ele não calibrou). */
+export async function falarPneus(): Promise<boolean> {
+  const { scooterNumbers, TIRE_PSI } = await import("./scooter");
+  const n = await scooterNumbers().catch(() => null);
+  if (!n?.lastTire || !n.tireDue) return false;
+  return alexaFalar(`Bom dia, Renato. Hoje é dia de calibrar os pneus da scooter: ${TIRE_PSI.front} na frente e ${TIRE_PSI.rear} atrás. Depois me avise: calibrei os pneus.`);
 }
 
 /** Agendador: fala o resumo da manhã (seg–sex, no horário escolhido). Fala mesmo no "silêncio" — ele escolheu a hora. */
@@ -182,6 +194,11 @@ export async function chegou(automatico: boolean): Promise<string> {
     const partes = fila.map((x) => x.texto.replace(/^Renato,\s*/i, ""));
     if (automatico && !partes.length) return ""; // chegou sem nada guardado: não fala nada
     if (contas && !partes.some((p) => p.includes("lembrete de contas"))) partes.push(contas.replace(/^Renato,\s*/i, ""));
+    // Como foi o dia no dinheiro: gasto de hoje e quanto ainda cabe no cartão.
+    try {
+      const { spentTodaySpeech, cardLimitSpeech } = await import("./message-handlers");
+      partes.push(await spentTodaySpeech(), await cardLimitSpeech());
+    } catch {}
     if (!partes.length) return "🏠 Bem-vindo! Nada guardado para a Alexa falar.";
     if (quieto(cfg.alexaQuiet)) return `🏠 Bem-vindo! Tinha ${partes.length} aviso(s), mas é horário de silêncio: ficam só aqui.\n• ${partes.join("\n• ")}`;
     const ok = await enviar(cfg.alexaToken, cfg.alexaDevice, `Bem-vindo, Renato. ${partes.join(" ")}`);

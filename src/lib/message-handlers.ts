@@ -905,7 +905,7 @@ async function vrBalanceShort(): Promise<string> {
  * o que sobra do salário no mês da fatura aberta — tudo que passar no cartão
  * até o fechamento cai nela. VR fica de fora (comida vai no VR).
  */
-export async function cardLimitLine(): Promise<string> {
+export async function cardLimitData() {
   const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
   const due = config?.creditCardDueDay || 10, best = config?.creditCardBestDay || 5;
   const today = todayBRT();
@@ -928,12 +928,47 @@ export async function cardLimitLine(): Promise<string> {
   const porConta = new Map<string, number>();
   for (const e of valeEntries) porConta.set(e.account, (porConta.get(e.account) ?? 0) + (e.type === "income" ? e.amount : -e.amount));
   const saldo = [...porConta].map(([account, v]) => ({ account, saldo: v })).filter((v) => v.saldo >= 0.01);
+  return { left, close, days, month, note, saldo, vales: saldo.reduce((a, v) => a + v.saldo, 0) };
+}
+
+export async function cardLimitLine(): Promise<string> {
+  const { left, close, days, month, note, saldo, vales } = await cardLimitData();
   const comida = saldo.length
-    ? `\n🍔 Para comida, sem mexer no salário: ${brl(saldo.reduce((a, v) => a + v.saldo, 0))}${saldo.length > 1 ? ` (${saldo.map((v) => `${v.account} ${brl(v.saldo)}`).join(" + ")})` : ""} — use primeiro.`
+    ? `\n🍔 Para comida, sem mexer no salário: ${brl(vales)}${saldo.length > 1 ? ` (${saldo.map((v) => `${v.account} ${brl(v.saldo)}`).join(" + ")})` : ""} — use primeiro.`
     : "";
   return (left >= 1
     ? `💳 Pode gastar no cartão até ${formatDayMonth(close)}: ${brl(left)} (≈ ${brl(left / days)}/dia) — é o que sobra do salário de ${month}${note}.`
     : `🔴 ${month[0].toUpperCase()}${month.slice(1)} já passou do salário em ${brl(-left)}${note}. Até ${formatDayMonth(close)}, cada compra no cartão aumenta isso — comida, no VR.`) + comida;
+}
+
+const MESES_FALA = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const reaisFala = (v: number) => `${Math.round(v)} reais`;
+
+/** Limite do cartão falado (Alexa): "Você pode gastar 160 reais no cartão até 3 de novembro…". */
+export async function cardLimitSpeech(): Promise<string> {
+  const { left, close, vales } = await cardLimitData();
+  const ate = `${close.getDate()} de ${MESES_FALA[close.getMonth()]}`;
+  const base = left >= 1 ? `Você pode gastar ${reaisFala(left)} no cartão até ${ate}.` : `Atenção: o mês da fatura já passou do salário em ${reaisFala(-left)}. Segure o cartão até ${ate}.`;
+  return vales >= 1 ? `${base} Para comida, tem ${reaisFala(vales)} nos vales.` : base;
+}
+
+/** Quanto gastou hoje, falado (tudo: cartão, pix e vales). */
+export async function spentTodaySpeech(): Promise<string> {
+  const { gte, lte } = dayRange(todayBRT());
+  const spent = await spentBetween(gte, lte);
+  const total = spent.reduce((acc, e) => acc + e.amount, 0);
+  return total >= 1 ? `Hoje você gastou ${reaisFala(total)}.` : "Hoje você não gastou nada.";
+}
+
+/** Véspera da fatura (Alexa, à noite): "Amanhã vence a fatura do seu cartão: 1.234 reais." */
+export async function invoiceEveSpeech(): Promise<string> {
+  const { listOpenInvoices, invoiceLabel } = await import("./invoices");
+  const t = todayBRT();
+  const amanha = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
+  const key = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, "0")}-${String(amanha.getDate()).padStart(2, "0")}`;
+  const faturas = (await listOpenInvoices()).filter((i) => i.dueDate === key && i.total >= 1);
+  if (!faturas.length) return "";
+  return `Renato, amanhã vence ${faturas.map((f) => `a fatura do ${invoiceLabel(f.card).toLowerCase()}: ${reaisFala(f.total)}`).join("; e ")}. Lembre de pagar inteira.`;
 }
 
 /** Resumo do dia (21h): o que gastou hoje, tetos, previsão do mês, VR e o que vence amanhã. */
