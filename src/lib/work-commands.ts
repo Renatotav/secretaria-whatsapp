@@ -68,6 +68,15 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     return "🔄 Pedido feito: em até 1 minuto eu copio do escala e te aviso o que mudou.";
   }
 
+  // "atualiza a extensão": a Central confere a versão nova em até 2 min e se atualiza.
+  if (/^\s*atualiz(?:ar|a|e)\s+(?:a\s+)?(?:extens[aã]o|central)(?:\s+do\s+atendente)?\s*\.?\s*$/i.test(msg)) {
+    const { prisma } = await import("./prisma");
+    const cfg = await prisma.agentConfig.findFirst({ select: { id: true } });
+    if (cfg) await prisma.agentConfig.update({ where: { id: cfg.id }, data: { extUpdateAt: new Date() } });
+    const r = await prisma.extRelease.findFirst({ orderBy: { createdAt: "desc" }, select: { version: true } });
+    return `🔄 Pedido feito: em até 2 minutos a extensão confere${r ? ` (a mais nova é a ${r.version})` : ""} e se atualiza sozinha. Se o Chrome perguntar da pasta, escolha *Permitir sempre*.`;
+  }
+
   // "como está meu trabalho?" / "resumo do trabalho": o briefing das 8h na hora.
   if (/^\s*(?:como\s+(?:est[aá]|t[aá])\s+(?:o\s+)?meu\s+trabalho|resumo\s+do\s+trabalho|briefing(?:\s+do\s+trabalho)?)\s*\??\s*$/i.test(msg)) {
     const { buildWorkBriefing } = await import("./work");

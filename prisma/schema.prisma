@@ -109,6 +109,8 @@ model AgentConfig {
   reserveSyncedMonth String @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  /// "atualiza a extensão" no WhatsApp: a extensão confere a versão na hora (e se atualiza sozinha).
+  extUpdateAt DateTime?
 }
 
 model Conversation {
