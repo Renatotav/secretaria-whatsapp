@@ -53,17 +53,23 @@ export async function leafCert(url: string): Promise<X509Certificate | null> {
 
 /** Confere se o pedido veio mesmo da Amazon e é da skill dele. */
 export async function alexaRequestOk(request: Request, raw: string, body: AlexaBody): Promise<boolean> {
+  // Diz no log POR QUE recusou (sem mostrar chave nem assinatura) — o 1º pedido
+  // de verdade (15/10) voltou 401 e não dava para saber qual conferência falhou.
+  const no = (motivo: string) => (console.warn(`[alexa-skill] recusado: ${motivo}`), false);
   const url = request.headers.get("signaturecertchainurl") || "";
   const sig = request.headers.get("signature-256") || "";
-  if (!certUrlOk(url) || !sig) return false;
+  if (!certUrlOk(url)) return no(url ? "endereço do certificado não é da Amazon" : "sem certificado (não veio da Alexa)");
+  if (!sig) return no("sem assinatura Signature-256");
   const ts = Date.parse(body?.request?.timestamp || "");
-  if (!ts || Math.abs(Date.now() - ts) > 150_000) return false;
+  if (!ts || Math.abs(Date.now() - ts) > 150_000) return no("horário do pedido fora do prazo de 150 s");
   const cfg = await prisma.agentConfig.findFirst({ select: { alexaSkillId: true } });
   const appId = body?.session?.application?.applicationId || body?.context?.System?.application?.applicationId || "";
-  if (!cfg?.alexaSkillId || appId !== cfg.alexaSkillId) return false;
-  const leaf = await leafCert(url).catch(() => null);
-  if (!leaf) return false;
-  return createVerify("RSA-SHA256").update(raw).verify(leaf.publicKey, sig, "base64");
+  if (!cfg?.alexaSkillId) return no("ID da skill não cadastrado (mande 'alexa skill amzn1.ask.skill...')");
+  if (appId !== cfg.alexaSkillId) return no(`ID da skill diferente do cadastrado (veio …${appId.slice(-6)}, cadastrado …${cfg.alexaSkillId.slice(-6)})`);
+  const leaf = await leafCert(url).catch((e) => (console.warn("[alexa-skill] certificado:", e instanceof Error ? e.message : e), null));
+  if (!leaf) return no("certificado da Amazon não conferiu");
+  const ok = createVerify("RSA-SHA256").update(raw).verify(leaf.publicKey, sig, "base64");
+  return ok || no("assinatura não confere");
 }
 
 export interface AlexaBody {
