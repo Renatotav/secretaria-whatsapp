@@ -10,6 +10,8 @@ import { prisma } from "./prisma";
 
 const LINK = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?[^\s]*?v=|live\/|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})[^\s]*/i;
 const MODELO = "google/gemini-3.8-flash";
+/** false = não assiste mais (custo); responde com o caminho do Gemini/NotebookLM. */
+const YOUTUBE_PAGO = false;
 let ultimo: { at: number; texto: string } | null = null;
 
 export async function applyYoutube(text: string, avisar: (t: string) => Promise<void>): Promise<string | null> {
@@ -21,6 +23,11 @@ export async function applyYoutube(text: string, avisar: (t: string) => Promise<
   }
   const m = t.match(LINK);
   if (!m) return null;
+  // Desligado a pedido dele (20/10/2026): assistir vídeo pelo OpenRouter gastava
+  // crédito demais. Ele usa o Gemini / NotebookLM (grátis) e manda o resumo.
+  if (!YOUTUBE_PAGO) {
+    return "🎥 Para vídeo do YouTube eu não assisto mais (gastava muito crédito da IA). Abra no *Gemini* ou no *NotebookLM* — é grátis — e me mande o resumo aqui que eu guardo no diário (comece com *diário:*).";
+  }
   const id = m[1];
   const pergunta = t.replace(m[0], "").trim();
   const cfg = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true } });
