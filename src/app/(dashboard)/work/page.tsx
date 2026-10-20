@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { alertsFor, DEFAULT_SITUATIONS, type Situation } from "@/lib/work-sla";
 import { useWidth } from "@/lib/use-width";
 import { InsightPanel, AskBox, type Selecao } from "./insight-panel";
@@ -264,6 +264,41 @@ function ContactsList({ links }: { links: Links }) {
 
 type Snippet = { shortcut: string; title: string; body: string };
 
+/** Texto do atalho com botões: **negrito**, __itálico__, [link](…) e {clipboard} (o que está copiado). */
+function SnippetBody({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  function envolver(antes: string, depois: string, vazio: string) {
+    const el = ref.current;
+    if (!el) return;
+    const a = el.selectionStart, b = el.selectionEnd;
+    const meio = value.slice(a, b) || vazio;
+    onChange(value.slice(0, a) + antes + meio + depois + value.slice(b));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = a + antes.length;
+      el.selectionEnd = a + antes.length + meio.length;
+    });
+  }
+  function link() {
+    const url = window.prompt("Endereço do link (https://…)");
+    if (!url) return;
+    const certo = /^https?:\/\//i.test(url.trim()) ? url.trim() : `https://${url.trim()}`;
+    envolver("[", `](${certo})`, "texto do link");
+  }
+  const btn = { fontSize: 12, padding: "2px 9px", minWidth: 30 } as const;
+  return (
+    <div style={{ display: "grid", gap: 4 }}>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        <button type="button" className="btn-ghost" style={{ ...btn, fontWeight: 700 }} title="Negrito: **texto**" onClick={() => envolver("**", "**", "texto")}>B</button>
+        <button type="button" className="btn-ghost" style={{ ...btn, fontStyle: "italic" }} title="Itálico: __texto__" onClick={() => envolver("__", "__", "texto")}>I</button>
+        <button type="button" className="btn-ghost" style={btn} title="Link: [texto](https://…)" onClick={link}>🔗 Link</button>
+        <button type="button" className="btn-ghost" style={btn} title="Entra o que você copiou (Ctrl+C)" onClick={() => envolver("{clipboard}", "", "")}>📋 Copiado</button>
+      </div>
+      <textarea ref={ref} aria-label="Texto" value={value} onChange={(e) => onChange(e.target.value)} rows={Math.min(10, Math.max(3, value.split("\n").length + 1))} style={{ width: "100%", fontSize: 12 }} />
+    </div>
+  );
+}
+
 /** ⌨️ Atalhos de texto: "/padrao" vira o texto em qualquer campo (extensão). */
 function SnippetsEditor() {
   const [rows, setRows] = useState<Snippet[] | null>(null);
@@ -285,7 +320,8 @@ function SnippetsEditor() {
       <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
         Digite o atalho em qualquer campo (Assyst, WhatsApp Web, e-mail, Redmine) e ele vira o texto. Campos automáticos: <code>{"{chamado}"}</code> nº do chamado
         aberto · <code>{"{saudacao}"}</code> Bom dia/Boa tarde/Boa noite · <code>{"{data}"}</code> · <code>{"{hora}"}</code> · <code>{"{campo:Nome do usuário}"}</code>{" "}
-        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica. Pode colar atalhos do Text Blaze ({"{time}"}, {"{formtext}"}, {"{if}"}): a extensão entende. Campo "Pronome" vira botões Sr./Sra./Dr./Dra./Sem título.
+        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica · <code>{"{clipboard}"}</code> o que você copiou (Ctrl+C). Formatação: <b>**negrito**</b>, <i>__itálico__</i> e{" "}
+        <code>[texto](https://link)</code> — de verdade no Assyst e no e-mail; no WhatsApp vira *negrito*/_itálico_. Pode colar atalhos do Text Blaze ({"{time}"}, {"{formtext}"}, {"{if}"}): a extensão entende. Campo "Pronome" vira botões Sr./Sra./Dr./Dra./Sem título.
       </p>
       {rows === null && <div style={{ fontSize: 12 }}>Carregando…</div>}
       {rows?.map((r, i) => (
@@ -297,7 +333,7 @@ function SnippetsEditor() {
               Remover
             </button>
           </div>
-          <textarea aria-label="Texto" value={r.body} onChange={(e) => set(i, { body: e.target.value })} rows={Math.min(10, Math.max(3, r.body.split("\n").length + 1))} style={{ width: "100%", fontSize: 12 }} />
+          <SnippetBody value={r.body} onChange={(v) => set(i, { body: v })} />
         </div>
       ))}
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
