@@ -101,13 +101,21 @@ export async function generateResponse(
  * quem chama). Groq não entra aqui — os modelos de chat padrão dela não têm
  * visão. Prioridade: OpenRouter > Google > OpenAI.
  */
+/**
+ * Leitura de nota/fatura/print. Teste de 20/10/2026 com duas notas reais: o
+ * DeepSeek V4.1 Flash acertou total e itens como o Gemini 2.5 Flash, ~5× mais
+ * barato (os "flash-lite" erraram itens). O Gemini fica de reserva.
+ */
+export const VISION_MODEL = "deepseek/deepseek-v4.1-flash-1017";
+const VISION_FALLBACK = "google/gemini-2.5-flash";
+
 export async function generateVisionResponse(
   base64: string,
   mimetype: string,
   systemPrompt: string,
   providerOpts: ProviderOptions,
-  /** Modelo do OpenRouter para esta leitura (padrão: gemini-2.5-flash). */
-  openrouterModel = "google/gemini-2.5-flash"
+  /** Modelo do OpenRouter para esta leitura (padrão: DeepSeek V4.1 Flash, com o Gemini de reserva). */
+  openrouterModel = VISION_MODEL
 ): Promise<string> {
   const imageContent = {
     type: "image_url" as const,
@@ -131,13 +139,26 @@ export async function generateVisionResponse(
     // Não reaproveita o modelo de chat geral (config.openrouterModel) — tarefas
     // de OCR/leitura de tabela densa em foto precisam de um modelo forte em
     // documento, independente do que está configurado pro resto do sistema.
-    const response = await openrouter.chat.completions.create({
-      model: openrouterModel,
-      temperature: 0.1,
-      max_tokens: 8192,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-    });
-    return response.choices[0]?.message?.content ?? "";
+    const pedir = async (model: string) => {
+      const response = await openrouter.chat.completions.create({
+        model,
+        temperature: 0.1,
+        max_tokens: 8192,
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        // DeepSeek (modelo aberto): só provedores que não guardam nem treinam com os dados.
+        ...(model.startsWith("deepseek/") ? { provider: { data_collection: "deny", order: ["deepinfra", "cloudflare"] } } : {}),
+      } as Parameters<typeof openrouter.chat.completions.create>[0]);
+      return (response as { choices: { message?: { content?: string | null } }[] }).choices[0]?.message?.content ?? "";
+    };
+    // Falhou ou veio vazio: tenta de novo com o Gemini (era o padrão antes).
+    try {
+      const texto = await pedir(openrouterModel);
+      if (texto.trim() || openrouterModel === VISION_FALLBACK) return texto;
+    } catch (err) {
+      if (openrouterModel === VISION_FALLBACK) throw err;
+      console.warn(`[visão] ${openrouterModel} falhou, indo para ${VISION_FALLBACK}:`, err instanceof Error ? err.message : err);
+    }
+    return pedir(VISION_FALLBACK);
   }
 
   if (providerOpts.googleApiKey) {
