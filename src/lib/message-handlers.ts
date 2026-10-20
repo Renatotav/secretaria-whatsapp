@@ -916,7 +916,7 @@ export async function cardLimitData() {
   const left = done + pending;
   const month = MONTH_NAMES[bill.getMonth()];
   const estimate = await prisma.financeEntry.findFirst({
-    where: { type: "income", description: { contains: "(previsto)" }, category: "Salário", date: { gte: new Date(bill.getFullYear(), bill.getMonth(), 1), lte: new Date(bill.getFullYear(), bill.getMonth() + 1, 0, 23, 59) } },
+    where: { type: "income", status: "pending", description: { contains: "(previsto)" }, category: "Salário", ...SO_SALARIO, date: { gte: new Date(bill.getFullYear(), bill.getMonth(), 1), lte: new Date(bill.getFullYear(), bill.getMonth() + 1, 0, 23, 59) } },
     select: { id: true },
   });
   const note = estimate ? " (com o salário estimado)" : "";
@@ -1500,23 +1500,50 @@ export async function applyMonthResultToReserve(year: number, monthIndex: number
     : `\n\n🏦 *${reserve.name}:* sobrou ${brl(balance)} na conta corrente em ${MONTH_NAMES[monthIndex]}, somei na ${name}. Agora: ${brl(newAmount)}.`;
 }
 
+
+/** Salário de verdade: o VR também está em "Salário" (subcategoria Vale Alimentação, conta VR/Vale antigo). */
+export const SO_SALARIO = { subcategory: { not: "Vale Alimentação" }, NOT: { account: { in: ["VR", "Vale antigo"] } } };
+const SALARY_REPLY_MARK = "responda *usa nos próximos*";
+
 /**
- * Depois de receber salário: quanto sobra no mês (entradas − saídas já
- * lançadas) e uma sugestão de quanto guardar na Reserva — 10% do que entrou,
- * limitado à metade da sobra, arredondado para dezena.
+ * Check-up do salário (pedido dele: "fica atento quando receber meu salário"):
+ * com o valor REAL, como fica o mês na conta corrente (VR fora), quanto ainda
+ * cabe no cartão e se os meses seguintes ainda estão com o salário estimado.
  */
-async function buildSavingsSuggestion(received: number): Promise<string> {
-  const today = todayBRT();
-  const { income, expense } = await monthTotals(today.getFullYear(), today.getMonth());
-  const leftover = income - expense;
-  const month = MONTH_NAMES[today.getMonth()];
-  const reserve = await findReserveGoal();
-  if (leftover <= 0) {
-    return `\n\n⚠️ Com o que já está lançado, ${month} fecha em −${brl(Math.abs(leftover))}.${reserve ? ` Se usar a ${reserve.name}, me avise: "tirei X da ${reserve.name.toLowerCase()}".` : ""}`;
-  }
-  const suggestion = Math.floor(Math.min(received * 0.1, leftover * 0.5) / 10) * 10;
-  if (!reserve || suggestion < 10) return `\n\n🟢 Depois das contas de ${month}, sobram ${brl(leftover)}.`;
-  return `\n\n💰 Depois das contas de ${month}, sobram ${brl(leftover)}. Que tal guardar *${brl(suggestion)}* na ${reserve.name}? ${SAVINGS_REPLY_MARK} que eu já somo.`;
+export async function salaryCheckup(received: number, previsto: number, when: Date): Promise<string> {
+  const y = when.getFullYear(), m = when.getMonth();
+  const month = MONTH_NAMES[m];
+  const { done, pending } = await monthForecastParts(y, m);
+  const saldo = done + pending;
+  const lines = [`\n\n📊 *Check-up do salário de ${month}*`];
+  if (Math.abs(received - previsto) > 0.01) lines.push(`${received < previsto ? "🔻" : "🔺"} Veio ${brl(Math.abs(received - previsto))} ${received < previsto ? "a menos" : "a mais"} que o estimado.`);
+  lines.push(
+    saldo >= 0
+      ? `${saldo >= 300 ? "🟢" : "🟡"} Pagando tudo o que já está lançado em ${month} (fatura, aluguel, contas), sobram *${brl(saldo)}*.`
+      : `🔴 Pagando tudo o que já está lançado em ${month}, faltam *${brl(-saldo)}* — sai da Reserva no dia 1º se nada mudar.`
+  );
+  lines.push(await cardLimitLine());
+  const futuros = await prisma.financeEntry.findMany({
+    where: { type: "income", category: "Salário", ...SO_SALARIO, status: "pending", description: { contains: "(previsto)" }, date: { gt: new Date(y, m + 1, 0, 23, 59) } },
+    select: { amount: true },
+  });
+  const estimado = futuros.find((f) => Math.abs(f.amount - received) > 0.01);
+  if (estimado) lines.push(`📅 Os próximos meses ainda estão com o salário estimado (${brl(estimado.amount)}). Se ${brl(received)} é o novo normal, ${SALARY_REPLY_MARK} que eu troco em ${futuros.length} mês(es).`);
+  return lines.join("\n");
+}
+
+/** "usa nos próximos" logo depois do check-up: troca o salário previsto dos meses seguintes pelo real. */
+export async function applySalaryReply(text: string, messages: { role: string; content: string; createdAt: Date }[] | undefined): Promise<string | null> {
+  if (!/^\s*(sim,?\s*)?(usa|use|usar|troca|pode trocar)(\s+nos?\s+pr[oó]ximos(\s+meses)?)?\s*[.!]?\s*$/i.test(text)) return null;
+  const last = messages?.find((x) => x.role === "assistant");
+  if (!last || !last.content.includes(SALARY_REPLY_MARK) || Date.now() - last.createdAt.getTime() > PAYMENT_REPLY_WINDOW_MS) return null;
+  const recebido = await prisma.financeEntry.findFirst({ where: { type: "income", category: "Salário", ...SO_SALARIO, status: "paid" }, orderBy: { date: "desc" } });
+  if (!recebido) return null;
+  const r = await prisma.financeEntry.updateMany({
+    where: { type: "income", category: "Salário", ...SO_SALARIO, status: "pending", description: { contains: "(previsto)" }, date: { gt: recebido.date } },
+    data: { amount: recebido.amount },
+  });
+  return `✅ Troquei o salário previsto de ${r.count} mês(es) para ${brl(recebido.amount)}. As previsões e o limite do cartão já usam o valor novo.\n\n${await cardLimitLine()}`;
 }
 
 /** Resposta "guarda" logo depois da sugestão acima: soma o valor sugerido na Reserva. */
@@ -1811,6 +1838,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     (await applyUndoOrEdit(joinedText)) ??
     (await applyInvoicePayment(joinedText)) ??
     (await applySavingsReply(joinedText, conv?.messages)) ??
+    (await applySalaryReply(joinedText, conv?.messages)) ??
     (await applyPaymentReply(joinedText, config));
   if (paymentReply) {
     if (!conv) {
@@ -1963,6 +1991,8 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
               type: route.financeType,
               status: "pending",
               paymentMethod: { not: "cartão" },
+              // "recebi o salário" não pode dar baixa no crédito do VR (também é categoria Salário).
+              ...(route.financeType === "income" && !/\b(vr|vale|ticket)\b/i.test(joinedText) ? { NOT: { account: { in: ["VR", "Vale antigo"] } } } : {}),
               date: { gte: new Date(today.getTime() - 45 * 86400000), lte: new Date(today.getTime() + 10 * 86400000) },
               OR: [
                 { amount: { gte: route.amount - 0.01, lte: route.amount + 0.01 } },
@@ -1993,7 +2023,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
             response += `\n(o previsto era ${brl(existingPending.amount)} — atualizei para o valor que você informou)`;
           }
           if (route.financeType === "income" && /sal[aá]rio/i.test(existingPending.category)) {
-            response += await buildSavingsSuggestion(newAmount);
+            response += await salaryCheckup(newAmount, existingPending.amount, existingPending.date);
           }
         } else {
           // Humor do dia do GASTO ("ontem gastei…" usa o diário de ontem).
@@ -2027,7 +2057,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
           }${UNDO_HINT}`;
 
           if (route.financeType === "income" && /sal[aá]rio/i.test(created.category)) {
-            response += await buildSavingsSuggestion(created.amount);
+            response += await salaryCheckup(created.amount, created.amount, created.date);
           }
 
           if (finalMood === "neutro" && route.financeType === "expense" && route.amount >= 100) {

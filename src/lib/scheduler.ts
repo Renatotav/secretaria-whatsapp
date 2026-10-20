@@ -4,7 +4,7 @@ import { generateWeeklyReport } from "./weekly-report";
 import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
-import { buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest, sendBudgetChart } from "./message-handlers";
+import { SO_SALARIO, buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest, sendBudgetChart } from "./message-handlers";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -15,6 +15,7 @@ let lastReminderHour = -1;
 let lastWorkBriefDate = "";
 let lastMorningDate = "";
 let lastTireDate = "";
+let lastSalaryNudgeDate = "";
 let lastInvoiceEveDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
@@ -222,6 +223,25 @@ export function startScheduler(): void {
           await falarPneus();
         } catch (err) {
           console.error("[alexa] aviso dos pneus falhou", err);
+        }
+      }
+
+      // Dia do salário (18:00): se o previsto venceu e ele ainda não mandou "recebi",
+      // pergunta — com o valor real eu refaço a conta do mês (até 3 dias).
+      if (hhmm === "18:00" && lastSalaryNudgeDate !== todayDate && config.ownerPhone) {
+        lastSalaryNudgeDate = todayDate;
+        try {
+          const fim = new Date(brtDate.getUTCFullYear(), brtDate.getUTCMonth(), brtDate.getUTCDate(), 23, 59);
+          const sal = await prisma.financeEntry.findFirst({
+            where: { type: "income", category: "Salário", ...SO_SALARIO, status: "pending", date: { lte: fim, gte: new Date(fim.getTime() - 3 * 86400000) } },
+            orderBy: { date: "asc" },
+          });
+          if (sal) {
+            const { notifyOwner } = await import("./message-handlers");
+            await notifyOwner(config, `💰 Era dia do salário. Já caiu? Me manda *recebi X de salário* (o valor que entrou de verdade) que eu faço o check-up do mês: quanto sobra depois das contas e quanto ainda cabe no cartão.`);
+          }
+        } catch (err) {
+          console.error("[salário] lembrete falhou", err);
         }
       }
 
