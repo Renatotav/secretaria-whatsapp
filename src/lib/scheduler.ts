@@ -16,6 +16,7 @@ let lastWorkBriefDate = "";
 let lastMorningDate = "";
 let lastTireDate = "";
 let lastSalaryNudgeDate = "";
+let lastCreditWarnDate = "";
 let lastInvoiceEveDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
@@ -242,6 +243,21 @@ export function startScheduler(): void {
           }
         } catch (err) {
           console.error("[salário] lembrete falhou", err);
+        }
+      }
+
+      // Crédito da IA (OpenRouter): confere 3x por dia; abaixo de US$ 2 avisa (1x por dia).
+      if ((hhmm === "08:30" || hhmm === "13:30" || hhmm === "19:00") && lastCreditWarnDate !== todayDate && config.ownerPhone) {
+        try {
+          const { creditWarning } = await import("./ai-credit");
+          const aviso = await creditWarning();
+          if (aviso) {
+            lastCreditWarnDate = todayDate;
+            const { notifyOwner } = await import("./message-handlers");
+            await notifyOwner(config, aviso);
+          }
+        } catch (err) {
+          console.error("[crédito IA] conferência falhou", err);
         }
       }
 

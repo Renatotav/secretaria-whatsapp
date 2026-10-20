@@ -1809,6 +1809,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
   const { attachPendingWorkChat } = await import("./work-phone");
   const { applyScooterCommand } = await import("./scooter");
   const { applyAlexaCommand } = await import("./alexa");
+  const { applyCreditCommand } = await import("./ai-credit");
   const { applyAlertRuleCommand } = await import("./work-alert-rules");
   const { applyMcpCommand } = await import("./mcp-tools");
   // Link do YouTube: o Gemini assiste e manda o resumo (ou responde a pergunta junto).
@@ -1818,7 +1819,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
