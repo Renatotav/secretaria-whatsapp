@@ -290,7 +290,7 @@ export function startScheduler(): void {
         }
       }
 
-      // 09:00: aviso das faturas (C6 e Santander) também para o irmão — 3 dias antes e no dia.
+      // 09:00: aviso das faturas (C6 e Santander) também para o irmão, no dia do vencimento.
       if (hhmm === "09:00" && lastBuddyInvoiceDate !== todayDate) {
         lastBuddyInvoiceDate = todayDate;
         try {
