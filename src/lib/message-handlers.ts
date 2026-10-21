@@ -984,6 +984,50 @@ ${itens.join("\n")}${spent.length > 8 ? "\n…" : ""}
 ${await cardLimitLine()}`;
 }
 
+/**
+ * Respostas FALADAS (Alexa): frases curtas, sem centavos e sem símbolos — o
+ * texto do WhatsApp lido em voz alta soava como extrato. null = sem fala pronta
+ * para isso (aí vai o caminho normal, convertido por paraFala).
+ */
+export async function spokenAnswer(text: string): Promise<string | null> {
+  const t = text.trim().toLowerCase();
+  const r = (v: number) => `${Math.round(Math.abs(v)).toLocaleString("pt-BR")} ${Math.round(Math.abs(v)) === 1 ? "real" : "reais"}`;
+  const { left, close } = await cardLimitData();
+  const ate = `${close.getDate()} de ${MESES_FALA[close.getMonth()]}`;
+  const cartao = left >= 1 ? `No cartão ainda cabem ${r(left)} até ${ate}.` : `O cartão já passou do salário em ${r(left)}, segura até ${ate}.`;
+
+  const dia = t.match(/gastei\s+(hoje|ontem)/);
+  if (dia) {
+    const ontem = dia[1] === "ontem";
+    const hj = todayBRT();
+    const d = ontem ? new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() - 1, 12) : hj;
+    const { gte, lte } = dayRange(d);
+    const gastos = await spentBetween(gte, lte);
+    const quando = ontem ? "Ontem" : "Hoje";
+    if (!gastos.length) return `${quando} você não gastou nada. ${cartao}`;
+    const total = gastos.reduce((a, e) => a + e.amount, 0);
+    const maior = gastos[0];
+    const nome = (maior.subcategory || maior.category || "uma compra").toLowerCase();
+    return `${quando} você gastou ${r(total)}, em ${gastos.length} ${gastos.length === 1 ? "compra" : "compras"}. ${gastos.length > 1 ? `A maior foi ${nome}, ${r(maior.amount)}. ` : ""}${cartao}`;
+  }
+
+  if (/gastei\s+(n?es[st]e|no)\s+m[eê]s|como\s+(est[aá]|t[aá])\s+(o\s+)?meu\s+financeiro|resumo\s+do\s+m[eê]s|como\s+(est[aá]|t[aá])\s+o\s+m[eê]s/.test(t)) {
+    const hj = todayBRT();
+    const entries = await prisma.financeEntry.findMany({ where: { date: { gte: new Date(hj.getFullYear(), hj.getMonth(), 1), lte: new Date(hj.getFullYear(), hj.getMonth() + 1, 0, 23, 59, 59) } } });
+    const soma = (type: string, status?: string) => entries.filter((e) => e.type === type && (!status || e.status === status)).reduce((a, e) => a + e.amount, 0);
+    const entradas = soma("income"), saidas = soma("expense");
+    const aReceber = entradas - soma("income", "paid"), aPagar = saidas - soma("expense", "paid");
+    const saldo = entradas - saidas;
+    const f = [`Em ${MESES_FALA[hj.getMonth()]}, entraram ${r(entradas)} e saíram ${r(saidas)}.`];
+    if (aReceber >= 1) f.push(`Ainda faltam chegar ${r(aReceber)}.`);
+    f.push(aPagar >= 1 ? `Você ainda tem ${r(aPagar)} pra pagar.` : "As contas do mês já estão todas pagas.");
+    f.push(saldo < 0 ? `O mês fecha no vermelho em ${r(saldo)}.` : `No fim, sobram ${r(saldo)}.`);
+    f.push(cartao);
+    return f.join(" ");
+  }
+  return null;
+}
+
 /** Véspera da fatura (Alexa, à noite): "Amanhã vence a fatura do seu cartão: 1.234 reais." */
 export async function invoiceEveSpeech(): Promise<string> {
   const { listOpenInvoices, invoiceLabel } = await import("./invoices");

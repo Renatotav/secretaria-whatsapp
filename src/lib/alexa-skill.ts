@@ -93,8 +93,14 @@ export function paraFala(t: string): string {
   return t
     // "R$ -2.551,76" / "−R$ 10,00" → "menos 2551 reais e 76 centavos".
     .replace(/(?:[-−]\s*R\$\s?|R\$\s?([-−])?)(\d{1,3}(?:\.\d{3})*),(\d{2})/g, (m: string, neg: string | undefined, r: string, c: string) =>
-      `${neg || /^[-−]/.test(m) ? "menos " : ""}${r.replace(/\./g, "")} ${r === "1" ? "real" : "reais"}${c !== "00" ? ` e ${Number(c)} ${Number(c) === 1 ? "centavo" : "centavos"}` : ""}`)
+      {
+        // Na fala, sem centavos (arredonda): "244 reais", não "244 reais e 25 centavos".
+        const v = Math.round(Number(r.replace(/\./g, "")) + Number(c) / 100);
+        return `${neg || /^[-−]/.test(m) ? "menos " : ""}${v.toLocaleString("pt-BR")} ${v === 1 ? "real" : "reais"}`;
+      })
     .replace(/[*_~`]/g, "")
+    .replace(/\s*\([^)]{0,80}\)/g, "")
+    .replace(/\s*·\s*/g, ", ")
     .replace(/\p{Extended_Pictographic}|️|‍/gu, "")
     .replace(/^\s*[•\-–]\s*/gm, "")
     .replace(/\s*\n+\s*/g, ". ")

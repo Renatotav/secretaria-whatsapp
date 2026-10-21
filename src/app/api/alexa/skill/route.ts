@@ -19,7 +19,8 @@ export async function POST(request: Request) {
 
   const tipo = body.request?.type;
   // Diagnóstico: o que a Alexa mandou (tipo, intenção e a frase entendida — é a fala dele, não sai do servidor).
-  console.log(`[alexa-skill] ${tipo}${body.request?.intent?.name ? ` ${body.request.intent.name}` : ""}${frase(body) ? `: "${frase(body).slice(0, 120)}"` : ""}`);
+  const entendeu = frase(body);
+  console.log(`[alexa-skill] ${tipo}${body.request?.intent?.name ? ` ${body.request.intent.name}` : ""}${entendeu ? `: "${entendeu.slice(0, 120)}"` : ""}`);
   if (tipo === "LaunchRequest") return NextResponse.json(falar("Oi, Renato. O que eu anoto?", false));
   if (tipo === "SessionEndedRequest") return NextResponse.json({ version: "1.0", response: {} });
   const nome = body.request?.intent?.name || "";
@@ -30,6 +31,12 @@ export async function POST(request: Request) {
   const texto = frase(body);
   if (!texto) return NextResponse.json(falar("Não entendi. Fale, por exemplo: anota trinta reais de mercado no pix.", false));
 
+  // Pergunta com fala pronta (gasto do dia, resumo do mês): responde curto e natural.
+  {
+    const { spokenAnswer } = await import("@/lib/message-handlers");
+    const fala = await spokenAnswer(texto).catch(() => null);
+    if (fala) return NextResponse.json(falar(fala));
+  }
   const { replyCapture } = await import("@/lib/reply-capture");
   const { handleSelfMessage } = await import("@/lib/message-handlers");
   const respostas: string[] = [];
