@@ -18,6 +18,8 @@ export async function POST(request: Request) {
   if (!(await alexaRequestOk(request, raw, body))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const tipo = body.request?.type;
+  // Diagnóstico: o que a Alexa mandou (tipo, intenção e a frase entendida — é a fala dele, não sai do servidor).
+  console.log(`[alexa-skill] ${tipo}${body.request?.intent?.name ? ` ${body.request.intent.name}` : ""}${frase(body) ? `: "${frase(body).slice(0, 120)}"` : ""}`);
   if (tipo === "LaunchRequest") return NextResponse.json(falar("Oi, Renato. O que eu anoto?", false));
   if (tipo === "SessionEndedRequest") return NextResponse.json({ version: "1.0", response: {} });
   const nome = body.request?.intent?.name || "";
