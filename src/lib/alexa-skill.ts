@@ -131,7 +131,7 @@ export function vozDaResposta(t: string): string {
 
 /** Tira o nome da skill que às vezes vem junto na frase ("a secretária tavares quanto gastei"). */
 export function semInvocacao(t: string): string {
-  return t.replace(/^\s*(?:(?:para|pra|pro|à|a|ao|o)\s+)?secret[aá]ria\s+tavares[,\s]*/i, "").trim() || t;
+  return t.replace(/^\s*(?:(?:para|pra|pro|à|a|ao|o)\s+)?(?:secret[aá]ria\s+tavares|tavares\s+secret[aá]ria)[,\s]*/i, "").trim() || t;
 }
 
 /** "não", "só isso", "obrigado", "tchau": fim da conversa. */
