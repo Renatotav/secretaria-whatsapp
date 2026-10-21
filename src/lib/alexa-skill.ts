@@ -111,6 +111,32 @@ export function paraFala(t: string): string {
     .slice(0, 700);
 }
 
+/**
+ * Resposta do WhatsApp → fala curta. Lançamento vira "Anotei: almoço, 25 reais,
+ * no cartão." (em vez de ler o cartão inteiro); o resto fica com as primeiras
+ * linhas, sem as dicas de "desfazer".
+ */
+export function vozDaResposta(t: string): string {
+  const linhas = t.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (/Lançamento salvo|Receita salva|Lançamento atualizado/i.test(t)) {
+    const pega = (emoji: string) => linhas.find((l) => l.startsWith(emoji))?.slice(emoji.length).trim() ?? "";
+    const oque = pega("📝"), valor = pega("💰");
+    const meio = (linhas.find((l) => l.startsWith("💳") || l.startsWith("🏦")) || "").replace(/^\S+\s*/, "").split("·")[0].trim();
+    const receita = /Receita salva/i.test(t);
+    return paraFala(`${receita ? "Anotei a entrada" : "Anotei"}: ${oque}, ${valor}${meio ? `, no ${meio.toLowerCase()}` : ""}.`);
+  }
+  const uteis = linhas.filter((l) => !/Errou\?|Responda \*|desfazer|^↩️/i.test(l));
+  return paraFala(uteis.slice(0, 4).join("\n"));
+}
+
+/** Tira o nome da skill que às vezes vem junto na frase ("a secretária tavares quanto gastei"). */
+export function semInvocacao(t: string): string {
+  return t.replace(/^\s*(?:(?:para|pra|pro|à|a|ao|o)\s+)?secret[aá]ria\s+tavares[,\s]*/i, "").trim() || t;
+}
+
+/** "não", "só isso", "obrigado", "tchau": fim da conversa. */
+export const FIM_RE = /^\s*(n[aã]o|nada|s[oó] isso|obrigad[oa]|valeu|tchau|pode parar|era s[oó] isso)\b/i;
+
 export function falar(texto: string, fim = true) {
   return {
     version: "1.0",

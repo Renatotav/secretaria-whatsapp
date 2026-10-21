@@ -991,6 +991,8 @@ ${await cardLimitLine()}`;
  */
 export async function spokenAnswer(text: string): Promise<string | null> {
   const t = text.trim().toLowerCase();
+  // Ação (lançar, pagar, lembrar…) não é pergunta: segue o caminho normal da secretária.
+  if (/^\s*(anota|anote|lan[cç]a|paguei|pago|gastei|comprei|recebi|caiu|marca|me lembra|lembra|agenda\s+\w+\s+(dia|amanh|hoje|às)|tirei|guarda|calibrei|carreguei|desfazer|na verdade)/.test(t) && !/^\s*gastei\s+(hoje|ontem)\s*\??$/.test(t)) return null;
   const r = (v: number) => `${Math.round(Math.abs(v)).toLocaleString("pt-BR")} ${Math.round(Math.abs(v)) === 1 ? "real" : "reais"}`;
   const { left, close } = await cardLimitData();
   const ate = `${close.getDate()} de ${MESES_FALA[close.getMonth()]}`;
@@ -1024,6 +1026,65 @@ export async function spokenAnswer(text: string): Promise<string | null> {
     f.push(saldo < 0 ? `O mês fecha no vermelho em ${r(saldo)}.` : `No fim, sobram ${r(saldo)}.`);
     f.push(cartao);
     return f.join(" ");
+  }
+
+  // Limite: "quanto posso gastar?", "quanto ainda cabe no cartão?"
+  if (/quanto\s+(ainda\s+)?(posso|d[aá] pra|da para)\s+gastar|quanto\s+(ainda\s+)?cabe|limite/.test(t)) {
+    const { vales } = await cardLimitData();
+    return `${cartao}${vales >= 1 ? ` E tem ${r(vales)} nos vales para comida.` : " Os vales de comida estão zerados."}`;
+  }
+
+  // Vales: "quanto tenho no vr / no vale?"
+  if (/\b(vr|vale|vales|ticket)\b/.test(t) && /quanto|saldo|tem/.test(t)) {
+    const { vales } = await cardLimitData();
+    const prox = await prisma.financeEntry.findFirst({ where: { type: "income", status: "pending", account: "VR" }, orderBy: { date: "asc" } });
+    const quando = prox ? ` O próximo crédito, de ${r(prox.amount)}, cai dia ${prox.date.getDate()} de ${MESES_FALA[prox.date.getMonth()]}.` : "";
+    return `${vales >= 1 ? `Você tem ${r(vales)} nos vales.` : "Os vales estão zerados."}${quando}`;
+  }
+
+  // Fatura: "quanto está a fatura?"
+  if (/fatura/.test(t)) {
+    const { listOpenInvoices } = await import("./invoices");
+    const faturas = (await listOpenInvoices()).filter((i) => !i.card && i.total >= 1);
+    if (!faturas.length) return "Você não tem fatura em aberto.";
+    const f = faturas[0];
+    const [, mm, dd] = f.dueDate.split("-").map(Number);
+    return `A próxima fatura vence dia ${dd} de ${MESES_FALA[mm - 1]} e está em ${r(f.total)}, com ${f.count} compras. ${cartao}`;
+  }
+
+  // Scooter: "como está a scooter?", "quanto dá pra rodar?"
+  if (/scooter|moto\b|bateria|quanto\s+d[aá]\s+pra\s+rodar|autonomia/.test(t)) {
+    const { scooterNumbers, TIRE_PSI } = await import("./scooter");
+    const n = await scooterNumbers();
+    if (!n) return "Ainda não tenho registros da scooter.";
+    const partes: string[] = [];
+    if (n.kmSince !== null) {
+      const folga = Math.round(n.safeKm - n.kmSince);
+      partes.push(folga <= 0 ? `Carregue hoje: já rodou ${Math.round(n.kmSince)} quilômetros desde a carga.` : `Ela rodou ${Math.round(n.kmSince)} quilômetros desde a carga e ainda tem folga de uns ${folga}.`);
+    }
+    partes.push(`A autonomia está em uns ${Math.round(n.rangeKm)} quilômetros.`);
+    if (n.tireDue) partes.push(`E hoje é dia de calibrar: ${TIRE_PSI.front} na frente e ${TIRE_PSI.rear} atrás.`);
+    return partes.join(" ");
+  }
+
+  // Contas: "o que vence hoje / amanhã / essa semana?"
+  if (/vence|contas?\s+(de|da|pra|para)\s+(hoje|amanh[aã]|semana)/.test(t)) {
+    const fala = await billsDueSpeech();
+    return fala ? fala.replace(/^Renato,\s*lembrete de contas:\s*/i, "Vencendo: ") : "Nenhuma conta vencendo hoje nem amanhã.";
+  }
+
+  // Agenda: "o que tenho hoje / amanhã?", "minha agenda"
+  const ag = t.match(/(?:agenda|compromissos?|o que (?:eu )?tenho)\s*(?:de|pra|para)?\s*(hoje|amanh[aã])?/);
+  if (ag && /agenda|compromiss|o que (eu )?tenho/.test(t)) {
+    const amanha = /amanh/.test(t);
+    const hj = todayBRT();
+    const d = amanha ? new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() + 1, 12) : hj;
+    const ini = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 3));
+    const itens = await prisma.agendaItem.findMany({ where: { done: false, dueDate: { gte: ini, lt: new Date(ini.getTime() + 86_400_000) } }, orderBy: { dueDate: "asc" }, take: 4 });
+    const quando = amanha ? "Amanhã" : "Hoje";
+    if (!itens.length) return `${quando} sua agenda está livre.`;
+    const hora = (x: Date) => { const b = new Date(x.getTime() - 3 * 3600_000); const h = b.getUTCHours(), mi = b.getUTCMinutes(); return h === 0 && mi === 0 ? "" : ` às ${h}${mi ? ` e ${mi}` : " horas"}`; };
+    return `${quando} você tem: ${itens.map((i) => `${i.title.replace(/[*_]/g, "").slice(0, 60)}${i.dueDate ? hora(i.dueDate) : ""}`).join("; ")}.`;
   }
   return null;
 }

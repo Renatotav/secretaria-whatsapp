@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { alexaRequestOk, falar, frase, paraFala, type AlexaBody } from "@/lib/alexa-skill";
+import { alexaRequestOk, falar, frase, vozDaResposta, semInvocacao, FIM_RE, type AlexaBody } from "@/lib/alexa-skill";
+
+/** Responde e continua ouvindo (conversa contínua até "não"/"tchau"). */
+const continua = (texto: string) => {
+  const r = falar(`${texto.replace(/\s+$/, "")} Mais alguma coisa?`, false);
+  r.response.reprompt = { outputSpeech: { type: "PlainText", text: "Quer mais alguma coisa?" } };
+  return r;
+};
 
 // Skill "minha secretária": "Alexa, pede pra minha secretária anotar 30 reais
 // de mercado no pix". A frase vira mensagem para a secretária (o mesmo caminho
@@ -24,18 +31,20 @@ export async function POST(request: Request) {
   if (tipo === "LaunchRequest") return NextResponse.json(falar("Oi, Renato. O que eu anoto?", false));
   if (tipo === "SessionEndedRequest") return NextResponse.json({ version: "1.0", response: {} });
   const nome = body.request?.intent?.name || "";
-  if (nome === "AMAZON.StopIntent" || nome === "AMAZON.CancelIntent" || nome === "AMAZON.NoIntent") return NextResponse.json(falar("Tá bom."));
+  if (nome === "AMAZON.StopIntent" || nome === "AMAZON.CancelIntent" || nome === "AMAZON.NoIntent") return NextResponse.json(falar("Tá bom. Até mais!"));
   if (nome === "AMAZON.HelpIntent")
     return NextResponse.json(falar("Fale, por exemplo: anota trinta reais de mercado no pix. Ou: quanto gastei este mês. Ou: me lembra amanhã às oito de pagar a internet. O que eu faço?", false));
 
-  const texto = frase(body);
-  if (!texto) return NextResponse.json(falar("Não entendi. Fale, por exemplo: anota trinta reais de mercado no pix.", false));
+  const bruto = frase(body);
+  if (!bruto) return NextResponse.json(falar("Não entendi. Fale, por exemplo: anota trinta reais de mercado no pix.", false));
+  const texto = semInvocacao(bruto);
+  if (FIM_RE.test(texto)) return NextResponse.json(falar("Tá bom. Até mais!"));
 
   // Pergunta com fala pronta (gasto do dia, resumo do mês): responde curto e natural.
   {
     const { spokenAnswer } = await import("@/lib/message-handlers");
     const fala = await spokenAnswer(texto).catch(() => null);
-    if (fala) return NextResponse.json(falar(fala));
+    if (fala) return NextResponse.json(continua(fala));
   }
   const { replyCapture } = await import("@/lib/reply-capture");
   const { handleSelfMessage } = await import("@/lib/message-handlers");
@@ -51,7 +60,7 @@ export async function POST(request: Request) {
   while (!terminou && !respostas.length && Date.now() - inicio < ESPERA_MS) await new Promise((r) => setTimeout(r, 150));
   if (respostas.length) {
     await new Promise((r) => setTimeout(r, 300)); // às vezes vêm 2 mensagens seguidas
-    return NextResponse.json(falar(paraFala(respostas.join("\n")) || "Feito."));
+    return NextResponse.json(continua(vozDaResposta(respostas.join("\n")) || "Feito."));
   }
-  return NextResponse.json(falar(terminou ? "Feito." : "Tá, já te respondo no WhatsApp."));
+  return NextResponse.json(terminou ? continua("Feito.") : falar("Tá, já te respondo no WhatsApp."));
 }
