@@ -18,6 +18,7 @@ let lastTireDate = "";
 let lastSalaryNudgeDate = "";
 let lastCreditWarnDate = "";
 let lastForecastRollDate = "";
+let lastBuddyInvoiceDate = "";
 let lastInvoiceEveDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
@@ -286,6 +287,17 @@ export function startScheduler(): void {
           }
         } catch (err) {
           console.error("[alexa] véspera da fatura falhou", err);
+        }
+      }
+
+      // 09:00: aviso das faturas (C6 e Santander) também para o irmão — 3 dias antes e no dia.
+      if (hhmm === "09:00" && lastBuddyInvoiceDate !== todayDate) {
+        lastBuddyInvoiceDate = todayDate;
+        try {
+          const { sendInvoiceBuddyReminder } = await import("./invoice-buddy");
+          if (await sendInvoiceBuddyReminder()) console.log("[faturas] aviso enviado ao irmão");
+        } catch (err) {
+          console.error("[faturas] aviso ao irmão falhou", err);
         }
       }
 

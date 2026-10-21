@@ -111,6 +111,9 @@ model AgentConfig {
   updatedAt       DateTime @updatedAt
   /// "atualiza a extensão" no WhatsApp: a extensão confere a versão na hora (e se atualiza sozinha).
   extUpdateAt DateTime?
+  /// Quem também recebe o aviso das faturas (o irmão é o titular do C6 e dono do Santander): WhatsApp e nome.
+  invoiceBuddyPhone String @default("")
+  invoiceBuddyName  String @default("")
 }
 
 model Conversation {
