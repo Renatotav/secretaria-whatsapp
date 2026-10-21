@@ -91,12 +91,15 @@ const PREFIXO: Record<string, string> = {
 /** Texto da resposta do WhatsApp → fala (sem emoji, markdown e listas). */
 export function paraFala(t: string): string {
   return t
-    .replace(/R\$\s?(\d{1,3}(?:\.\d{3})*),(\d{2})/g, (_m, r: string, c: string) => `${r.replace(/\./g, "")} reais${c !== "00" ? ` e ${Number(c)} centavos` : ""}`)
+    // "R$ -2.551,76" / "−R$ 10,00" → "menos 2551 reais e 76 centavos".
+    .replace(/(?:[-−]\s*R\$\s?|R\$\s?([-−])?)(\d{1,3}(?:\.\d{3})*),(\d{2})/g, (m: string, neg: string | undefined, r: string, c: string) =>
+      `${neg || /^[-−]/.test(m) ? "menos " : ""}${r.replace(/\./g, "")} ${r === "1" ? "real" : "reais"}${c !== "00" ? ` e ${Number(c)} ${Number(c) === 1 ? "centavo" : "centavos"}` : ""}`)
     .replace(/[*_~`]/g, "")
     .replace(/\p{Extended_Pictographic}|️|‍/gu, "")
     .replace(/^\s*[•\-–]\s*/gm, "")
     .replace(/\s*\n+\s*/g, ". ")
     .replace(/\.\s*\./g, ".")
+    .replace(/([:;,])\s*\./g, "$1")
     .replace(/\s{2,}/g, " ")
     .trim()
     .slice(0, 700);

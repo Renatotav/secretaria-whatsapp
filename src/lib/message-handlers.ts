@@ -960,6 +960,30 @@ export async function spentTodaySpeech(): Promise<string> {
   return total >= 1 ? `Hoje você gastou ${reaisFala(total)}.` : "Hoje você não gastou nada.";
 }
 
+/**
+ * "quanto gastei hoje/ontem?" (WhatsApp e Alexa): o dia, não o mês — o
+ * roteador mandava para o resumo do mês inteiro. Sem IA.
+ */
+export async function applySpentDayCommand(text: string): Promise<string | null> {
+  const m = text.trim().match(/^\s*(?:e\s+)?quanto\s+(?:eu\s+)?(?:j[aá]\s+)?gastei\s+(hoje|ontem)\s*\??\s*$/i);
+  if (!m) return null;
+  const ontem = m[1].toLowerCase() === "ontem";
+  const t = todayBRT();
+  const dia = ontem ? new Date(t.getFullYear(), t.getMonth(), t.getDate() - 1, 12) : t;
+  const { gte, lte } = dayRange(dia);
+  const spent = await spentBetween(gte, lte);
+  const total = spent.reduce((acc, e) => acc + e.amount, 0);
+  const quando = ontem ? "Ontem" : "Hoje";
+  if (!spent.length) return `🙌 ${quando} você não gastou nada.
+
+${await cardLimitLine()}`;
+  const itens = spent.slice(0, 8).map((e) => `• ${(e.description.replace(/\s*-?\s*Parcela.*$/, "").trim() || e.subcategory || e.category)}: ${brl(e.amount)}`);
+  return `💸 ${quando} você gastou ${brl(total)}:
+${itens.join("\n")}${spent.length > 8 ? "\n…" : ""}
+
+${await cardLimitLine()}`;
+}
+
 /** Véspera da fatura (Alexa, à noite): "Amanhã vence a fatura do seu cartão: 1.234 reais." */
 export async function invoiceEveSpeech(): Promise<string> {
   const { listOpenInvoices, invoiceLabel } = await import("./invoices");
@@ -1819,7 +1843,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
