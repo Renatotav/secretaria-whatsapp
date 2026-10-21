@@ -37,6 +37,8 @@ interface Config {
   typingMaxSeconds: number;
   creditCardDueDay: number;
   creditCardBestDay: number;
+  invoiceBuddyName: string;
+  invoiceBuddyPhone: string;
 }
 
 const DEFAULT: Config = {
@@ -68,6 +70,8 @@ const DEFAULT: Config = {
   audioEnabled: false,
   privateBriefings: false,
   detectCommitments: true,
+  invoiceBuddyName: "",
+  invoiceBuddyPhone: "",
   mutedContacts: "",
   debounceSeconds: 8,
   typingMsPerChar: 35,
@@ -157,6 +161,16 @@ export default function ConfigPage() {
     setConfig((prev) => ({ ...prev, [key]: value }));
   }
 
+  const [avisoMsg, setAvisoMsg] = useState("");
+  async function testarAviso() {
+    setAvisoMsg("Mandando…");
+    // Salva antes, para o teste usar o nome e o número que estão na tela.
+    await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+    const r = await fetch("/api/config/invoice-buddy-test", { method: "POST" });
+    const d = await r.json().catch(() => ({}));
+    setAvisoMsg(r.ok ? "✅ Teste enviado. Confira com a pessoa se chegou." : `⚠️ ${d.error || "Não consegui mandar."}`);
+  }
+
   async function save() {
     setSaving(true);
     await fetch("/api/config", {
@@ -239,6 +253,31 @@ export default function ConfigPage() {
               value={config.creditCardBestDay}
               onChange={(e) => set("creditCardBestDay", Number(e.target.value))}
             />
+          </Field>
+          <Field
+            label="Avisar outra pessoa das faturas"
+            hint="Recebe no WhatsApp, às 9h do dia do vencimento de cada cartão (C6 e Santander), só a SUA parte de cada fatura. Deixe o WhatsApp vazio para desligar."
+          >
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input
+                aria-label="Nome de quem recebe"
+                placeholder="Nome (ex: Bruno)"
+                value={config.invoiceBuddyName}
+                onChange={(e) => set("invoiceBuddyName", e.target.value)}
+                style={{ flex: "1 1 140px" }}
+              />
+              <input
+                aria-label="WhatsApp de quem recebe"
+                placeholder="WhatsApp com DDI e DDD"
+                value={config.invoiceBuddyPhone}
+                onChange={(e) => set("invoiceBuddyPhone", e.target.value.replace(/\D/g, ""))}
+                style={{ flex: "1 1 180px" }}
+              />
+              <button type="button" className="btn-ghost" disabled={!config.invoiceBuddyPhone} onClick={testarAviso} style={{ flex: "0 0 auto" }}>
+                Mandar teste
+              </button>
+            </div>
+            {avisoMsg && <div style={{ fontSize: 12, marginTop: 6, color: "var(--text-muted)" }}>{avisoMsg}</div>}
           </Field>
         </Section>
 
