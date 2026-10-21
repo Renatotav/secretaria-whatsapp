@@ -17,6 +17,7 @@ let lastMorningDate = "";
 let lastTireDate = "";
 let lastSalaryNudgeDate = "";
 let lastCreditWarnDate = "";
+let lastForecastRollDate = "";
 let lastInvoiceEveDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
@@ -243,6 +244,18 @@ export function startScheduler(): void {
           }
         } catch (err) {
           console.error("[salário] lembrete falhou", err);
+        }
+      }
+
+      // 03:40: previsões fixas (aluguel, salário, VR, contas, assinaturas) sempre 12 meses à frente.
+      if (hhmm === "03:40" && lastForecastRollDate !== todayDate) {
+        lastForecastRollDate = todayDate;
+        try {
+          const { rollForecasts } = await import("./forecast-roll");
+          const r = await rollForecasts();
+          if (r.criados) console.log(`[previsões] ${r.criados} mês(es) novo(s) em ${r.series} série(s)`);
+        } catch (err) {
+          console.error("[previsões] renovação falhou", err);
         }
       }
 
