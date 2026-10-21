@@ -990,7 +990,11 @@ ${await cardLimitLine()}`;
  * para isso (aí vai o caminho normal, convertido por paraFala).
  */
 export async function spokenAnswer(text: string): Promise<string | null> {
-  const t = text.trim().toLowerCase();
+  // A Alexa ouve "VR" como "BR", "vê erre" ou "tempo BR" ("quanto tenho no VR").
+  const t = text.trim().toLowerCase()
+    .replace(/\bv[eê]\s*err?e\b/g, "vr")
+    .replace(/\b(tempo|tenho)\s+(n[oa]\s+)?br\b/g, "tenho no vr")
+    .replace(/\bno\s+br\b/g, "no vr");
   // Ação (lançar, pagar, lembrar…) não é pergunta: segue o caminho normal da secretária.
   if (/^\s*(anota|anote|lan[cç]a|paguei|pago|gastei|comprei|recebi|caiu|marca|me lembra|lembra|agenda\s+\w+\s+(dia|amanh|hoje|às)|tirei|guarda|calibrei|carreguei|desfazer|na verdade)/.test(t) && !/^\s*gastei\s+(hoje|ontem)\s*\??$/.test(t)) return null;
   const r = (v: number) => `${Math.round(Math.abs(v)).toLocaleString("pt-BR")} ${Math.round(Math.abs(v)) === 1 ? "real" : "reais"}`;
