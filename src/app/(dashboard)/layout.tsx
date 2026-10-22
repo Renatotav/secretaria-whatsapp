@@ -19,6 +19,7 @@ const NAV = [
   { href: "/daily-summary", icon: "📋", label: "Resumo do dia" },
   { href: "/weekly-report", icon: "📊", label: "Rel. Semanal" },
   { href: "/conversations", icon: "💬", label: "Conversas" },
+  { href: "/saude", icon: "🩺", label: "Saúde" },
   { href: "/config", icon: "⚙️", label: "Configurações" },
 ];
 

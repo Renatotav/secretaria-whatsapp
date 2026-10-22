@@ -37,6 +37,7 @@ interface Config {
   typingMaxSeconds: number;
   creditCardDueDay: number;
   creditCardBestDay: number;
+  cardBillDays: { card: string; due: number; best: number }[];
   invoiceBuddyName: string;
   invoiceBuddyPhone: string;
 }
@@ -78,6 +79,7 @@ const DEFAULT: Config = {
   typingMaxSeconds: 8,
   creditCardDueDay: 10,
   creditCardBestDay: 5,
+  cardBillDays: [],
 };
 
 /** Chave liga/desliga com o texto ao lado (mesmo visual da chave de áudio). */
@@ -253,6 +255,38 @@ export default function ConfigPage() {
               value={config.creditCardBestDay}
               onChange={(e) => set("creditCardBestDay", Number(e.target.value))}
             />
+          </Field>
+          <Field
+            label="Outros cartões (vencimento próprio)"
+            hint='Ao citar o cartão na mensagem ("comprei 80 no santander do bruno"), o gasto vai para ele com o vencimento dele — parcelas também. O nome tem que ser igual ao do cartão nos lançamentos.'
+          >
+            <div style={{ display: "grid", gap: 8 }}>
+              {(config.cardBillDays || []).map((c, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    aria-label="Nome do cartão"
+                    placeholder="Santander do Bruno"
+                    value={c.card}
+                    onChange={(e) => set("cardBillDays", config.cardBillDays.map((x, j) => (j === i ? { ...x, card: e.target.value } : x)))}
+                    style={{ flex: "1 1 180px", minWidth: 0 }}
+                  />
+                  <label style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", gap: 4, alignItems: "center" }}>
+                    vence dia
+                    <input type="number" min={1} max={31} value={c.due} style={{ width: 64 }}
+                      onChange={(e) => set("cardBillDays", config.cardBillDays.map((x, j) => (j === i ? { ...x, due: Number(e.target.value) } : x)))} />
+                  </label>
+                  <label style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", gap: 4, alignItems: "center" }}>
+                    melhor dia
+                    <input type="number" min={1} max={31} value={c.best} style={{ width: 64 }}
+                      onChange={(e) => set("cardBillDays", config.cardBillDays.map((x, j) => (j === i ? { ...x, best: Number(e.target.value) } : x)))} />
+                  </label>
+                  <button type="button" className="btn-ghost" onClick={() => set("cardBillDays", config.cardBillDays.filter((_x, j) => j !== i))}>Tirar</button>
+                </div>
+              ))}
+              <div>
+                <button type="button" className="btn-ghost" onClick={() => set("cardBillDays", [...(config.cardBillDays || []), { card: "", due: 15, best: 5 }])}>+ Adicionar cartão</button>
+              </div>
+            </div>
           </Field>
           <Field
             label="Avisar outra pessoa das faturas"

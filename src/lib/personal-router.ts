@@ -417,6 +417,8 @@ export interface StatementEntry {
   paymentMethod?: string;
   account?: string;
   status?: "paid" | "pending";
+  /** Cartão de outra pessoa (vazio = o dele). */
+  card?: string;
 }
 
 function buildStatementInstructions(ownerName: string): string {

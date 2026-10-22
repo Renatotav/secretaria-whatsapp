@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { parseLocalDate, autoEntryDates, todayBRT } from "@/lib/dates";
+import { parseLocalDate, autoEntryDates, todayBRT, billDaysFor } from "@/lib/dates";
 import { projectAndInsertFinanceEntries } from "@/lib/message-handlers";
 import { autoMarkPaid } from "@/lib/auto-pay";
 
@@ -83,11 +83,11 @@ export const POST = withErrorHandling(async (request: Request) => {
   // Data da fatura e pago/pendente saem sozinhos (cartão = vencimento da
   // fatura, "pendente"; pix/débito/etc. = "pago" se já passou). O status
   // escolhido à mão só vale se o dono mexeu nele (statusManual).
-  const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
+  const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true, cardBillDays: true } });
   const auto = autoEntryDates(
     { type: body.type, paymentMethod: body.paymentMethod || "pix", date: body.date, purchaseDate: body.purchaseDate, description: body.description },
-    config?.creditCardDueDay || 10,
-    config?.creditCardBestDay || 5
+    billDaysFor(config, body.card).due,
+    billDaysFor(config, body.card).best
   );
   const description = body.description?.trim() ?? "";
   const amount = Number(body.amount) || 0;
@@ -195,7 +195,7 @@ export const PATCH = withErrorHandling(async (request: Request) => {
     const purchaseChanged = data.purchaseDate !== undefined && day(data.purchaseDate) !== day(beforeAuto.purchaseDate);
     const dateChanged = data.date !== undefined && day(data.date) !== day(beforeAuto.date);
     if (methodChanged || purchaseChanged || dateChanged) {
-      const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
+      const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true, cardBillDays: true } });
       const type = (data.type as string) ?? beforeAuto.type;
       const isCard = type === "expense" && method === "cartão";
       const auto = autoEntryDates(
@@ -207,8 +207,8 @@ export const PATCH = withErrorHandling(async (request: Request) => {
           purchaseDate: purchase,
           description: (data.description as string) ?? beforeAuto.description,
         },
-        config?.creditCardDueDay || 10,
-        config?.creditCardBestDay || 5
+        billDaysFor(config, (data.card as string) ?? beforeAuto.card).due,
+        billDaysFor(config, (data.card as string) ?? beforeAuto.card).best
       );
       if (isCard && !methodChanged && !purchaseChanged) {
         // Fatura escolhida à mão: pendente até ela vencer.

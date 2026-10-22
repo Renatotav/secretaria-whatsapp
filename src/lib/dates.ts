@@ -66,3 +66,33 @@ export function autoEntryDates(
   const purchaseDate = input.purchaseDate ? parseLocalDate(input.purchaseDate) : input.type === "expense" ? date : null;
   return { date, purchaseDate, status: date.getTime() <= today.getTime() ? "paid" : "pending" };
 }
+
+/** Cartão com vencimento próprio (AgentConfig.cardBillDays). */
+export type CardBillDays = { card: string; due: number; best: number };
+
+export function cardBillDaysList(raw: unknown): CardBillDays[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((c) => ({ card: String(c?.card ?? "").trim(), due: Number(c?.due), best: Number(c?.best) }))
+    .filter((c) => c.card && c.due >= 1 && c.due <= 31 && c.best >= 1 && c.best <= 31);
+}
+
+type DaysConfig = { creditCardDueDay?: number | null; creditCardBestDay?: number | null; cardBillDays?: unknown };
+
+/** Vencimento e melhor dia do cartão: o do cartão citado, senão o dele (global). */
+export function billDaysFor(cfg: DaysConfig | null | undefined, card: string | null | undefined): { due: number; best: number } {
+  const c = card ? cardBillDaysList(cfg?.cardBillDays).find((x) => x.card.toLowerCase() === card.trim().toLowerCase()) : undefined;
+  return c ? { due: c.due, best: c.best } : { due: cfg?.creditCardDueDay || 10, best: cfg?.creditCardBestDay || 5 };
+}
+
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** Cartão citado na mensagem ("no santander do bruno", "no santander"): o nome cadastrado, ou "". */
+export function cardInText(cfg: DaysConfig | null | undefined, text: string): string {
+  const t = ` ${semAcento(text).replace(/[^a-z0-9]+/g, " ")} `;
+  for (const c of cardBillDaysList(cfg?.cardBillDays)) {
+    const nome = semAcento(c.card).replace(/[^a-z0-9]+/g, " ").trim();
+    const primeira = nome.split(" ")[0];
+    if (t.includes(` ${nome} `) || (primeira.length >= 4 && t.includes(` ${primeira} `))) return c.card;
+  }
+  return "";
+}

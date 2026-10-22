@@ -180,5 +180,5 @@ export async function applyMcpCommand(text: string): Promise<string | null> {
   const { randomBytes } = await import("crypto");
   const chave = randomBytes(24).toString("base64url");
   await prisma.agentConfig.update({ where: { id: cfg.id }, data: { mcpToken: chave } });
-  return `🔌 Nova chave do conector do Claude criada (a anterior parou de valer).\nEndereço: o mesmo do seu painel + /api/mcp/${chave}\nNo Claude: Configurações › Conectores › Adicionar conector personalizado › cole o endereço.`;
+  return `🔌 Nova chave do conector do Claude criada (a anterior parou de valer).\nNo claude.ai (só aceita endereço): Configurações › Conectores › Adicionar conector personalizado › o endereço do seu painel + /api/mcp/${chave}\nNo Claude Code/Desktop (mais seguro, a chave não fica no registro do servidor): endereço do painel + /api/mcp, com o cabeçalho Authorization: Bearer ${chave}`;
 }

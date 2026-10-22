@@ -70,28 +70,46 @@ const ha = (iso: string | Date) => {
   return min < 60 ? `${min} min` : min < 48 * 60 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} dias`;
 };
 
-export async function healthReport(config: AgentConfig): Promise<string> {
-  const linhas: string[] = [];
+export type HealthItem = { nivel: "ok" | "atencao" | "problema"; titulo: string; detalhe: string };
+
+/** Cada parte do sistema com um sinal: o comando do WhatsApp e a tela 🩺 Saúde usam isto. */
+export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
+  const itens: HealthItem[] = [];
   const wa = await whatsappState(config);
-  linhas.push(wa === "open" ? "🟢 WhatsApp conectado" : `🔴 WhatsApp ${wa === "close" ? "desconectado" : wa === "connecting" ? "reconectando" : "sem resposta da Evolution"}`);
+  itens.push(wa === "open"
+    ? { nivel: "ok", titulo: "WhatsApp", detalhe: "conectado" }
+    : { nivel: "problema", titulo: "WhatsApp", detalhe: wa === "close" ? "desconectado — leia o QR code de novo em Instâncias" : wa === "connecting" ? "reconectando" : "a Evolution não respondeu" });
 
   const ultima = await prisma.processedMessage.findFirst({ orderBy: { at: "desc" }, select: { at: true } });
-  if (ultima) linhas.push(`📨 Última mensagem recebida: há ${ha(ultima.at)}`);
+  itens.push(ultima
+    ? { nivel: "ok", titulo: "Última mensagem recebida", detalhe: `há ${ha(ultima.at)}` }
+    : { nivel: "atencao", titulo: "Última mensagem recebida", detalhe: "nenhuma registrada ainda" });
 
   const ponte = await getKv<{ state: string; at: string }>("health:ponte");
-  linhas.push(ponte ? (ponte.state === "down" ? `🔴 Ponte da tomada fora desde há ${ha(ponte.at)}` : `🟢 Ponte da tomada ok (último aviso: voltou há ${ha(ponte.at)})`) : "🟢 Ponte da tomada: nenhum aviso de queda");
+  itens.push(!ponte
+    ? { nivel: "ok", titulo: "Ponte da tomada (scooter)", detalhe: "nenhum aviso de queda" }
+    : ponte.state === "down"
+      ? { nivel: "problema", titulo: "Ponte da tomada (scooter)", detalhe: `fora há ${ha(ponte.at)} — o Fire TV está ligado e no Wi-Fi?` }
+      : { nivel: "ok", titulo: "Ponte da tomada (scooter)", detalhe: `ok (voltou há ${ha(ponte.at)})` });
 
   const { openrouterCredit, CREDIT_WARN_USD } = await import("./ai-credit");
   const c = await openrouterCredit().catch(() => null);
-  linhas.push(!c ? "🟡 Crédito da IA: não consegui consultar" : `${c.restante < CREDIT_WARN_USD ? "🔴" : "🟢"} Crédito da IA: US$ ${c.restante.toFixed(2).replace(".", ",")}`);
+  itens.push(!c
+    ? { nivel: "atencao", titulo: "Crédito da IA", detalhe: "não consegui consultar" }
+    : { nivel: c.restante < CREDIT_WARN_USD ? "problema" : "ok", titulo: "Crédito da IA", detalhe: `US$ ${c.restante.toFixed(2).replace(".", ",")}${c.restante < CREDIT_WARN_USD ? " — coloque mais em openrouter.ai › Credits" : ""}` });
 
   const sha = (process.env.GIT_SHA || "").slice(0, 7);
-  linhas.push(`🟢 No ar há ${ha(new Date(Date.now() - process.uptime() * 1000))}${sha ? ` (versão ${sha})` : ""}`);
+  itens.push({ nivel: "ok", titulo: "Secretária no ar", detalhe: `há ${ha(new Date(Date.now() - process.uptime() * 1000))}${sha ? ` · versão ${sha}` : ""}` });
 
-  const hoje = await prisma.financeLog.count({ where: { at: { gte: new Date(Date.now() - 24 * 3600_000) } } });
-  linhas.push(`🕓 Mudanças no financeiro nas últimas 24 h: ${hoje}`);
+  const mudancas = await prisma.financeLog.count({ where: { at: { gte: new Date(Date.now() - 24 * 3600_000) } } });
+  itens.push({ nivel: "ok", titulo: "Mudanças no financeiro (24 h)", detalhe: String(mudancas) });
+  return itens;
+}
 
-  return `🩺 *Saúde do sistema*\n${linhas.join("\n")}`;
+const ICONE = { ok: "🟢", atencao: "🟡", problema: "🔴" } as const;
+export async function healthReport(config: AgentConfig): Promise<string> {
+  const itens = await healthItems(config);
+  return `🩺 *Saúde do sistema*\n${itens.map((i) => `${ICONE[i.nivel]} ${i.titulo}: ${i.detalhe}`).join("\n")}`;
 }
 
 /** "como está o sistema?", "saúde do sistema", "status do sistema". null = não é esse comando. */

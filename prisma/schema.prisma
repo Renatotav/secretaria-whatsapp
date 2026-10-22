@@ -41,6 +41,9 @@ model AgentConfig {
   typingMaxSeconds Int     @default(8)
   creditCardDueDay Int     @default(10)
   creditCardBestDay Int    @default(5)
+  /// Outros cartões com vencimento próprio: [{card: "Santander do Bruno", due: 15, best: 5}].
+  /// Sem cartão citado vale o creditCardDueDay/BestDay acima (o cartão dele).
+  cardBillDays    Json     @default("[]")
   /// Resumir com a IA cada mensagem privada recebida e avisar o dono (desligado desde 07/10/2026: virou barulho).
   privateBriefings Boolean @default(false)
   /// Ler as conversas privadas só para achar compromissos e sugerir na agenda.

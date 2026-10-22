@@ -15,7 +15,7 @@ import {
   type InvoiceEntry,
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
-import { parseLocalDate, todayBRT, creditCardBillDate } from "./dates";
+import { parseLocalDate, todayBRT, creditCardBillDate, billDaysFor, cardInText } from "./dates";
 import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
 import { withReason } from "./finance-reason";
 import type { AgentConfig, Prisma } from "@prisma/client";
@@ -2241,11 +2241,14 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       // fechamento às vezes muda (ex: feriado/eleição).
       const isCardExpense = route.paymentMethod === "cartão" && route.financeType === "expense";
       const cardPurchaseDate = route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT();
+      // Cartão de outra pessoa citado ("no santander do bruno"): vai para ele, com o vencimento dele.
+      const cardName = isCardExpense ? cardInText(config, joinedText) : "";
       if (isCardExpense) {
+        const days = billDaysFor(config, cardName);
         route.purchaseDate = cardPurchaseDate.toISOString();
         route.date = (route.billDate && BILL_STATED_RE.test(joinedText)
           ? parseLocalDate(route.billDate)
-          : creditCardBillDate(cardPurchaseDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5)
+          : creditCardBillDate(cardPurchaseDate, days.due, days.best)
         ).toISOString();
         route.status = "pending";
       }
@@ -2272,6 +2275,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
               subcategory: route.subcategory,
               paymentMethod: route.paymentMethod,
               status: route.status,
+              card: cardName,
             },
           ],
           "a mensagem"
@@ -2349,6 +2353,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
               paymentMethod: route.paymentMethod,
               account: route.account,
               status: route.status,
+              card: cardName,
               mood: finalMood,
               source: "whatsapp",
             },
@@ -2720,7 +2725,8 @@ export async function projectAndInsertFinanceEntries(
       if (info.current < info.total) {
         for (let i = info.current + 1; i <= info.total; i++) {
           const futureDate = addMonths(baseDate, i - info.current);
-          if (creditCardDueDay && (e.category === "Cartão" || e.category === "Financeiro" || e.description.toLowerCase().includes("parcela"))) {
+          // Cartão de outra pessoa: a 1ª parcela já está no vencimento dele; o mês avança no mesmo dia.
+          if (creditCardDueDay && !e.card && (e.category === "Cartão" || e.category === "Financeiro" || e.description.toLowerCase().includes("parcela"))) {
             futureDate.setDate(creditCardDueDay);
           }
           const futureDescription = `${info.baseDescription} - Parcela ${i}/${info.total} (compra em ${info.purchaseDate.split("-")[1]}/${info.purchaseDate.split("-")[0]}) (previsto)`;
@@ -2951,6 +2957,7 @@ export async function projectAndInsertFinanceEntries(
         paymentMethod: e.paymentMethod || "pix",
         account: e.account || "Principal",
         status: e.status || "paid",
+        card: e.card || "",
         source,
       })),
     });
