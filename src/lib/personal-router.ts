@@ -621,6 +621,10 @@ export interface InvoiceEntry {
   status: "paid" | "pending";
   /** "Qtde. Total de Itens" impresso no cupom (0 = não tem). */
   itemCount?: number;
+  /** Chave de acesso (44 dígitos) impressa na NFC-e, se aparecer na foto. */
+  accessKey?: string;
+  /** Itens e total vieram da consulta da SEFAZ (não da leitura da foto). */
+  fromSefaz?: boolean;
   items: InvoiceItemEntry[];
 }
 
@@ -660,6 +664,7 @@ CUPOM COM LINHA "DESCONTO" EMBAIXO DO ITEM (muito comum em supermercado):
   A linha "DESCONTO" NÃO é um item: ela pertence ao item de cima, e o número mais à DIREITA dela (6,99) é o valor final pago por esse item → amount: 6.99 (unitPrice 8.69). Item sem linha de desconto → amount = valor da direita da própria linha.
 - Cada item numerado (001, 002, 003…) é UMA entrada, mesmo que se repita igual várias vezes (14 cervejas iguais = 14 entradas, ou 1 entrada com quantity 14 e o amount somado). Não pule linhas repetidas.
 - itemCount: o número de "Qtde. Total de Itens" (ou "Qtd. total de itens") impresso no fim do cupom; 0 se não houver.
+- accessKey: a "Chave de acesso" da NFC-e (44 números, impressos em blocos de 4 perto do QR Code), só os dígitos, sem espaços. Se não aparecer inteira e legível na foto, "".
 
 IMPORTANTE:
 - Retorne APENAS um JSON válido. Não coloque texto antes ou depois.
@@ -674,6 +679,7 @@ Formato esperado:
   "account": "Principal",
   "status": "pending",
   "itemCount": 22,
+  "accessKey": "",
   "items": [
     { "name": "Cerveja", "category": "Bebidas Alcoólicas", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
   ]

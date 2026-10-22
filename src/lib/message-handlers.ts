@@ -3787,9 +3787,37 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
   const gapOf = (inv: InvoiceEntry | null) => (inv && inv.items.length ? Math.abs(inv.total - sumOf(inv)) : Infinity);
   let invoice = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption);
 
+  // NFC-e do Ceará com a chave legível na foto: itens, quantidades e total
+  // oficiais da SEFAZ no lugar da leitura da IA (que fica só para a categoria
+  // de cada item e a forma de pagamento — o VR aparece como "débito" lá).
+  let daSefaz = false;
+  if (invoice?.accessKey) {
+    const { fetchNfce } = await import("./nfce");
+    const nf = await fetchNfce(invoice.accessKey);
+    if (nf) {
+      const n = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      const lidos = invoice.items;
+      const categoriaDe = (nome: string) => {
+        const a = n(nome);
+        const igual = lidos.find((i) => n(i.name) === a) ?? lidos.find((i) => a.startsWith(n(i.name).slice(0, 10)) || n(i.name).startsWith(a.slice(0, 10)));
+        return igual?.category || invoice!.category || "Outros";
+      };
+      invoice = {
+        ...invoice,
+        total: nf.total,
+        date: nf.date ?? invoice.date,
+        itemCount: nf.items.length,
+        items: nf.items.map((i) => ({ name: i.name, category: categoriaDe(i.name), quantity: i.quantity, unitPrice: i.unitPrice, amount: i.amount })),
+        fromSefaz: true,
+      };
+      daSefaz = true;
+      console.log(`[nfce] nota da SEFAZ: ${nf.items.length} itens, total ${nf.total}`);
+    }
+  }
+
   // Nota comprida (40+ itens) às vezes perde linhas: relê com um modelo mais
   // forte e fica com a leitura que fechou melhor.
-  if (gapOf(invoice) > 15 && providerOpts.openrouterApiKey) {
+  if (!daSefaz && gapOf(invoice) > 15 && providerOpts.openrouterApiKey) {
     console.log(`[invoice] conta não fechou (diferença ${gapOf(invoice).toFixed(2)}): relendo com modelo mais forte`);
     const again = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption, "google/gemini-2.5-pro");
     if (gapOf(again) < gapOf(invoice)) invoice = again;
@@ -3981,7 +4009,7 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
   const payLine = splitText && !splitText.includes("somam") && !splitText.includes("não sobra")
     ? splitText
     : `Pagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : paymentMethod === "ticket" ? "Se não foi no VR, responda *1* cartão · *2* pix · *3* débito." : "Pagou de outro jeito? Responda *1* cartão · *2* pix · *5* VR"}\nPagou parte em cada? Responda *100 no VR e o resto no cartão*.${splitText ? `\n${splitText}` : ""}`;
-  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\n${payLine}${detective}`;
+  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard${invoice.fromSefaz ? " — conferidos na SEFAZ, valores oficiais" : ""})\n${payLine}${detective}`;
 
   if (finalMood === "neutro") response += askMoodFor(entry.id, purchaseDate, "Percebi esse gasto.");
 
