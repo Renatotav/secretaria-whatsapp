@@ -82,7 +82,14 @@ const PRESERVE =
   "nomes de pessoas e de órgãos. Ao corrigir o português (ortografia, acentuação, concordância, regência, crase, pontuação), " +
   "não mude o sentido nem acrescente fatos. Na dúvida entre melhorar e preservar, preserve.";
 
-export async function runWorkSkill(key: string, text: string, ticketRaw?: string, plain = false): Promise<WorkAiResult> {
+export async function runWorkSkill(
+  key: string,
+  text: string,
+  ticketRaw?: string,
+  plain = false,
+  /** Só para testes de modelo: troca o modelo e o limite de raciocínio desta chamada. */
+  teste?: { model?: string; reasoning?: number }
+): Promise<WorkAiResult> {
   if (!WORK_SKILLS[key]) throw new Error("Skill desconhecida");
   let input = (text || "").trim();
   if (key === "auto") {
@@ -164,19 +171,25 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
       (conferencia.status === "SEM_PROCESSO" ? "Não há número de processo no texto." : `Resultado: OK. Processos: ${conferencia.processos.join(", ")}.`) +
       " NÃO rode scripts nem refaça a conta: as etapas 0 e final já são conferidas pelo sistema. Mantenha todos esses números, dígito por dígito, e não acrescente outros. Não escreva a linha final de conferência (o sistema põe).";
 
-  // Skills que pensam mais vão no modelo mais inteligente (ele pediu: sem
-  // economizar); os corretores, que rodam o tempo todo, no rápido.
-  const SMART = new Set(["redmine", "resumo", "whatsapp", "escrever"]);
+  // Teste de 21/10/2026 (textos de trabalho reais, ele pediu para cortar gasto):
+  // gemini-3.1-flash-lite preservou 18/18 termos e corrigiu tudo, 4,4× mais barato
+  // que o 3.8-flash — vale para corretores, resumo e "melhorar a escrita". Redmine
+  // e registro do WhatsApp continuam no inteligente (o barato pulou um passo do
+  // atendimento no registro).
+  const SMART = new Set(["redmine", "whatsapp"]);
   const inteligente = SMART.has(key);
-  const model = (inteligente ? config.workAiModelSmart : config.workAiModel) || "anthropic/claude-sonnet-5.5";
+  const model = teste?.model || (inteligente ? config.workAiModelSmart : config.workAiModel) || "anthropic/claude-sonnet-5.5";
+  // Os rápidos sem "pensar" (o raciocínio é cobrado como resposta e não mudou o resultado no teste).
+  const raciocinio = teste?.reasoning ?? (inteligente ? 4000 : 0);
   const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1" });
+  let raciocinioForcado = 0;
   const pedir = (extra = "") => client.chat.completions.create({
     model,
     temperature: 0.2,
     // O modelo "pensa" antes de responder: sem limitar o raciocínio, textos
     // longos (Redmine) gastavam tudo pensando e não sobrava resposta.
     max_tokens: inteligente ? 12000 : 6000,
-    ...({ reasoning: { max_tokens: inteligente ? 4000 : 1024 } } as object),
+    ...({ reasoning: (raciocinioForcado || raciocinio) > 0 ? { max_tokens: raciocinioForcado || raciocinio } : { enabled: false } } as object),
     messages: [
       {
         role: "system",
@@ -196,7 +209,14 @@ export async function runWorkSkill(key: string, text: string, ticketRaw?: string
       { role: "user", content: input },
     ],
   });
-  let res = await pedir();
+  let res = await pedir().catch(async (err) => {
+    // Modelo que exige raciocínio (ex.: gemini-3.8-flash): tenta de novo com um pouco.
+    if (raciocinio === 0 && /reasoning is mandatory/i.test(String(err?.message))) {
+      raciocinioForcado = 1024;
+      return pedir();
+    }
+    throw err;
+  });
   let out = res.choices[0]?.message?.content?.trim() || "";
   if (!out) throw new Error("A IA não devolveu texto. Tente de novo.");
   const tokens = { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 };
