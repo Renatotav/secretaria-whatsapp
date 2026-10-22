@@ -671,6 +671,8 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 ✏️ Corrigir um lançamento antigo: *responda* (citando) a mensagem dele com "foi no pix", "era 32,50", "foi dia 15/10" ou "apaga" — ela mostra a mudança e espera o "sim".
 ✂️ Pagou parte em cada (nota ou gasto): "100 no VR e 80 no cartão" ou "25 no vale antigo e o resto no cartão" — na legenda da foto da nota, logo depois dela, ou respondendo à mensagem do lançamento.
 🧪 "Testa a ia" — laboratório com mensagens e textos inventados: quantas a IA acertou, tempo e custo; "testa a ia com <modelo>" compara um candidato antes de trocar.
+🧮 "Por que meu limite é esse?" — a conta do limite do cartão aberta: entradas, fatura, contas e o que sobra por dia.
+📦 Vários pedidos numa mensagem: "gastei 25 no mercado, registra 120 km na scooter e me lembra de calibrar sábado" — ela separa e faz um por um (gasto a partir de R$ 500 vai sozinho, para confirmar).
 👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -1274,6 +1276,72 @@ async function applyQuotedEdit(entryId: string, c: QuotedChange): Promise<string
   }
   const u = await prisma.financeEntry.update({ where: { id: e.id }, data });
   return entryCard(u, "✏️ Corrigido!");
+}
+
+// "por que meu limite é esse?": a mesma conta do limite do cartão, aberta em
+// partes, com os números do banco (sem IA, nada inventado).
+const EXPLAIN_LIMIT_RE = /^\s*(?:por\s*qu[eê]\s+(?:o\s+|meu\s+)?limite|como\s+(?:voc[eê]\s+)?(?:calculou|chegou\s+(?:n[oa]|a[oa]?))\s+(?:o\s+|meu\s+)?limite|explica\s+(?:o\s+|meu\s+)?limite|de\s+onde\s+vem\s+(?:o\s+|meu\s+)?limite)/i;
+
+export async function applyExplainLimitCommand(text: string): Promise<string | null> {
+  if (!EXPLAIN_LIMIT_RE.test(text)) return null;
+  const { left, close, days, month, note } = await cardLimitData();
+  const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true } });
+  const bill = creditCardBillDate(todayBRT(), config?.creditCardDueDay || 10, config?.creditCardBestDay || 5);
+  const y = bill.getFullYear(), m = bill.getMonth();
+  const entries = await prisma.financeEntry.findMany({
+    where: { date: { gte: new Date(y, m, 1), lte: new Date(y, m + 1, 0, 23, 59, 59) } },
+    select: { type: true, amount: true, account: true, status: true, paymentMethod: true, card: true, description: true, category: true },
+  });
+  const conta = entries.filter((e) => !/vr|ticket|vale/i.test(e.account));
+  const nome = (e: { description: string; category: string }) => e.description.replace(/\s*\((previsto|recorrente)\)/gi, "").replace(/\s*-?\s*Parcela.*$/i, "").trim().slice(0, 40) || e.category;
+  const soma = (xs: typeof conta) => xs.reduce((a, e) => a + (e.type === "income" ? e.amount : -e.amount), 0);
+  const entradas = conta.filter((e) => e.type === "income" && e.paymentMethod !== "cartão");
+  const fatura = conta.filter((e) => e.paymentMethod === "cartão" && !e.card);
+  const outros = conta.filter((e) => e.paymentMethod === "cartão" && e.card);
+  const contas = conta.filter((e) => e.type === "expense" && e.paymentMethod !== "cartão");
+  const top = (xs: typeof conta, n = 4) => {
+    const g = new Map<string, number>();
+    for (const e of xs) g.set(nome(e), (g.get(nome(e)) ?? 0) + e.amount);
+    const arr = [...g].sort((a, b) => b[1] - a[1]);
+    return arr.slice(0, n).map(([k, v]) => `   · ${k}: ${brl(v)}`).concat(arr.length > n ? [`   · e mais ${arr.length - n}`] : []);
+  };
+  const linhas = [
+    `🧮 *Como saiu o limite de ${brl(left)}* (mês de ${month}, conta corrente; VR fica fora${note ? "; com o salário estimado" : ""})`,
+    "",
+    `➕ Entradas: ${brl(soma(entradas))}`,
+    ...top(entradas, 3),
+    `➖ Fatura do seu cartão (vence ${formatDayMonth(bill)}): ${brl(-soma(fatura))}`,
+    ...top(fatura.filter((e) => e.type === "expense")),
+    ...(outros.length ? [`➖ Outros cartões: ${brl(-soma(outros))}`, ...top(outros, 2)] : []),
+    `➖ Contas e outros gastos: ${brl(-soma(contas))}`,
+    ...top(contas),
+    "",
+    `= *${brl(left)}* ${left >= 0 ? "sobrando" : "faltando"}${left > 0 ? ` · ${days} dias até ${formatDayMonth(close)} (fechamento) → ≈ ${brl(left / days)}/dia` : ""}`,
+    "Conta: entradas − tudo que sai da conta corrente nesse mês (pago ou a pagar). Compras novas no cartão até o fechamento caem nessa fatura e diminuem o limite.",
+  ];
+  return linhas.join("\n");
+}
+
+// ── Vários pedidos numa mensagem ───────────────────────────────────────────
+// "Gastei 25 no mercado, registra 120 km na scooter e me lembra de calibrar
+// sábado": separa onde começa um pedido novo e faz um por um. Só separa se
+// TODOS os pedaços parecem pedidos completos ("almoço" + "25" continua junto).
+const MULTI_VERB = String.raw`(?:me\s+lembr[ae]|lembr[ae]-?me|registra|anota|lan[cç]a|gastei|paguei|comprei|recebi|marca|agenda)`;
+export function splitRequests(text: string): string[] {
+  const pieces = text
+    .split(new RegExp(String.raw`\n+|;\s*|,\s*(?=${MULTI_VERB}\b)|\s+e\s+(?=${MULTI_VERB}\b)`, "i"))
+    .map((p) => p.trim().replace(/[.!]+$/, "").trim())
+    .filter(Boolean);
+  if (pieces.length < 2 || pieces.length > 6) return [];
+  const pedido = (p: string) =>
+    p.length <= 120 &&
+    (new RegExp(String.raw`^${MULTI_VERB}\b`, "i").test(p) ||
+      (/\b(scooter|moto)\b/i.test(p) && /\d/.test(p)) ||
+      /^[\p{L}\s]{2,40}?\s(?:de\s+|no\s+|na\s+)?(?:r\$\s*)?\d+(?:[.,]\d{1,2})?\b/iu.test(p));
+  if (!pieces.every(pedido)) return [];
+  // Gasto alto (≥ R$ 500) pede "sim": manda sozinho, senão o "sim" se perde entre os pedidos.
+  if (pieces.some((p) => [...p.matchAll(/\d+(?:\.\d{3})*(?:,\d{1,2})?/g)].some((m) => parseBrNumber(m[0]) >= HIGH_VALUE && !/km\b/i.test(p)))) return [];
+  return pieces;
 }
 
 const ATTENTION_RE = /^\s*(?:(?:o\s*)?q(?:ue)?\s+(?:é\s+que\s+)?(?:precisa|tem|falta)\s+(?:de\s+)?(?:da\s+)?(?:minha\s+aten[cç][aã]o|(?:pra|para)\s+eu\s+(?:fazer|resolver|ver)|eu\s+(?:fazer|resolver|ver))|(?:minhas\s+)?pend[eê]ncias|tem\s+alguma\s+pend[eê]ncia)\s*\??\s*$/i;
@@ -2279,6 +2347,22 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, quotedReply);
     return;
   }
+  // Vários pedidos numa mensagem: um por um (sem nada esperando resposta).
+  if (!pendingHighValue && !pendingImageDraft && !pendingInvoiceDraft && !pendingAmount && !pendingStatement && !pendingCommitment) {
+    const pedidos = splitRequests(joinedText);
+    if (pedidos.length) {
+      await notifyOwner(config, `📦 Entendi ${pedidos.length} pedidos — vou fazer um por um:\n${pedidos.map((p, i) => `${i + 1}. ${p}`).join("\n")}`);
+      for (const p of pedidos) {
+        try {
+          await handleSelfMessageInner(p, _meta.quoted ? { messageTimestamp: _meta.messageTimestamp } : _meta);
+        } catch (e) {
+          console.error("[pedidos] falhou:", p, e);
+          await notifyOwner(config, `⚠️ Não consegui fazer "${p}". Mande esse de novo sozinho.`);
+        }
+      }
+      return;
+    }
+  }
   // "100 no VR e 80 no cartão" logo depois de uma nota (até 1 h): divide a nota.
   if (lastNotaEntry && Date.now() - lastNotaEntry.at < 60 * 60 * 1000) {
     const nota = await prisma.financeEntry.findUnique({ where: { id: lastNotaEntry.id } });
@@ -2332,7 +2416,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t)));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t)));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;

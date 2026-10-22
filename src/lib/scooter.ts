@@ -64,7 +64,8 @@ function readingFrom(text: string) {
 
 /** Comando da scooter, ou null se a mensagem não é sobre ela. */
 export async function applyScooterCommand(text: string): Promise<string | null> {
-  const t = text.trim();
+  // "registra 120 km na scooter" = "scooter 120 km".
+  const t = text.trim().replace(/[.!]+$/, "").replace(/^\s*(?:registra|anota|lan[cç]a|marca)\s+(.+?)\s+(?:na|da|pra|para\s+a)\s+(scooter|moto)\s*$/i, "scooter $1");
   if (!t || t.length > 200 || (MONEY_RE.test(t) && !/^\s*tarifa\b/i.test(t))) return null;
 
   if (STATUS_RE.test(t)) return scooterStatus();

@@ -320,7 +320,7 @@ function SnippetsEditor() {
       <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
         Digite o atalho em qualquer campo (Assyst, WhatsApp Web, e-mail, Redmine) e ele vira o texto. Campos automáticos: <code>{"{chamado}"}</code> nº do chamado
         aberto · <code>{"{saudacao}"}</code> Bom dia/Boa tarde/Boa noite · <code>{"{data}"}</code> · <code>{"{hora}"}</code> · <code>{"{campo:Nome do usuário}"}</code>{" "}
-        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica · <code>{"{clipboard}"}</code> o que você copiou (Ctrl+C). Formatação: <b>**negrito**</b>, <i>__itálico__</i> e{" "}
+        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica · <code>{"{clipboard}"}</code> o que você copiou (Ctrl+C). Do chamado aberto (o que a Central sabe, sem IA; extensão 3.10+): <code>{"{situacao}"}</code> · <code>{"{status}"}</code> · <code>{"{redmine}"}</code> · <code>{"{usuario}"}</code> · <code>{"{tipo}"}</code> · <code>{"{fila}"}</code> · <code>{"{dias}"}</code>. Formatação: <b>**negrito**</b>, <i>__itálico__</i> e{" "}
         <code>[texto](https://link)</code> — de verdade no Assyst e no e-mail; no WhatsApp vira *negrito*/_itálico_. Pode colar atalhos do Text Blaze ({"{time}"}, {"{formtext}"}, {"{if}"}): a extensão entende. Campo "Pronome" vira botões Sr./Sra./Dr./Dra./Sem título.
       </p>
       {rows === null && <div style={{ fontSize: 12 }}>Carregando…</div>}
