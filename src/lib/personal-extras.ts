@@ -193,13 +193,41 @@ async function unitPriceReport(q: string): Promise<string> {
 }
 
 // ── 4) Caixa de ideias e links ────────────────────────────────────────────
+/** Endereço público? (nada de rede interna, loopback, link-local…) */
+async function hostPublico(host: string): Promise<boolean> {
+  const { lookup } = await import("node:dns/promises");
+  const { isIP } = await import("node:net");
+  const ips = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => []);
+  if (!ips.length) return false;
+  return ips.every(({ address: a }) => {
+    const v4 = a.replace(/^::ffff:/i, "");
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) {
+      const [x, y] = v4.split(".").map(Number);
+      return !(x === 0 || x === 10 || x === 127 || (x === 100 && y >= 64 && y <= 127) || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || x >= 224);
+    }
+    const h = a.toLowerCase();
+    return !(h === "::1" || h === "::" || h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"));
+  });
+}
+
+/** Título da página (só endereço público, até 3 redirecionamentos conferidos um a um). */
 async function tituloDoLink(url: string): Promise<string> {
   try {
-    const r = await fetch(url, { signal: AbortSignal.timeout(6000), redirect: "follow", headers: { "user-agent": "Mozilla/5.0" } });
-    if (!r.ok || !/text\/html/.test(r.headers.get("content-type") || "")) return "";
-    const html = (await r.text()).slice(0, 200_000);
-    const m = html.match(/<title[^>]*>([^<]{1,200})<\/title>/i);
-    return m ? m[1].replace(/\s+/g, " ").replace(/&amp;/g, "&").replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').trim() : "";
+    let atual = url;
+    for (let salto = 0; salto < 4; salto++) {
+      const u = new URL(atual);
+      if (!/^https?:$/.test(u.protocol) || !(await hostPublico(u.hostname.replace(/^\[|\]$/g, "")))) return "";
+      const r = await fetch(u, { signal: AbortSignal.timeout(6000), redirect: "manual", headers: { "user-agent": "Mozilla/5.0" } });
+      if (r.status >= 300 && r.status < 400 && r.headers.get("location")) {
+        atual = new URL(r.headers.get("location")!, u).toString();
+        continue;
+      }
+      if (!r.ok || !/text\/html/.test(r.headers.get("content-type") || "")) return "";
+      const html = (await r.text()).slice(0, 200_000);
+      const m = html.match(/<title[^>]*>([^<]{1,200})<\/title>/i);
+      return m ? m[1].replace(/\s+/g, " ").replace(/&amp;/g, "&").replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').trim() : "";
+    }
+    return "";
   } catch {
     return "";
   }
