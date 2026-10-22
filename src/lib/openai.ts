@@ -19,6 +19,9 @@ export interface ProviderOptions {
 
 /** Modelos que não têm provedor ZDR na OpenRouter (descoberto na 1ª chamada). */
 const SEM_ZDR = new Set<string>();
+/** Reserva quando o modelo configurado é aposentado ou some da OpenRouter. */
+const MODELO_RESERVA = "google/gemini-3.1-flash-lite";
+const MODELO_FORA = new Set<string>();
 
 export async function generateResponse(
   messages: ChatMessage[],
@@ -70,7 +73,10 @@ export async function generateResponse(
       apiKey: providerOpts.openrouterApiKey,
       baseURL: "https://openrouter.ai/api/v1",
     });
-    const model = providerOpts.openrouterModel ?? "openai/gpt-4o-mini";
+    let model = providerOpts.openrouterModel ?? "openai/gpt-4o-mini";
+    // Modelo aposentado/fora do ar (o Google está aposentando o gemini-2.5-flash-lite):
+    // passa sozinho para o reserva, testado em 21/10/2026 com as mensagens dele (8/10, igual).
+    if (MODELO_FORA.has(model)) model = MODELO_RESERVA;
     // Finanças e conversas dele: prefere provedor que não guarda (ZDR); se nenhum
     // estiver disponível agora, usa o normal para a secretária não parar.
     const pedir = (zdr: boolean) =>
@@ -81,12 +87,23 @@ export async function generateResponse(
         messages: [{ role: "system", content: systemPrompt }, ...messages],
         ...(zdr ? { provider: { zdr: true, data_collection: "deny" } } : {}),
       } as Parameters<typeof openrouter.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>;
-    const response = await (SEM_ZDR.has(model) ? pedir(false) : pedir(true)).catch((err) => {
-      // Modelo sem nenhum provedor ZDR (ex.: gemini-2.5-flash-lite, só no AI Studio): lembra e vai direto nas próximas.
-      if (/data policy|zero data retention/i.test(String(err?.message))) SEM_ZDR.add(model);
-      else console.warn("[ia] provedor ZDR falhou, indo pelo normal:", err instanceof Error ? err.message.slice(0, 120) : err);
-      return pedir(false);
-    });
+    const response = await (SEM_ZDR.has(model) ? pedir(false) : pedir(true))
+      .catch((err) => {
+        // Modelo sem nenhum provedor ZDR (ex.: gemini-2.5-flash-lite, só no AI Studio): lembra e vai direto nas próximas.
+        if (/data policy|zero data retention/i.test(String(err?.message))) SEM_ZDR.add(model);
+        else console.warn("[ia] provedor ZDR falhou, indo pelo normal:", err instanceof Error ? err.message.slice(0, 120) : err);
+        return pedir(false);
+      })
+      .catch(async (err) => {
+        // O próprio modelo não existe mais (404/"not a valid model"/"no endpoints"): troca pelo reserva.
+        if (model !== MODELO_RESERVA && /not a valid model|no endpoints found|model.*(not found|deprecated|retired|unavailable)|404/i.test(String(err?.message))) {
+          console.error(`[ia] modelo ${model} fora do ar — usando ${MODELO_RESERVA}`);
+          MODELO_FORA.add(model);
+          model = MODELO_RESERVA;
+          return pedir(!SEM_ZDR.has(model)).catch(() => pedir(false));
+        }
+        throw err;
+      });
     return {
       content: response.choices[0]?.message?.content ?? "",
       tokens: response.usage?.total_tokens ?? 0,
