@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Config {
   id?: string;
@@ -149,18 +149,42 @@ export default function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Não carregou (sessão expirada, servidor fora): NÃO mostra o formulário —
+  // salvar os valores padrão apagaria as configurações e as chaves reais.
+  const [loadError, setLoadError] = useState("");
+  const original = useRef<Record<string, string>>({});
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     fetch("/api/config")
-      .then((r) => r.json())
-      .then((data) => {
+      .then(async (r) => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !data || data.error) throw new Error(r.status === 401 ? "Sua sessão expirou. Entre de novo." : "Não consegui carregar as configurações.");
+        original.current = data;
         setConfig({ ...DEFAULT, ...data, ownerPhone: data.ownerPhone || "55" });
-        setLoading(false);
-      });
+      })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Não consegui carregar as configurações."))
+      .finally(() => setLoading(false));
   }, []);
 
   function set<K extends keyof Config>(key: K, value: Config[K]) {
     setConfig((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // Chave salva vem como "••••abcd": o campo fica vazio, dizendo o final da
+  // chave guardada; digitar troca. (Antes o texto novo começava com "••••" e
+  // era ignorado sem aviso.)
+  const MASK = "••••";
+  function secretField(key: "evolutionApiKey" | "openaiApiKey" | "groqApiKey" | "googleApiKey" | "openrouterApiKey") {
+    const v = config[key] || "";
+    const guardada = original.current[key] || ""; // como veio do servidor
+    const salva = guardada.startsWith(MASK);
+    return {
+      value: v.startsWith(MASK) ? "" : v,
+      placeholder: salva ? `Chave salva (final ${guardada.slice(-4)}) — digite outra para trocar` : "Cole a chave aqui",
+      // Apagar o que digitou volta para a chave guardada (não apaga a chave).
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(key, e.target.value || (salva ? guardada : "")),
+    };
   }
 
   const [avisoMsg, setAvisoMsg] = useState("");
@@ -175,12 +199,14 @@ export default function ConfigPage() {
 
   async function save() {
     setSaving(true);
-    await fetch("/api/config", {
+    setSaveError("");
+    const r = await fetch("/api/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(config),
-    });
+    }).catch(() => null);
     setSaving(false);
+    if (!r || !r.ok) return setSaveError(r?.status === 401 ? "Não salvou: sua sessão expirou. Entre de novo." : "Não salvou. Tente de novo.");
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   }
@@ -192,6 +218,18 @@ export default function ConfigPage() {
       </div>
     );
   }
+  if (loadError) {
+    return (
+      <div style={{ display: "grid", placeItems: "center", height: "100%", padding: 24, textAlign: "center", gap: 12 }}>
+        <div style={{ display: "grid", gap: 12 }}>
+          <p style={{ color: "var(--danger)" }}>⚠️ {loadError}</p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Por segurança o formulário não aparece: salvar agora apagaria suas configurações.</p>
+          <div><button className="btn-primary" onClick={() => location.reload()}>Tentar de novo</button></div>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
@@ -199,6 +237,7 @@ export default function ConfigPage() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>⚙️ Configurações</h1>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {saveError && <span style={{ fontSize: 13, color: "var(--danger)" }}>⚠️ {saveError}</span>}
             {saved && (
               <span style={{ fontSize: 13, color: "var(--success)" }}>✅ Salvo!</span>
             )}
@@ -393,9 +432,7 @@ export default function ConfigPage() {
           <Field label="API Key">
             <input
               type="password"
-              value={config.evolutionApiKey}
-              onChange={(e) => set("evolutionApiKey", e.target.value)}
-              placeholder="••••••••"
+              {...secretField("evolutionApiKey")}
             />
           </Field>
           <Field label="Instance ID">
@@ -434,9 +471,7 @@ export default function ConfigPage() {
               <Field label="OpenAI API Key">
                 <input
                   type="password"
-                  value={config.openaiApiKey}
-                  onChange={(e) => set("openaiApiKey", e.target.value)}
-                  placeholder="sk-..."
+                  {...secretField("openaiApiKey")}
                 />
               </Field>
               <Field label="Modelo OpenAI">
@@ -458,9 +493,7 @@ export default function ConfigPage() {
               <Field label="Groq API Key">
                 <input
                   type="password"
-                  value={config.groqApiKey}
-                  onChange={(e) => set("groqApiKey", e.target.value)}
-                  placeholder="gsk_..."
+                  {...secretField("groqApiKey")}
                 />
               </Field>
               <Field label="Modelo Groq">
@@ -481,9 +514,7 @@ export default function ConfigPage() {
               <Field label="Google AI API Key" hint="Obtenha em aistudio.google.com">
                 <input
                   type="password"
-                  value={config.googleApiKey}
-                  onChange={(e) => set("googleApiKey", e.target.value)}
-                  placeholder="AIza..."
+                  {...secretField("googleApiKey")}
                 />
               </Field>
               <Field label="Modelo Gemini">
@@ -505,9 +536,7 @@ export default function ConfigPage() {
               <Field label="OpenRouter API Key" hint="Obtenha em openrouter.ai/keys">
                 <input
                   type="password"
-                  value={config.openrouterApiKey}
-                  onChange={(e) => set("openrouterApiKey", e.target.value)}
-                  placeholder="sk-or-v1-..."
+                  {...secretField("openrouterApiKey")}
                 />
               </Field>
               <Field label="Modelo" hint="Slug do modelo no OpenRouter, ex: openai/gpt-4o-mini">
