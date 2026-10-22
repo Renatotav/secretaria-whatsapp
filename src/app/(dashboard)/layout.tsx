@@ -114,7 +114,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Nav */}
         <nav style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
           {NAV.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}

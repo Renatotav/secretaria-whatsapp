@@ -270,3 +270,16 @@ button {
 
 /* Barras de rolagem e campos nativos no tema escuro (sem o quadrado branco). */
 :root { color-scheme: dark; }
+
+/* Celular (dedo): todo botão e item do menu com pelo menos 40 px de altura.
+   As chaves liga/desliga (role="switch") têm tamanho próprio. */
+@media (pointer: coarse) {
+  button:not([role="switch"]), .btn-ghost, .btn-primary, nav a { min-height: 40px; }
+  label.btn-ghost, label.btn-primary { display: inline-flex; align-items: center; }
+}
+
+/* Menu "⚙️ Ferramentas" do Trabalho: no computador abre alinhado à direita;
+   no celular o botão quebra para a esquerda e o menu abre para a direita
+   (antes saía da tela e os itens ficavam cortados). */
+.menu-ferramentas { right: 0; }
+@media (max-width: 640px) { .menu-ferramentas { right: auto; left: 0; max-width: calc(100vw - 32px); } }

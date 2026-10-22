@@ -55,7 +55,7 @@ const EMPTY = { ticketId: "", status: "aberto", errorType: "", origin: "", redmi
 
 type Links = { ticket: string; redmine: string };
 
-const linkStyle = { color: "#60a5fa", textDecoration: "underline" } as const;
+const linkStyle = { color: "var(--accent)", textDecoration: "underline" } as const;
 const urlFor = (template: string, n: string) => template.replace("{n}", encodeURIComponent(n));
 
 /** Número do chamado como link azul para o Assyst (igual ao escala). */
@@ -138,7 +138,7 @@ function TicketBadges({ t, situations }: { t: Ticket; situations: Situation[] })
   return (
     <>
       {a.urgent && (
-        <span className="badge-alerta" style={{ ...tag, color: "#fff", background: "#dc2626" }}>
+        <span className="badge-alerta" style={{ ...tag, color: "#fff", background: "var(--danger)" }}>
           URGENTE
         </span>
       )}
@@ -156,7 +156,7 @@ function TicketBadges({ t, situations }: { t: Ticket; situations: Situation[] })
           style={{
             ...tag,
             color: a.color === "amarelo" ? "#111827" : "#fff",
-            background: a.color === "vermelho" ? "#dc2626" : a.color === "amarelo" ? "#facc15" : "#16a34a",
+            background: a.color === "vermelho" ? "var(--danger)" : a.color === "amarelo" ? "var(--warning)" : "var(--success)",
           }}
         >
           {a.paused ? "🕒 " : a.color === "vermelho" ? "⚠ " : ""}
@@ -305,33 +305,47 @@ function SnippetBody({ value, onChange }: { value: string; onChange: (v: string)
 function SnippetsEditor() {
   const [rows, setRows] = useState<Snippet[] | null>(null);
   const [msg, setMsg] = useState("");
+  const [erro, setErro] = useState("");
   useEffect(() => {
-    fetch("/api/work/snippets").then(async (r) => r.ok && setRows((await r.json()).snippets));
+    fetch("/api/work/snippets")
+      .then(async (r) => {
+        if (!r.ok) throw new Error();
+        setRows((await r.json()).snippets);
+      })
+      .catch(() => setErro("Não consegui carregar os atalhos. Atualize a página."));
   }, []);
   const set = (i: number, patch: Partial<Snippet>) => setRows((r) => (r ?? []).map((x, k) => (k === i ? { ...x, ...patch } : x)));
   async function save() {
     const res = await fetch("/api/work/snippets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ snippets: rows }) });
-    const data = await res.json();
-    if (!res.ok) return setMsg(data.error || "Não consegui salvar.");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return setMsg(`⚠️ ${data.error || "Não consegui salvar. Tente de novo."}`);
     // Atalho com problema continua na tela (antes sumia e a tela dizia "Salvo").
     const rejeitados: (Snippet & { motivo: string })[] = data.rejected ?? [];
     setRows([...data.snippets, ...rejeitados.map(({ shortcut, title, body }) => ({ shortcut, title, body }))]);
     setMsg(
       rejeitados.length
         ? `⚠️ Salvei ${data.snippets.length}, mas ${rejeitados.length === 1 ? "1 não foi salvo" : `${rejeitados.length} não foram salvos`} (ficaram no fim da lista): ${rejeitados.map((r) => r.motivo).join("; ")}.`
-        : `✅ Salvo (${data.snippets.length} atalho(s)). Volte para a aba do Assyst e a extensão pega na hora (3.10.1+) — ou clique em ⚡ › ⌨️ Atualizar atalhos.`
+        : `✅ Salvo (${data.snippets.length} atalho(s)). Volte para a aba do Assyst e a extensão pega na hora — ou clique em ⚡ › ⌨️ Atualizar atalhos.`
     );
   }
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>⌨️ Atalhos de texto</div>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
-        Digite o atalho (começando com / ou \\) em qualquer campo (Assyst, WhatsApp Web, e-mail, Redmine) e ele vira o texto. Campos automáticos: <code>{"{chamado}"}</code> nº do chamado
-        aberto · <code>{"{saudacao}"}</code> Bom dia/Boa tarde/Boa noite · <code>{"{data}"}</code> · <code>{"{hora}"}</code> · <code>{"{campo:Nome do usuário}"}</code>{" "}
-        pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica · <code>{"{clipboard}"}</code> o que você copiou (Ctrl+C). Do chamado aberto (o que a Central sabe, sem IA; extensão 3.10+): <code>{"{situacao}"}</code> · <code>{"{status}"}</code> · <code>{"{redmine}"}</code> · <code>{"{usuario}"}</code> · <code>{"{tipo}"}</code> · <code>{"{fila}"}</code> · <code>{"{dias}"}</code>. Formatação: <b>**negrito**</b>, <i>__itálico__</i> e{" "}
-        <code>[texto](https://link)</code> — de verdade no Assyst e no e-mail; no WhatsApp vira *negrito*/_itálico_. Pode colar atalhos do Text Blaze ({"{time}"}, {"{formtext}"}, {"{if}"}): a extensão entende. Campo "Pronome" vira botões Sr./Sra./Dr./Dra./Sem título.
+      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 6 }}>
+        Digite o atalho (começando com / ou {"\\"}) em qualquer campo — Assyst, WhatsApp Web, e-mail, Redmine — e ele vira o texto.
       </p>
-      {rows === null && <div style={{ fontSize: 12 }}>Carregando…</div>}
+      <details style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>
+        <summary style={{ cursor: "pointer", minHeight: 32, display: "flex", alignItems: "center" }}>Ver campos automáticos e formatação</summary>
+        <ul style={{ margin: "6px 0 0", paddingLeft: 18, display: "grid", gap: 4 }}>
+          <li><code>{"{chamado}"}</code> nº do chamado aberto · <code>{"{saudacao}"}</code> Bom dia/Boa tarde/Boa noite · <code>{"{data}"}</code> · <code>{"{hora}"}</code></li>
+          <li><code>{"{campo:Nome do usuário}"}</code> pergunta na hora · <code>{"{cursor}"}</code> onde o cursor fica · <code>{"{clipboard}"}</code> o que você copiou</li>
+          <li>Do chamado aberto (sem IA): <code>{"{situacao}"}</code> <code>{"{status}"}</code> <code>{"{redmine}"}</code> <code>{"{usuario}"}</code> <code>{"{tipo}"}</code> <code>{"{fila}"}</code> <code>{"{dias}"}</code></li>
+          <li><b>**negrito**</b>, <i>__itálico__</i> e <code>[texto](https://link)</code> — no WhatsApp viram *negrito*/_itálico_</li>
+          <li>Atalhos do Text Blaze ({"{time}"}, {"{formtext}"}, {"{if}"}) funcionam colados como estão. Campo &quot;Pronome&quot; vira botões Sr./Sra./Dr./Dra.</li>
+        </ul>
+      </details>
+      {erro && <div style={{ fontSize: 13, color: "var(--danger)" }}>⚠️ {erro}</div>}
+      {rows === null && !erro && <div style={{ fontSize: 12 }}>Carregando…</div>}
       {rows?.map((r, i) => (
         <div key={i} style={{ display: "grid", gap: 6, marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -450,8 +464,8 @@ function FilterCard({ title, n, color, active, onClick }: { title: string; n: nu
         flex: "1 1 160px",
         textAlign: "left",
         cursor: "pointer",
-        background: active ? `${color}22` : "var(--bg-card)",
-        border: `1px solid ${active ? color : n > 0 ? `${color}88` : "var(--border)"}`,
+        background: active ? `color-mix(in srgb, ${color} 13%, transparent)` : "var(--bg-card)",
+        border: `1px solid ${active ? color : n > 0 ? `color-mix(in srgb, ${color} 53%, transparent)` : "var(--border)"}`,
         borderRadius: 12,
         padding: 14,
         color: "var(--text)",
@@ -638,7 +652,8 @@ export default function WorkPage() {
               ⚙️ Ferramentas ▾
             </summary>
             <div
-              style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 20, minWidth: 220, display: "grid", gap: 2, padding: 6, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.35)" }}
+              className="menu-ferramentas"
+              style={{ position: "absolute", top: "calc(100% + 6px)", zIndex: 20, minWidth: 220, display: "grid", gap: 2, padding: 6, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,.35)" }}
               onClick={(e) => (e.currentTarget.parentElement as HTMLDetailsElement).removeAttribute("open")}
             >
               {[
@@ -730,9 +745,9 @@ export default function WorkPage() {
           <Card title="Mês" c={stats.mes} />
           <div style={{ ...box, flex: "1 1 160px" }}>
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Na sua fila agora</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--warning)" }}>{stats.emAberto}</div>
+            <div style={{ fontSize: 26, fontWeight: 700 }}>{stats.emAberto}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-              +{stats.no3n ?? 0} com o 3º nível{stats.encerrarAqui ? ` · ${stats.encerrarAqui} já encerrado(s) na planilha` : ""}
+              e {stats.no3n ?? 0} com o 3º nível{stats.encerrarAqui ? ` · ${stats.encerrarAqui} já encerrado(s) na planilha` : ""}
             </div>
           </div>
         </div>
@@ -740,9 +755,9 @@ export default function WorkPage() {
 
       {stats && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-          <FilterCard title="🚨 Solicitação de Urgência" n={stats.urgentes} color="#ef4444" active={f === "urgentes"} onClick={() => setF(f === "urgentes" ? "" : "urgentes")} />
-          <FilterCard title="⚠ Passou do prazo" n={stats.atrasados} color="#ef4444" active={f === "atrasados"} onClick={() => setF(f === "atrasados" ? "" : "atrasados")} />
-          <FilterCard title="⚡ Redmine resolvido" n={stats.paraEncerrar.length} color="#f97316" active={f === "encerrar"} onClick={() => setF(f === "encerrar" ? "" : "encerrar")} />
+          <FilterCard title="🚨 Solicitação de Urgência" n={stats.urgentes} color="var(--danger)" active={f === "urgentes"} onClick={() => setF(f === "urgentes" ? "" : "urgentes")} />
+          <FilterCard title="⚠ Passou do prazo" n={stats.atrasados} color="var(--danger)" active={f === "atrasados"} onClick={() => setF(f === "atrasados" ? "" : "atrasados")} />
+          <FilterCard title="⚡ Redmine resolvido" n={stats.paraEncerrar.length} color="var(--warning)" active={f === "encerrar"} onClick={() => setF(f === "encerrar" ? "" : "encerrar")} />
         </div>
       )}
 
@@ -823,9 +838,9 @@ export default function WorkPage() {
               flexDirection: "column",
               gap: 6,
               ...(al.urgent
-                ? { borderLeft: "3px solid #ef4444", background: "rgba(127,29,29,.25)" }
+                ? { borderLeft: "3px solid var(--danger)", background: "rgba(127,29,29,.25)" }
                 : al.overdue
-                ? { borderLeft: "3px solid #f97316", background: "rgba(124,45,18,.18)" }
+                ? { borderLeft: "3px solid var(--warning)", background: "rgba(124,45,18,.18)" }
                 : {}),
             }}
           >

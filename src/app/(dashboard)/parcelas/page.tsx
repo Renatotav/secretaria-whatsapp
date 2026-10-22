@@ -36,20 +36,20 @@ export default function ParcelasPage() {
               <div style={{ ...card, display: "grid", gap: 2 }}>
                 <span style={muted}>Ainda falta pagar</span>
                 <strong style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{brl(totalRestante)}</strong>
-                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>em {d.series.length} compras</span>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>em {d.series.length} compras</span>
               </div>
               {d.meses.length > 0 && (
                 <div style={{ ...card, display: "grid", gap: 2 }}>
                   <span style={muted}>Parcelas em {mesCurto(d.meses[0].mes)}</span>
                   <strong style={{ fontSize: 20, fontVariantNumeric: "tabular-nums" }}>{brl(d.meses[0].total)}</strong>
-                  <span style={{ fontSize: 11, color: "var(--text-dim)" }}>o mês mais pesado daqui para a frente</span>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>o mês mais pesado daqui para a frente</span>
                 </div>
               )}
               {d.meses.length > 5 && (
                 <div style={{ ...card, display: "grid", gap: 2 }}>
                   <span style={muted}>Respiro em {mesCurto(d.meses[4].mes)}</span>
                   <strong style={{ fontSize: 20, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>+{brl(d.meses[0].total - d.meses[4].total)}</strong>
-                  <span style={{ fontSize: 11, color: "var(--text-dim)" }}>a mais por mês, comparado com {mesCurto(d.meses[0].mes)}</span>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>a mais por mês, comparado com {mesCurto(d.meses[0].mes)}</span>
                 </div>
               )}
             </div>
@@ -122,7 +122,7 @@ function Grafico({ meses }: { meses: Mes[] }) {
           {atual.acabam.length > 0 && <span style={muted}>✓ Última parcela: {atual.acabam.map((n) => n.replace(/\s*\(pedido[^)]*\)/, "")).join(", ")}</span>}
         </div>
       ) : (
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>👆 Toque num mês para ver o total e o que termina nele. ✓ verde = alguma parcela acaba nesse mês.</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>👆 Toque num mês para ver o total e o que termina nele. ✓ verde = alguma parcela acaba nesse mês.</div>
       )}
     </div>
   );

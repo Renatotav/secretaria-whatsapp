@@ -88,6 +88,9 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
     <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
       <button
         type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
         onClick={() => onChange(!on)}
         style={{ flex: "0 0 44px", width: 44, height: 24, borderRadius: 12, background: on ? "var(--accent)" : "var(--border)", border: "none", cursor: "pointer", position: "relative", transition: "background 0.2s" }}
       >
@@ -125,7 +128,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
         {label}
       </label>
       {hint && (
-        <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>{hint}</p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>{hint}</p>
       )}
       {children}
     </div>
@@ -356,7 +359,7 @@ export default function ConfigPage() {
 
         {/* Agendamento */}
         <Section title="⏰ Agendamento Automático">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(160px, 100%), 1fr))", gap: 12 }}>
             <Field label="Horário do resumo do dia" hint="Gastos, tetos, previsão e o que vence amanhã, com gráfico">
               <input
                 type="time"
@@ -587,6 +590,10 @@ export default function ConfigPage() {
         <Section title="🎙️ Áudio e Digitação">
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
             <button
+              type="button"
+              role="switch"
+              aria-checked={config.audioEnabled}
+              aria-label="Áudio ligado"
               onClick={() => set("audioEnabled", !config.audioEnabled)}
               style={{
                 width: 44,
@@ -616,10 +623,10 @@ export default function ConfigPage() {
               {config.audioEnabled ? "Escutar áudios (transcrever automaticamente)" : "Áudios ignorados"}
             </span>
           </div>
-          <p style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 16 }}>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
             A transcrição usa, nessa ordem, a primeira chave configurada na seção de Provedor de IA acima: Groq (whisper-large-v3), OpenRouter (openai/whisper-1) ou OpenAI (whisper-1).
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(160px, 100%), 1fr))", gap: 12 }}>
             <Field label="Debounce (segundos)" hint="Espera antes de processar mensagens quebradas">
               <input
                 type="number"
@@ -654,6 +661,10 @@ export default function ConfigPage() {
         <Section title="🔒 Segurança">
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
             <button
+              type="button"
+              role="switch"
+              aria-checked={config.enabled}
+              aria-label="Agente ativo"
               onClick={() => set("enabled", !config.enabled)}
               style={{
                 width: 44,

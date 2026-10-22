@@ -125,15 +125,15 @@ function Painel({ d }: { d: Dados }) {
             <div style={{ display: "grid", gap: 2 }}>
               <span style={muted}>Neste mês</span>
               <strong style={{ fontSize: 22, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{brl(Math.max(0, d.economia.mes))}</strong>
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Uber seria {brl(d.economia.uberMes)} · energia {brl(d.mesKwh * d.price)}</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Uber seria {brl(d.economia.uberMes)} · energia {brl(d.mesKwh * d.price)}</span>
             </div>
             <div style={{ display: "grid", gap: 2 }}>
               <span style={muted}>Desde que começou</span>
               <strong style={{ fontSize: 22, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{brl(Math.max(0, d.economia.total))}</strong>
-              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{d.economia.dias} dias úteis rodando</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.economia.dias} dias úteis rodando</span>
             </div>
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
             Estimativa: dias úteis em que o ODO subiu × 2 corridas (ida e volta) × {brl(d.economia.corrida)}, a média das suas {d.economia.corridasBase} corridas de Uber lançadas — menos a energia das cargas. Não desconta as parcelas da moto.
           </div>
         </div>
@@ -172,7 +172,7 @@ function Kpi({ titulo, valor, dica, explica }: { titulo: string; valor: string; 
       style={{ ...card, display: "grid", gap: 2, textAlign: "left", cursor: "pointer", color: "inherit", font: "inherit", borderColor: aberto ? "var(--accent-border)" : "var(--border)" }}>
       <span style={{ ...muted, display: "flex", justifyContent: "space-between", gap: 4 }}>{titulo}<span aria-hidden>{aberto ? "▴" : "ⓘ"}</span></span>
       <strong style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }}>{valor}</strong>
-      <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{dica}</span>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{dica}</span>
       {aberto && <span style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, lineHeight: 1.4 }}>{explica}</span>}
     </button>
   );
@@ -209,7 +209,7 @@ function CargaCard({ c, price }: { c: Carga; price: number }) {
           {c.kwh == null && <span>Sem kWh medido (antes da tomada inteligente). Serve de ponto de partida do ODO.</span>}
         </div>
       )}
-      <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{c.auto ? "registrada pela tomada" : "anotada à mão"} · toque para {aberto ? "fechar" : "ver detalhes"}</div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{c.auto ? "registrada pela tomada" : "anotada à mão"} · toque para {aberto ? "fechar" : "ver detalhes"}</div>
     </button>
   );
 }
@@ -290,7 +290,7 @@ function GraficoKm({ leituras, cargas, media }: { leituras: Leitura[]; cargas: C
           ))}
         </div>
       ) : (
-        <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>👆 Toque numa barra para ver o detalhe. Barra mais clara = média de mais de um dia (o ODO não foi mandado no meio).</div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>👆 Toque numa barra para ver o detalhe. Barra mais clara = média de mais de um dia (o ODO não foi mandado no meio).</div>
       )}
     </div>
   );
