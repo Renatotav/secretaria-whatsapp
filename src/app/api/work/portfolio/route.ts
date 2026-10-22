@@ -31,7 +31,9 @@ export async function GET(request: Request) {
     where: { status: { in: ["resolvido", "escalado"] }, resolvedAt: { not: null } },
     select: { status: true, redmine: true, openedAt: true, receivedAt: true, resolvedAt: true, errorGroup: true, origin: true, tmrHours: true, team: true },
   });
-  const openCount = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
+  const { queueSplit } = await import("@/lib/work");
+  const fila = await queueSplit();
+  const openCount = fila.naFila;
 
   // Tempo com ele: TMR exclusivo do escala (horas) quando houver; senão, do
   // recebimento ao fechamento. Fechamento igual ao recebimento = planilha sem
@@ -96,6 +98,8 @@ export async function GET(request: Request) {
       tempoBase: spans.length,
       semRedminePct: closed.length ? Math.round((closed.filter((t) => !withRedmine(t)).length / closed.length) * 100) : null,
       emAberto: openCount,
+      no3n: fila.no3n,
+      encerrarAqui: fila.encerrarAqui,
     },
     meses,
     heat,

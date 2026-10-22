@@ -19,6 +19,8 @@ type Data = {
     tempoBase: number;
     semRedminePct: number | null;
     emAberto: number;
+    no3n?: number;
+    encerrarAqui?: number;
   };
   meses: { mes: string; direto: number; redmine: number; tempoMedio: number | null }[];
   heat: number[][];
@@ -212,7 +214,7 @@ export default function PortfolioPage() {
               />
               <Kpi label="Resolvidos sem Redmine" value={data.kpis.semRedminePct === null ? "—" : `${data.kpis.semRedminePct}%`} hint="sem precisar escalar" />
               <Kpi label="Dia mais produtivo" value={best && best.n ? DIAS[best.d] : "—"} hint={best && best.n ? `${best.n} fechados` : undefined} />
-              <Kpi label="Em aberto agora" value={String(data.kpis.emAberto)} />
+              <Kpi label="Na sua fila agora" value={String(data.kpis.emAberto)} hint={`+${data.kpis.no3n ?? 0} com o 3º nível${data.kpis.encerrarAqui ? ` · ${data.kpis.encerrarAqui} já encerrado(s) na planilha` : ""}`} />
             </div>
 
             <div style={card}>

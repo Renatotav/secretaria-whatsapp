@@ -35,6 +35,8 @@ type Stats = {
   semana: Count;
   mes: Count;
   emAberto: number;
+  no3n?: number;
+  encerrarAqui?: number;
   urgentes: number;
   atrasados: number;
   tiposDoMes: { name: string; n: number }[];
@@ -727,8 +729,11 @@ export default function WorkPage() {
           <Card title="Semana" c={stats.semana} />
           <Card title="Mês" c={stats.mes} />
           <div style={{ ...box, flex: "1 1 160px" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Em aberto agora</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Na sua fila agora</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "var(--warning)" }}>{stats.emAberto}</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+              +{stats.no3n ?? 0} com o 3º nível{stats.encerrarAqui ? ` · ${stats.encerrarAqui} já encerrado(s) na planilha` : ""}
+            </div>
           </div>
         </div>
       )}

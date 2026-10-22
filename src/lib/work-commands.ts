@@ -81,7 +81,7 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   if (/^\s*(?:como\s+(?:est[aá]|t[aá])\s+(?:o\s+)?meu\s+trabalho|resumo\s+do\s+trabalho|briefing(?:\s+do\s+trabalho)?)\s*\??\s*$/i.test(msg)) {
     const { buildWorkBriefing } = await import("./work");
     const s = await workStats();
-    return (await buildWorkBriefing()) || `💼 Nada pedindo ação agora. ${s.emAberto} chamado(s) em aberto, nenhum urgente, atrasado ou com Redmine resolvido. 👍`;
+    return (await buildWorkBriefing()) || `💼 Nada pedindo ação agora. ${s.emAberto} chamado(s) na sua fila (+${s.no3n} com o 3º nível), nenhum urgente, atrasado ou com Redmine resolvido. 👍`;
   }
   const isQuestion = /\?\s*$/.test(msg) || /^(?:quant[oa]s?|qual|quais|como|m[eé]dia|tempo|em\s+qu[ea]l)\b/i.test(msg);
   if (!/chamado/i.test(msg)) {
@@ -119,7 +119,7 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     const what = status === "escalado" ? `virou Redmine${saved.redmine ? ` *${saved.redmine}*` : ""} 🔁` : status === "resolvido" ? "resolvido ✅" : status;
     return [
       `💼 Chamado *${id}* ${before ? "" : "registrado e "}${what}.`,
-      `Hoje: ${s.hoje.resolvidos} resolvido(s) · ${s.hoje.escalados} Redmine · ${s.emAberto} em aberto.`,
+      `Hoje: ${s.hoje.resolvidos} resolvido(s) · ${s.hoje.escalados} Redmine · ${s.emAberto} na sua fila (+${s.no3n} com o 3º nível).`,
     ].join("\n");
   }
 
@@ -146,7 +146,7 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     const key = m[1].toLowerCase().startsWith("h") ? "hoje" : m[1].toLowerCase().startsWith("s") ? "semana" : "mes";
     const p = s[key];
     const label = key === "hoje" ? "Hoje" : key === "semana" ? "Nesta semana" : "Neste mês";
-    return `💼 ${label}: *${p.resolvidos}* resolvido(s), *${p.escalados}* para o Redmine e ${p.registrados} chamado(s) aberto(s). Em aberto agora: ${s.emAberto}.`;
+    return `💼 ${label}: *${p.resolvidos}* resolvido(s), *${p.escalados}* para o Redmine e ${p.registrados} chamado(s) aberto(s). Na sua fila: ${s.emAberto} (+${s.no3n} com o 3º nível).`;
   }
 
   if (TO_CLOSE_RE.test(msg)) {

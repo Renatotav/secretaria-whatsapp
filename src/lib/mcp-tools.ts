@@ -49,7 +49,7 @@ export const FERRAMENTAS: Ferramenta[] = [
         linha("Hoje", s.hoje),
         linha("Semana", s.semana),
         linha("Mês", s.mes),
-        `Em aberto: ${s.emAberto} · urgentes: ${s.urgentes} · atrasados: ${s.atrasados} · Redmine resolvido para encerrar: ${s.paraEncerrar.length}`,
+        `Na fila dele: ${s.emAberto} (+${s.no3n} com o 3º nível) · urgentes: ${s.urgentes} · atrasados: ${s.atrasados} · Redmine resolvido para encerrar: ${s.paraEncerrar.length}`,
         `Grupos do mês: ${(s.gruposDoMes || []).map((g) => `${g.name} ${g.n}`).join(", ")}`,
         `Tipos do mês: ${s.tiposDoMes.map((g) => `${g.name} ${g.n}`).join(", ")}`,
         "",

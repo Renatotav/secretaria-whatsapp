@@ -38,6 +38,27 @@ function pastDate(v: string | null | undefined): Date | null {
 const clean = (v: unknown, max = 2000) => (typeof v === "string" ? maskPersonalData(v.trim()).slice(0, max) : undefined);
 
 /** Cria ou atualiza o chamado pelo número (chave comum de todo o ecossistema). */
+/**
+ * Onde estão os chamados que ainda não acabaram, pela planilha dele (a mesma
+ * fila do Assyst): "na fila" = aguardando abertura de Redmine, pendente,
+ * relógio parado ou 1º nível (mesmo que a Central já tenha marcado resolvido);
+ * "no 3º nível" = atribuído ao 3N (saiu da fila dele); "encerrar aqui" =
+ * a planilha já diz ENCERRADO e a Central ainda está como aberto. Antes o
+ * "em aberto" somava tudo (19) e a fila dele tinha 8.
+ */
+export async function queueSplit(): Promise<{ naFila: number; no3n: number; encerrarAqui: number }> {
+  const rows = await prisma.workTicket.findMany({ select: { status: true, sheetStatus: true } });
+  let naFila = 0, no3n = 0, encerrarAqui = 0;
+  for (const t of rows) {
+    const st = (t.sheetStatus || "").toUpperCase();
+    const aberto = t.status === "aberto" || t.status === "pendente";
+    if (/AGUARD|PENDENT|REL[OÓ]GIO|\b1N\b/.test(st) || (!st && aberto)) naFila++;
+    else if (aberto && /^ATRIBU/.test(st) && /3N/.test(st)) no3n++;
+    else if (aberto && /^ENCERRAD/.test(st)) encerrarAqui++;
+  }
+  return { naFila, no3n, encerrarAqui };
+}
+
 export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" | "extensao" | "whatsapp" | "escala" | "planilha") {
   const ticketId = normalizeTicketId(input.ticketId);
   if (!/^[A-Z]?\d{6,9}$/.test(ticketId)) throw new Error("Número de chamado inválido");
@@ -126,7 +147,7 @@ export async function workStats() {
     hoje: await count(starts.day),
     semana: await count(starts.week),
     mes: await count(starts.month),
-    emAberto: await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } }),
+    ...(await (async () => { const q = await queueSplit(); return { emAberto: q.naFila, no3n: q.no3n, encerrarAqui: q.encerrarAqui }; })()),
     tiposDoMes: tally("errorType"),
     origemDoMes: tally("origin"),
     gruposDoMes: tally("errorGroup").filter((g) => g.name !== "(sem)" && g.name !== "Sem grupo"),
@@ -162,7 +183,8 @@ export async function workWeekSection(monday: Date): Promise<string> {
   const opened = await prisma.workTicket.count({
     where: { OR: [{ openedAt: { gte: start, lt: end } }, { openedAt: null, createdAt: { gte: start, lt: end } }] },
   });
-  const emAberto = await prisma.workTicket.count({ where: { status: { in: ["aberto", "pendente"] } } });
+  const fila = await queueSplit();
+  const emAberto = fila.naFila;
   if (closed.length === 0 && opened === 0) return "";
 
   const days = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -184,7 +206,7 @@ export async function workWeekSection(monday: Date): Promise<string> {
   const best = perDay.indexOf(Math.max(...perDay));
 
   return [
-    `\n💼 *Trabalho na semana:* ${resolvidos} resolvido(s) · ${escalados} Redmine · ${opened} aberto(s) · ${emAberto} em aberto agora`,
+    `\n💼 *Trabalho na semana:* ${resolvidos} resolvido(s) · ${escalados} Redmine · ${opened} aberto(s) · ${emAberto} na sua fila (+${fila.no3n} com o 3º nível)`,
     "```",
     ...bars,
     "```",
