@@ -15,7 +15,7 @@ import {
   type InvoiceEntry,
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
-import { parseLocalDate, todayBRT, creditCardBillDate, billDaysFor, cardInText } from "./dates";
+import { parseLocalDate, todayBRT, creditCardBillDate, billDaysFor, cardInText, autoEntryDates } from "./dates";
 import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
 import { withReason } from "./finance-reason";
 import type { AgentConfig, Prisma } from "@prisma/client";
@@ -668,6 +668,8 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🛍️ Lista de desejos: "quero comprar um tênis de 300 em 3x" anota e diz se cabe; "minha lista de desejos" mostra tudo; ela avisa sozinha quando um desejo passar a caber.
 🕓 "Histórico do aluguel" / "por que a luz mudou?" / "o que mudou hoje?" — cada mudança no lançamento (valor, data, situação…) com o motivo; "desfaz a mudança 2" volta uma delas.
 🩺 "Como está o sistema?" — WhatsApp conectado, última mensagem recebida, ponte da tomada, crédito da IA e há quanto tempo está no ar. Se o WhatsApp cair, a Alexa avisa; quando volta, chega a mensagem.
+✏️ Corrigir um lançamento antigo: *responda* (citando) a mensagem dele com "foi no pix", "era 32,50", "foi dia 15/10" ou "apaga" — ela mostra a mudança e espera o "sim".
+✂️ Pagou parte em cada (nota ou gasto): "100 no VR e 80 no cartão" ou "25 no vale antigo e o resto no cartão" — na legenda da foto da nota, logo depois dela, ou respondendo à mensagem do lançamento.
 👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -1101,6 +1103,176 @@ async function undoFinanceLog(logId: string): Promise<string> {
   for (const f of HIST_FIELDS) if (f in b) volta[f] = b[f];
   await prisma.financeEntry.update({ where: { id: atual.id }, data: asData(volta) });
   return `↩️ "${atual.description}" voltou ao que era: ${histValue("amount", b.amount)}, ${histValue("date", b.date)}, ${histValue("status", b.status)}.`;
+}
+
+// ── Corrigir respondendo à mensagem antiga e pagamento dividido ─────────────
+// Ele responde (cita) o cartão de um lançamento de semanas atrás com "foi no
+// pix", "era 32,50", "foi dia 15/10" ou "apaga": a secretária acha aquele
+// lançamento, mostra a mudança e espera o "sim". "100 no VR e 80 no cartão"
+// (respondendo à nota, na legenda da foto ou logo depois dela) divide a compra
+// em um lançamento por forma de pagamento, sem duplicar o total.
+type QuotedChange = { amount?: number; paymentMethod?: string; purchase?: string; remove?: boolean };
+let pendingQuotedEdit: { entryId: string; change: QuotedChange; at: number } | null = null;
+let pendingSplit: { entryId: string; parts: SplitPart[]; at: number } | null = null;
+let lastNotaEntry: { id: string; at: number } | null = null;
+
+type SplitPart = { amount: number; paymentMethod: string; account: string; label: string };
+const SPLIT_METHOD = String.raw`vale\s+antigo|vr|va|vale|ticket|pix|d[eé]bito|dinheiro|esp[eé]cie|cart[aã]o|cr[eé]dito`;
+function splitMethod(raw: string): { paymentMethod: string; account: string; label: string } {
+  const m = raw.toLowerCase();
+  if (/antigo/.test(m)) return { paymentMethod: "ticket", account: "Vale antigo", label: "vale antigo" };
+  if (/^(vr|va|vale|ticket)$/.test(m)) return { paymentMethod: "ticket", account: "VR", label: "VR" };
+  if (m === "pix") return { paymentMethod: "pix", account: "Principal", label: "Pix" };
+  if (/^d/.test(m)) return { paymentMethod: "débito", account: "Principal", label: "débito" };
+  if (/^(dinheiro|esp)/.test(m)) return { paymentMethod: "dinheiro", account: "Principal", label: "dinheiro" };
+  return { paymentMethod: "cartão", account: "Principal", label: "cartão" };
+}
+
+/** "100 no VR e 80 no cartão" / "25,35 no vale antigo, o resto no cartão" → partes; null se não for divisão. */
+export function parseSplit(text: string, total: number): SplitPart[] | { erro: string } | null {
+  const t = text.toLowerCase();
+  const parts: SplitPart[] = [];
+  const re = new RegExp(String.raw`(?:r\$\s*)?${NUMBER_PART}\s*(?:reais\s*)?(?:no|na|em|de|pelo|pela)\s+(${SPLIT_METHOD})\b`, "gi");
+  for (const m of t.matchAll(re)) parts.push({ amount: Math.round(parseBrNumber(m[1]) * 100) / 100, ...splitMethod(m[2]) });
+  const resto = t.match(new RegExp(String.raw`(?:o\s+)?resto\s+(?:no|na|em|de|pelo|pela)\s+(${SPLIT_METHOD})\b`, "i"));
+  if (!parts.length || (parts.length < 2 && !resto)) return null;
+  const soma = parts.reduce((a, p) => a + p.amount, 0);
+  if (resto) {
+    const falta = Math.round((total - soma) * 100) / 100;
+    if (falta <= 0) return { erro: `As partes já somam ${brl(soma)} (o total é ${brl(total)}), não sobra resto.` };
+    parts.push({ amount: falta, ...splitMethod(resto[1]) });
+  } else if (Math.abs(soma - total) > 0.05) {
+    return { erro: `As partes somam ${brl(soma)}, mas o total é ${brl(total)}. Mande de novo com os valores certos (ou "o resto no cartão").` };
+  }
+  return parts;
+}
+
+/** Divide o lançamento: o original fica com a 1ª parte (e os itens da nota); as outras viram lançamentos novos. */
+async function applySplit(entryId: string, parts: SplitPart[]): Promise<string> {
+  const e = await prisma.financeEntry.findUnique({ where: { id: entryId } });
+  if (!e) return "Esse lançamento não existe mais.";
+  const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true, cardBillDays: true } });
+  const purchase = e.purchaseDate ?? e.date;
+  const datesFor = (method: string) => {
+    if (method !== "cartão") return { date: purchase, status: "paid" };
+    const d = billDaysFor(config, e.card);
+    const date = creditCardBillDate(purchase, d.due, d.best);
+    return { date, status: date.getTime() >= todayBRT().getTime() ? "pending" : "paid" };
+  };
+  const base = e.description.replace(/\s*\(parte n[oa] [^)]*\)\s*$/i, "");
+  const [first, ...rest] = parts;
+  await prisma.financeEntry.update({ where: { id: e.id }, data: { amount: first.amount, paymentMethod: first.paymentMethod, account: first.account, ...datesFor(first.paymentMethod) } });
+  for (const p of rest) {
+    await prisma.financeEntry.create({
+      data: {
+        type: e.type, amount: p.amount, category: e.category, subcategory: e.subcategory,
+        description: `${base} (parte no ${p.label})`.slice(0, 200), purchaseDate: purchase,
+        paymentMethod: p.paymentMethod, account: p.account, card: e.card, mood: e.mood, source: e.source,
+        ...datesFor(p.paymentMethod),
+      },
+    });
+  }
+  const linhas = parts.map((p) => { const d = datesFor(p.paymentMethod); return `• ${brl(p.amount)} — ${paymentLabel(p.paymentMethod, d.date)}${p.account === "Vale antigo" ? " (vale antigo)" : ""}`; });
+  return `✂️ *Pagamento dividido:* ${base.replace(/^Nota Fiscal \(\d+ itens\) - ?/, "Nota fiscal ").trim() || e.category} · total ${brl(parts.reduce((a, p) => a + p.amount, 0))}\n${linhas.join("\n")}${e.description.startsWith("Nota Fiscal") ? "\nOs itens da nota ficam no primeiro lançamento." : ""}`;
+}
+
+/** Acha o lançamento da mensagem citada: o cartão "📝 … 💰 R$ …", a nota salva, ou a mensagem original dele. */
+async function entryFromQuoted(quoted: string) {
+  const q = quoted.trim();
+  const desc = q.match(/^📝\s*(.+)$/m)?.[1]?.trim();
+  const val = q.match(/💰\s*R\$\s*([\d.,]+)/)?.[1] ?? q.match(/Nota fiscal de R\$\s*([\d.,]+)/i)?.[1];
+  if (val) {
+    const amount = parseBrNumber(val);
+    const isNota = /Nota fiscal de R\$/i.test(q) && !desc;
+    const found = await prisma.financeEntry.findFirst({
+      where: {
+        amount: { gte: amount - 0.01, lte: amount + 0.01 },
+        ...(isNota ? { description: { startsWith: "Nota Fiscal" } } : desc ? { OR: [{ description: desc }, { description: "", category: desc }] } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (found) return found;
+  }
+  // Respondeu à própria mensagem ("almoço 25"): o histórico sabe o que ela criou.
+  const log = await prisma.financeLog.findFirst({ where: { action: "create", reason: { startsWith: `mensagem: "${q.slice(0, 60)}` } }, orderBy: { at: "desc" } });
+  return log?.entryId ? prisma.financeEntry.findUnique({ where: { id: log.entryId } }) : null;
+}
+
+/** "foi no pix", "era 32,50", "foi dia 15/10", "foi ontem", "apaga" → mudança; null se não entendeu. */
+function parseQuotedChange(text: string): QuotedChange | null {
+  const t = text.trim().toLowerCase();
+  if (/^(apag[ae]|exclu[ia]|remov[ae]|desfaz(er)?|cancel[ae])\b/.test(t)) return { remove: true };
+  const c: QuotedChange = {};
+  const pm = t.match(/\b(pix|d[eé]bito|dinheiro|esp[eé]cie|boleto|cart[aã]o|cr[eé]dito|vr|va|vale|ticket)\b/);
+  if (pm) c.paymentMethod = PAYMENT_OPTIONS[pm[1].normalize("NFD").replace(/[̀-ͯ]/g, "")] ?? PAYMENT_OPTIONS[pm[1]] ?? (pm[1] === "boleto" ? "boleto" : undefined);
+  const dm = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  const hj = todayBRT();
+  if (dm) {
+    const y = dm[3] ? (dm[3].length === 2 ? 2000 + Number(dm[3]) : Number(dm[3])) : hj.getFullYear();
+    c.purchase = new Date(y, Number(dm[2]) - 1, Number(dm[1]), 12).toISOString();
+  } else if (/\bontem\b/.test(t)) c.purchase = new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() - 1, 12).toISOString();
+  else if (/\bhoje\b/.test(t)) c.purchase = hj.toISOString();
+  const am = (dm ? t.replace(dm[0], " ") : t).match(new RegExp(String.raw`(?:^|\b(?:foi|era|é|deu|custou|valor|na verdade)\s+(?:de\s+)?)(?:r\$\s*)?${NUMBER_PART}(?:\s*(?:reais|conto))?\b`, "i"));
+  if (am) { const v = parseBrNumber(am[1]); if (v > 0) c.amount = v; }
+  return Object.keys(c).length ? c : null;
+}
+
+function describeChange(e: { amount: number; paymentMethod: string; purchaseDate: Date | null; date: Date }, c: QuotedChange): string {
+  if (c.remove) return "apagar este lançamento";
+  const ps: string[] = [];
+  if (c.amount != null && Math.abs(c.amount - e.amount) > 0.001) ps.push(`valor ${brl(e.amount)} → ${brl(c.amount)}`);
+  if (c.paymentMethod && c.paymentMethod !== e.paymentMethod) ps.push(`pagamento ${PAYMENT_NAMES[e.paymentMethod] ?? e.paymentMethod} → ${PAYMENT_NAMES[c.paymentMethod] ?? c.paymentMethod}`);
+  if (c.purchase) ps.push(`data da compra ${formatFullDate(e.purchaseDate ?? e.date)} → ${formatFullDate(new Date(c.purchase))}`);
+  return ps.join("; ");
+}
+
+/** Resposta citando uma mensagem antiga. null = não é o caso (segue o fluxo normal). */
+async function applyQuotedReply(text: string, quoted: string | undefined): Promise<string | null> {
+  if (!quoted) return null;
+  // Só correção curta e afirmativa: pergunta ("quanto gastei ontem?") segue o fluxo normal.
+  const t = text.trim();
+  if (t.length > 80 || /\?\s*$/.test(t)) return null;
+  const looksSplit = parseSplit(t, 1_000_000) !== null;
+  const change = looksSplit ? null : parseQuotedChange(t);
+  if (!looksSplit && !change) return null;
+  const e = await entryFromQuoted(quoted);
+  if (!e) return /📝|💰|Nota fiscal de R\$/i.test(quoted) ? "🤔 Não achei esse lançamento (pode ter sido apagado ou mudado de valor). Corrija pelo painel ou peça o \"histórico do …\"." : null;
+  const label = e.description || e.category;
+  const split = looksSplit ? parseSplit(t, e.amount) : null;
+  if (split && "erro" in split) return `✂️ ${split.erro}`;
+  if (split) {
+    pendingSplit = { entryId: e.id, parts: split, at: Date.now() };
+    return `✂️ Dividir "${label}" (${brl(e.amount)}) assim?\n${split.map((p) => `• ${brl(p.amount)} no ${p.label}`).join("\n")}\nResponda *sim* ou *não*.`;
+  }
+  if (!change) return null;
+  const desc = describeChange(e, change);
+  if (!desc) return `👍 "${label}" já está assim.`;
+  pendingQuotedEdit = { entryId: e.id, change, at: Date.now() };
+  const parcela = /Parcela \d+\/\d+/.test(e.description) ? "\n(Só esta parcela muda.)" : "";
+  return `✏️ Em "${label}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.${parcela}\nConfirma? Responda *sim* ou *não*.`;
+}
+
+async function applyQuotedEdit(entryId: string, c: QuotedChange): Promise<string> {
+  const e = await prisma.financeEntry.findUnique({ where: { id: entryId } });
+  if (!e) return "Esse lançamento não existe mais.";
+  const label = e.description || e.category;
+  if (c.remove) {
+    await prisma.financeEntry.delete({ where: { id: e.id } });
+    return `🗑️ Apaguei "${label}" (${brl(e.amount)}). Errou? Peça "histórico do ${label.slice(0, 30)}" e "desfaz a mudança 1".`;
+  }
+  const data: Prisma.FinanceEntryUpdateInput = {};
+  if (c.amount != null) data.amount = c.amount;
+  const method = c.paymentMethod ?? e.paymentMethod;
+  if (c.paymentMethod || c.purchase) {
+    const purchase = c.purchase ? new Date(c.purchase) : e.purchaseDate ?? e.date;
+    const config = await prisma.agentConfig.findFirst({ select: { creditCardDueDay: true, creditCardBestDay: true, cardBillDays: true } });
+    const d = billDaysFor(config, e.card);
+    const auto = autoEntryDates({ type: e.type, paymentMethod: method, date: method === "cartão" && e.type === "expense" ? null : purchase.toISOString(), purchaseDate: purchase.toISOString(), description: e.description }, d.due, d.best);
+    Object.assign(data, { paymentMethod: method, date: auto.date, purchaseDate: auto.purchaseDate ?? purchase, status: auto.status });
+    if (c.paymentMethod) data.account = method === "ticket" ? "VR" : /vr|ticket|vale/i.test(e.account) ? "Principal" : e.account;
+  }
+  const u = await prisma.financeEntry.update({ where: { id: e.id }, data });
+  return entryCard(u, "✏️ Corrigido!");
 }
 
 const ATTENTION_RE = /^\s*(?:(?:o\s*)?q(?:ue)?\s+(?:é\s+que\s+)?(?:precisa|tem|falta)\s+(?:de\s+)?(?:da\s+)?(?:minha\s+aten[cç][aã]o|(?:pra|para)\s+eu\s+(?:fazer|resolver|ver)|eu\s+(?:fazer|resolver|ver))|(?:minhas\s+)?pend[eê]ncias|tem\s+alguma\s+pend[eê]ncia)\s*\??\s*$/i;
@@ -1632,6 +1804,8 @@ async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> 
 
 export interface SelfMessageMeta {
   messageTimestamp: number;
+  /** Texto da mensagem que ele respondeu (citou), quando houver. */
+  quoted?: string;
 }
 
 // Quase tudo do dono é no cartão de crédito (milhas): quando ele não diz como
@@ -2081,6 +2255,42 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   await restoreFlowStates();
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
+
+  // "sim"/"não" para a correção ou a divisão pedida respondendo a uma mensagem antiga.
+  for (const kind of ["edit", "split"] as const) {
+    const p = kind === "edit" ? pendingQuotedEdit : pendingSplit;
+    if (!p || Date.now() - p.at > 30 * 60 * 1000) continue;
+    const t = joinedText.trim();
+    if (CONFIRM_YES_RE.test(t)) {
+      if (kind === "edit") pendingQuotedEdit = null; else pendingSplit = null;
+      await notifyOwner(config, kind === "edit" ? await applyQuotedEdit(p.entryId, (p as NonNullable<typeof pendingQuotedEdit>).change) : await applySplit(p.entryId, (p as NonNullable<typeof pendingSplit>).parts));
+      return;
+    }
+    if (CONFIRM_NO_RE.test(t)) {
+      if (kind === "edit") pendingQuotedEdit = null; else pendingSplit = null;
+      await notifyOwner(config, "👍 Deixei como estava.");
+      return;
+    }
+  }
+  // Respondeu (citou) uma mensagem antiga: corrige aquele lançamento.
+  const quotedReply = await applyQuotedReply(joinedText, _meta.quoted);
+  if (quotedReply) {
+    await notifyOwner(config, quotedReply);
+    return;
+  }
+  // "100 no VR e 80 no cartão" logo depois de uma nota (até 1 h): divide a nota.
+  if (lastNotaEntry && Date.now() - lastNotaEntry.at < 60 * 60 * 1000) {
+    const nota = await prisma.financeEntry.findUnique({ where: { id: lastNotaEntry.id } });
+    const split = nota ? parseSplit(joinedText, nota.amount) : null;
+    if (nota && split) {
+      if ("erro" in split) await notifyOwner(config, `✂️ ${split.erro}`);
+      else {
+        lastNotaEntry = null;
+        await notifyOwner(config, await applySplit(nota.id, split));
+      }
+      return;
+    }
+  }
 
   // Resposta com o valor que faltava ("25") completa a frase anterior.
   // (Com um print ou nota esperando resposta, o número é para eles.)
@@ -3647,12 +3857,22 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
     }
   });
 
+  // Legenda com divisão ("100 no VR e 80 no cartão"): divide já. Senão, guarda
+  // a nota para uma divisão mandada logo depois.
+  lastNotaEntry = { id: entry.id, at: Date.now() };
+  const captionSplit = parseSplit(caption, invoice.total);
+  const splitText = captionSplit && !("erro" in captionSplit) ? await applySplit(entry.id, captionSplit) : captionSplit ? `✂️ ${captionSplit.erro}` : "";
+  if (splitText && !splitText.includes("somam")) lastNotaEntry = null;
+
   const detective = await priceChanges(entry.id, invoice.items).catch((err) => {
     console.error("[detetive] falha ao comparar preços", err);
     return "";
   });
 
-  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\nPagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : paymentMethod === "ticket" ? "Se não foi no VR, responda *1* cartão · *2* pix · *3* débito." : "Pagou de outro jeito? Responda *1* cartão · *2* pix · *5* VR"}${detective}`;
+  const payLine = splitText && !splitText.includes("somam") && !splitText.includes("não sobra")
+    ? splitText
+    : `Pagamento: ${paymentLabel(paymentMethod, invoiceDate)}.\n${paymentMethod === "cartão" ? PAYMENT_QUESTION : paymentMethod === "ticket" ? "Se não foi no VR, responda *1* cartão · *2* pix · *3* débito." : "Pagou de outro jeito? Responda *1* cartão · *2* pix · *5* VR"}\nPagou parte em cada? Responda *100 no VR e o resto no cartão*.${splitText ? `\n${splitText}` : ""}`;
+  let response = `✅ Nota fiscal de ${brl(invoice.total)} salva com sucesso!\n(${invoice.items.length} itens registrados em detalhes na sua dashboard)\n${payLine}${detective}`;
 
   if (finalMood === "neutro") response += askMoodFor(entry.id, purchaseDate, "Percebi esse gasto.");
 
@@ -4022,6 +4242,7 @@ function flowSnapshot(): Record<string, unknown> {
   return {
     lastSaved, pendingAmount, lastInvoicePayment, pendingHighValue, confirmedHighValueText,
     pendingStatement, pendingImageDraft, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
+    pendingQuotedEdit, pendingSplit, lastNotaEntry,
   };
 }
 
@@ -4045,6 +4266,9 @@ export function restoreFlowStates(): Promise<void> {
       if (g.pendingInvoiceDraft) pendingInvoiceDraft = g.pendingInvoiceDraft;
       if (g.pendingCommitment) pendingCommitment = g.pendingCommitment;
       if (g.lastHistoryIds) lastHistoryIds = g.lastHistoryIds;
+      if (g.pendingQuotedEdit) pendingQuotedEdit = g.pendingQuotedEdit;
+      if (g.pendingSplit) pendingSplit = g.pendingSplit;
+      if (g.lastNotaEntry) lastNotaEntry = g.lastNotaEntry;
       markFlowStatesLoaded(flowSnapshot());
       const voltaram = Object.keys(s);
       if (voltaram.length) console.log(`[estado] recuperado do banco: ${voltaram.join(", ")}`);

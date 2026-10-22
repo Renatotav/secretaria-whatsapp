@@ -239,7 +239,10 @@ export async function POST(request: Request) {
     // Conversa com o próprio número: sempre trata como canal pessoal,
     // independente de fromMe (é assim que o dono se auto-alimenta).
     if (isSelfChat) {
-      bufferMessage(`self:${phone}`, text, { messageTimestamp }, config.debounceSeconds, handleSelfMessage);
+      // Resposta citando uma mensagem (ex.: o cartão de um lançamento antigo).
+      const qm = (rawMessage.extendedTextMessage as { contextInfo?: { quotedMessage?: Record<string, unknown> } } | undefined)?.contextInfo?.quotedMessage;
+      const quoted = qm ? extractText(qm) : "";
+      bufferMessage(`self:${phone}`, text, { messageTimestamp, ...(quoted ? { quoted } : {}) }, config.debounceSeconds, handleSelfMessage);
       return NextResponse.json({ ok: true });
     }
 
