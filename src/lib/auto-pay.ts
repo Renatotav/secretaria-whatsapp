@@ -1,3 +1,4 @@
+import { withReason } from "./finance-reason";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -23,7 +24,7 @@ export async function autoMarkPaid() {
       23, 59, 59
     );
 
-    const result = await prisma.financeEntry.updateMany({
+    const result = await withReason("baixa automática (fatura vencida)", () => prisma.financeEntry.updateMany({
       // Compras e estornos (crédito) da fatura vencida.
       where: {
         paymentMethod: "cartão",
@@ -35,7 +36,7 @@ export async function autoMarkPaid() {
       data: {
         status: "paid"
       }
-    });
+    }));
 
     if (result.count > 0) {
       console.log(`[Auto-Pay] ${result.count} compras no cartão marcadas como pagas (fatura vencida até ${endOfToday.toISOString()})`);

@@ -21,6 +21,8 @@ export async function POST(request: Request) {
   } else if (body.state === "up") {
     msg = `✅ A ponte da tomada voltou${minutos ? ` (ficou ${minutos} min fora)` : ""}. Já estou vigiando as cargas de novo.`;
   } else return NextResponse.json({ error: "state deve ser down ou up" }, { status: 400 });
+  const { notePonte } = await import("@/lib/health");
+  await notePonte(body.state);
   const { notifyOwner } = await import("@/lib/message-handlers");
   const config = await prisma.agentConfig.findFirst();
   if (config) await notifyOwner(config, msg);

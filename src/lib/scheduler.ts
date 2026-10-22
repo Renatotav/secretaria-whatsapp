@@ -272,6 +272,12 @@ export function startScheduler(): void {
         await pruneProcessedMessages().catch((err) => console.error("[webhook] limpeza dos ids falhou", err));
       }
 
+      // Saúde: WhatsApp (Evolution) conectado? A cada 5 min.
+      if (brtDate.getUTCMinutes() % 5 === 0) {
+        const { checkWhatsapp } = await import("./health");
+        await checkWhatsapp(config).catch((err) => console.error("[saúde] checagem falhou", err));
+      }
+
       // Crédito da IA (OpenRouter): confere 3x por dia; abaixo de US$ 2 avisa (1x por dia).
       if ((hhmm === "08:30" || hhmm === "13:30" || hhmm === "19:00") && lastCreditWarnDate !== todayDate && config.ownerPhone) {
         try {

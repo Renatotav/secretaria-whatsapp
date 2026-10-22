@@ -17,7 +17,8 @@ import {
 import { extractAndSaveTickets } from "./ticket-extractor";
 import { parseLocalDate, todayBRT, creditCardBillDate } from "./dates";
 import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
-import type { AgentConfig } from "@prisma/client";
+import { withReason } from "./finance-reason";
+import type { AgentConfig, Prisma } from "@prisma/client";
 
 export function extractText(message: Record<string, unknown>): string {
   return (
@@ -665,6 +666,8 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 70%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa a partir de 70% e mostra a previsão do mês (sobra ou falta, e se vai sair da Reserva).
 🍔 VR (vale): "gastei 45 no almoço no VR" lança na conta do VR; "quanto tenho no VR?" mostra o saldo e quanto dá pra gastar por dia.
 🛍️ Lista de desejos: "quero comprar um tênis de 300 em 3x" anota e diz se cabe; "minha lista de desejos" mostra tudo; ela avisa sozinha quando um desejo passar a caber.
+🕓 "Histórico do aluguel" / "por que a luz mudou?" / "o que mudou hoje?" — cada mudança no lançamento (valor, data, situação…) com o motivo; "desfaz a mudança 2" volta uma delas.
+🩺 "Como está o sistema?" — WhatsApp conectado, última mensagem recebida, ponte da tomada, crédito da IA e há quanto tempo está no ar. Se o WhatsApp cair, a Alexa avisa; quando volta, chega a mensagem.
 👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -1015,6 +1018,89 @@ ${await cardLimitLine()}`;
 ${itens.join("\n")}${spent.length > 8 ? "\n…" : ""}
 
 ${await cardLimitLine()}`;
+}
+
+// ── Histórico do financeiro (FinanceLog, gravado sozinho em prisma.ts) ──────
+// "histórico do aluguel", "por que a luz mudou?", "o que mudou hoje?" e
+// "desfaz a mudança 2" (o número da última lista mostrada).
+let lastHistoryIds: string[] | null = null;
+const HIST_FIELDS = ["amount", "date", "purchaseDate", "status", "description", "category", "subcategory", "paymentMethod", "account", "card", "type"] as const;
+const HIST_LABEL: Record<string, string> = { amount: "valor", date: "data", purchaseDate: "data da compra", status: "situação", description: "nome", category: "categoria", subcategory: "subcategoria", paymentMethod: "pagamento", account: "conta", card: "cartão", type: "tipo" };
+
+function histValue(field: string, v: unknown): string {
+  if (v == null || v === "") return "—";
+  if (field === "amount") return brl(Number(v));
+  if (field === "date" || field === "purchaseDate") { const d = new Date(String(v)); return formatDayMonth(new Date(d.getTime() - 3 * 3600_000 + 12 * 3600_000)); }
+  if (field === "status") return v === "paid" ? "pago" : "a pagar";
+  if (field === "type") return v === "income" ? "entrada" : "saída";
+  return String(v);
+}
+
+function histLine(n: number, l: { at: Date; action: string; description: string; before: unknown; after: unknown; reason: string }): string {
+  const quando = new Date(l.at.getTime() - 3 * 3600_000).toISOString().slice(5, 16).replace(/(\d\d)-(\d\d)T/, "$2/$1 ");
+  const b = (l.before ?? {}) as Record<string, unknown>, a = (l.after ?? {}) as Record<string, unknown>;
+  let what: string;
+  if (l.action === "create") what = `➕ criado: ${l.description} — ${histValue("amount", a.amount)} (${histValue("date", a.date)})`;
+  else if (l.action === "delete") what = `🗑️ apagado: ${l.description} — ${histValue("amount", b.amount)} (${histValue("date", b.date)})`;
+  else {
+    const diffs = HIST_FIELDS.filter((f) => histValue(f, b[f]) !== histValue(f, a[f])).map((f) => `${HIST_LABEL[f]} ${histValue(f, b[f])} → ${histValue(f, a[f])}`);
+    what = `✏️ ${l.description}: ${diffs.length ? diffs.join("; ") : "sem mudança visível"}`;
+  }
+  return `*${n}.* ${quando} · ${what}\n   ↳ motivo: ${l.reason || "não registrado"}`;
+}
+
+export async function applyHistoryCommand(text: string): Promise<string | null> {
+  const t = text.trim();
+  const undo = t.match(/^desfa(?:z|ça|ca|zer)\s+(?:a\s+)?mudan[cç]a\s+(\d{1,2})[.!]?$/i);
+  if (undo) {
+    const id = lastHistoryIds?.[Number(undo[1]) - 1];
+    if (!id) return "Não achei essa mudança. Peça o histórico de novo (\"histórico do aluguel\", \"o que mudou hoje?\") e use o número da lista.";
+    return withReason(`desfazer a mudança ${undo[1]} do histórico`, () => undoFinanceLog(id));
+  }
+  let where: Record<string, unknown> | null = null;
+  let titulo = "";
+  if (/^(?:o\s+)?q(?:ue)?\s+mudou(?:\s+(?:hoje|no\s+financeiro(?:\s+hoje)?))?\??$|^mudan[cç]as\s+de\s+hoje\??$/i.test(t)) {
+    const hj = todayBRT();
+    where = { at: { gte: new Date(Date.UTC(hj.getFullYear(), hj.getMonth(), hj.getDate(), 3)) } };
+    titulo = "🕓 *O que mudou hoje no financeiro*";
+  } else {
+    const m = t.match(/^hist[oó]rico\s+(?:d[oae]s?\s+)?(.{2,60}?)\??$/i) || t.match(/^por\s*que\s+(?:o\s+|a\s+|os\s+|as\s+)?(.{2,60}?)\s+mudou\??$/i);
+    if (!m) return null;
+    where = { description: { contains: m[1].trim(), mode: "insensitive" } };
+    titulo = `🕓 *Histórico: ${m[1].trim()}*`;
+  }
+  const logs = await prisma.financeLog.findMany({ where, orderBy: { at: "desc" }, take: 10 });
+  if (!logs.length) return `${titulo}\nNada registrado. (O histórico começou a ser gravado em 22/10/2026.)`;
+  lastHistoryIds = logs.map((l) => l.id);
+  return `${titulo}\n\n${logs.map((l, i) => histLine(i + 1, l)).join("\n")}\n\nPara voltar uma mudança: *desfaz a mudança N*.`;
+}
+
+/** Volta uma linha do histórico: alteração → valores de antes; criação → apaga; exclusão → recria. */
+async function undoFinanceLog(logId: string): Promise<string> {
+  const l = await prisma.financeLog.findUnique({ where: { id: logId } });
+  if (!l) return "Essa mudança não existe mais.";
+  const b = (l.before ?? {}) as Record<string, unknown>;
+  const asData = (src: Record<string, unknown>) => {
+    const d: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(src)) d[k] = (k === "date" || k === "purchaseDate" || k === "createdAt" || k === "updatedAt") && typeof v === "string" ? new Date(v) : v;
+    return d;
+  };
+  const atual = l.entryId ? await prisma.financeEntry.findUnique({ where: { id: l.entryId } }) : null;
+  if (l.action === "create") {
+    if (!atual) return `"${l.description}" já não existe — nada a desfazer.`;
+    await prisma.financeEntry.delete({ where: { id: atual.id } });
+    return `↩️ Apaguei "${atual.description}" (${brl(atual.amount)}), criado nessa mudança.`;
+  }
+  if (l.action === "delete") {
+    if (atual) return `"${l.description}" já existe de novo — nada a desfazer.`;
+    await prisma.financeEntry.create({ data: asData(b) as Prisma.FinanceEntryUncheckedCreateInput });
+    return `↩️ Recriei "${l.description}" (${histValue("amount", b.amount)}, ${histValue("date", b.date)}).${/nota|invoice/i.test(String(b.source ?? "")) ? " Os itens da nota não voltam." : ""}`;
+  }
+  if (!atual) return `"${l.description}" foi apagado depois — não dá para voltar essa alteração.`;
+  const volta: Record<string, unknown> = {};
+  for (const f of HIST_FIELDS) if (f in b) volta[f] = b[f];
+  await prisma.financeEntry.update({ where: { id: atual.id }, data: asData(volta) });
+  return `↩️ "${atual.description}" voltou ao que era: ${histValue("amount", b.amount)}, ${histValue("date", b.date)}, ${histValue("status", b.status)}.`;
 }
 
 const ATTENTION_RE = /^\s*(?:(?:o\s*)?q(?:ue)?\s+(?:é\s+que\s+)?(?:precisa|tem|falta)\s+(?:de\s+)?(?:da\s+)?(?:minha\s+aten[cç][aã]o|(?:pra|para)\s+eu\s+(?:fazer|resolver|ver)|eu\s+(?:fazer|resolver|ver))|(?:minhas\s+)?pend[eê]ncias|tem\s+alguma\s+pend[eê]ncia)\s*\??\s*$/i;
@@ -1989,6 +2075,9 @@ let pendingHighValue: { text: string; at: number } | null = null;
 let confirmedHighValueText: string | null = null;
 
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
+  return withReason(`mensagem: "${joinedText.trim().slice(0, 120)}"`, () => handleSelfMessageInner(joinedText, _meta));
+}
+async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   await restoreFlowStates();
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
@@ -2032,7 +2121,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
@@ -2918,6 +3007,9 @@ let pendingStatement: { text: string; sections: CardSection[]; total: number | n
 const STATEMENT_CHOICE_WINDOW_MS = 30 * 60 * 1000;
 
 export async function handleStatementDocument(statementText: string): Promise<void> {
+  return withReason(`fatura em PDF`, () => handleStatementDocumentInner(statementText));
+}
+async function handleStatementDocumentInner(statementText: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
@@ -3171,6 +3263,9 @@ const CONFIRM_NO_RE = /^(n[aã]o|nao|cancela|deixa|esquece)[.!]*$/i;
  * "Confirma?" (nada é gravado sem o "sim"); outra coisa é explicada.
  */
 export async function handleSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
+  return withReason(`print${caption ? ` ("${caption.slice(0, 60)}")` : ""}`, () => handleSmartImageInner(base64, mimetype, caption));
+}
+async function handleSmartImageInner(base64: string, mimetype: string, caption: string): Promise<void> {
   try {
     await readSmartImage(base64, mimetype, caption);
   } finally {
@@ -3301,6 +3396,9 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
 }
 
 export async function handleStatementImage(base64: string, mimetype: string): Promise<void> {
+  return withReason(`print da fatura`, () => handleStatementImageInner(base64, mimetype));
+}
+async function handleStatementImageInner(base64: string, mimetype: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
@@ -3352,6 +3450,9 @@ async function priceChanges(entryId: string, items: { name: string; amount: numb
 }
 
 export async function handleInvoiceImage(base64: string, mimetype: string, caption: string): Promise<void> {
+  return withReason(`foto da nota fiscal`, () => handleInvoiceImageInner(base64, mimetype, caption));
+}
+async function handleInvoiceImageInner(base64: string, mimetype: string, caption: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
@@ -3913,7 +4014,7 @@ export async function billsDueSpeech(): Promise<string> {
 function flowSnapshot(): Record<string, unknown> {
   return {
     lastSaved, pendingAmount, lastInvoicePayment, pendingHighValue, confirmedHighValueText,
-    pendingStatement, pendingImageDraft, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment,
+    pendingStatement, pendingImageDraft, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
   };
 }
 
@@ -3936,6 +4037,7 @@ export function restoreFlowStates(): Promise<void> {
       if (g.pendingMoodAsk) pendingMoodAsk = g.pendingMoodAsk;
       if (g.pendingInvoiceDraft) pendingInvoiceDraft = g.pendingInvoiceDraft;
       if (g.pendingCommitment) pendingCommitment = g.pendingCommitment;
+      if (g.lastHistoryIds) lastHistoryIds = g.lastHistoryIds;
       markFlowStatesLoaded(flowSnapshot());
       const voltaram = Object.keys(s);
       if (voltaram.length) console.log(`[estado] recuperado do banco: ${voltaram.join(", ")}`);

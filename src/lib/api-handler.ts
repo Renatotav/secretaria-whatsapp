@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withReason } from "./finance-reason";
 
 /**
  * Garante que toda rota sempre devolve JSON, mesmo se algo (ex: Prisma)
@@ -11,7 +12,7 @@ export function withErrorHandling<Args extends unknown[]>(
 ) {
   return async (...args: Args): Promise<Response> => {
     try {
-      return await handler(...args);
+      return await withReason("painel", () => handler(...args));
     } catch (err) {
       console.error("[api]", err);
       return NextResponse.json(

@@ -1,3 +1,4 @@
+import { withReason } from "./finance-reason";
 import { prisma } from "./prisma";
 
 // Previsões fixas (aluguel, salário, VR, luz, internet, academia, assinaturas…)
@@ -41,7 +42,8 @@ export async function rollForecasts(hoje = new Date()): Promise<{ series: number
       });
     }
     if (!novos.length) continue;
-    await prisma.financeEntry.createMany({ data: novos });
+    const dados = novos;
+    await withReason("previsões (12 meses à frente)", () => prisma.financeEntry.createMany({ data: dados }));
     series++;
     criados += novos.length;
   }

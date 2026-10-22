@@ -62,16 +62,34 @@ export function maskPersonalData(text: string): string {
 /**
  * Para a IA corrigir/reescrever sem ver dado pessoal: CPF, telefone e e-mail
  * viram ⟦1⟧, ⟦2⟧… e voltam depois, idênticos. O texto dele fica intacto.
+ * Com termos=true, números de processo e nomes entre colchetes ([Analisar
+ * petição]) também viram marcador: a IA não tem como mexer neles.
  */
-export function protectPersonalData(text: string): { text: string; restore: (out: string) => string; count: number } {
+export function protectPersonalData(text: string, termos = false): { text: string; restore: (out: string) => string; count: number; marks: string[] } {
   const vals: string[] = [];
   const marca = (m: string) => {
     let i = vals.indexOf(m);
     if (i < 0) i = vals.push(m) - 1;
     return `⟦${i + 1}⟧`;
   };
-  const t = trocarDados(text, { email: marca, cpf: marca, tel: marca });
-  return { text: t, count: vals.length, restore: (out: string) => out.replace(/⟦(\d+)⟧/g, (m, i) => vals[Number(i) - 1] ?? m) };
+  let t = text;
+  if (termos) t = t.replace(CNJ, marca).replace(COLCHETES, marca);
+  t = trocarDados(t, { email: marca, cpf: marca, tel: marca });
+  return { text: t, count: vals.length, marks: vals.map((_v, i) => `⟦${i + 1}⟧`), restore: (out: string) => out.replace(/⟦(\d+)⟧/g, (m, i) => vals[Number(i) - 1] ?? m) };
+}
+
+/** Nome de tarefa/fluxo entre colchetes, numa linha só. */
+const COLCHETES = /\[[^\[\]\n]{1,120}\]/g;
+
+/**
+ * O que a IA tinha que devolver igual e não devolveu: marcadores sumidos e
+ * números longos (chamado, documento, Redmine — 5+ dígitos) que mudaram.
+ */
+export function missingTerms(input: string, out: string, marks: string[]): string[] {
+  const faltam = marks.filter((m) => !out.includes(m));
+  const numeros = new Set((input.match(/(?<![\d⟦])\d{5,}(?![\d⟧])/g) || []));
+  for (const n of numeros) if (!out.includes(n)) faltam.push(n);
+  return faltam;
 }
 
 /** Só tira e-mail e telefone (o CPF fica): texto que vai para o Redmine — a TI usa o CPF. */

@@ -117,13 +117,16 @@ export async function runWorkSkill(
   // Corretores e "melhorar a escrita": a IA não vê CPF/telefone/e-mail
   // (viram ⟦1⟧…) e eles voltam idênticos no texto final.
   const protege = key === "corrigir" || key === "corrigir-whatsapp" || key === "escrever";
+  // Também números de processo e [nomes de tarefa]: a IA recebe só o marcador.
   let restaurar = (t: string) => t;
+  let marcas: string[] = [];
   if (protege) {
     const { protectPersonalData } = await import("./work-privacy");
-    const p = protectPersonalData(input);
+    const p = protectPersonalData(input, true);
     if (p.count) {
       input = p.text;
       restaurar = p.restore;
+      marcas = p.marks;
     }
   }
   // Redmine: telefone e e-mail não entram (nem vão para a IA); o CPF fica.
@@ -210,7 +213,7 @@ export async function runWorkSkill(
           }Você está sendo usado por um botão da extensão do navegador (não há conversa: é um pedido só). ` +
           "Responda direto com o resultado final em português, pronto para copiar. Não faça perguntas; se faltar informação, indique entre colchetes no próprio texto. " +
           "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto." +
-          (protege ? " Marcadores como ⟦1⟧, ⟦2⟧ substituem dados pessoais: mantenha cada um exatamente como está, no mesmo lugar." : "") +
+          (protege ? " Marcadores como ⟦1⟧, ⟦2⟧ substituem dados pessoais, números de processo e nomes de tarefa: mantenha cada um exatamente como está, no mesmo lugar, sem acrescentar colchetes nem palavras em volta." : "") +
           (usesContext && ticketRaw ? `\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +
           context +
           extra,
@@ -229,6 +232,23 @@ export async function runWorkSkill(
   let out = res.choices[0]?.message?.content?.trim() || "";
   if (!out) throw new Error("A IA não devolveu texto. Tente de novo.");
   const tokens = { input: res.usage?.prompt_tokens ?? 0, output: res.usage?.completion_tokens ?? 0 };
+
+  // Trava dos corretores, em código: marcador sumido ou número longo mudado →
+  // refaz uma vez; se ainda faltar, não devolve (o texto dele fica como estava).
+  if (protege) {
+    const { missingTerms } = await import("./work-privacy");
+    let faltam = missingTerms(input, out, marcas);
+    if (faltam.length) {
+      console.warn(`[trabalho] IA ${key}: ${faltam.length} termo(s) protegido(s) sumiram — refazendo`);
+      res = await pedir(`\n\nATENÇÃO: na resposta anterior sumiram ou mudaram estes trechos, que precisam voltar exatamente iguais e no mesmo lugar: ${faltam.join(", ")}. Refaça.`);
+      tokens.input += res.usage?.prompt_tokens ?? 0;
+      tokens.output += res.usage?.completion_tokens ?? 0;
+      const nova = res.choices[0]?.message?.content?.trim() || "";
+      if (nova) out = nova;
+      faltam = missingTerms(input, out, marcas);
+      if (faltam.length) throw new Error(`A correção mudou ou tirou ${faltam.length === 1 ? "um trecho que" : "trechos que"} não pode mexer (${restaurar(faltam.join(", "))}). Não troquei o texto — tente de novo ou corrija à mão.`);
+    }
+  }
 
   if (conferencia && conferencia.status === "OK") {
     // Etapa final, em código: título + corpo (sem o comparativo, que copia o original).

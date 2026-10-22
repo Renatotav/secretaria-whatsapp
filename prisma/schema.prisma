@@ -473,3 +473,21 @@ model FlowState {
   value     Json
   updatedAt DateTime @updatedAt
 }
+
+/// Histórico de cada mudança nos lançamentos (criado, alterado, apagado), com o
+/// antes, o depois e o motivo. Gravado sozinho em src/lib/prisma.ts.
+model FinanceLog {
+  id          String   @id @default(cuid())
+  at          DateTime @default(now())
+  entryId     String   @default("")
+  /// "create" | "update" | "delete"
+  action      String
+  description String   @default("")
+  before      Json?
+  after       Json?
+  /// De onde veio: a mensagem dele, "painel", "fatura importada", "baixa automática"…
+  reason      String   @default("")
+
+  @@index([entryId])
+  @@index([at])
+}
