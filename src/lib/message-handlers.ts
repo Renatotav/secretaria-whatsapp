@@ -670,6 +670,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🩺 "Como está o sistema?" — WhatsApp conectado, última mensagem recebida, ponte da tomada, crédito da IA e há quanto tempo está no ar. Se o WhatsApp cair, a Alexa avisa; quando volta, chega a mensagem.
 ✏️ Corrigir um lançamento antigo: *responda* (citando) a mensagem dele com "foi no pix", "era 32,50", "foi dia 15/10" ou "apaga" — ela mostra a mudança e espera o "sim".
 ✂️ Pagou parte em cada (nota ou gasto): "100 no VR e 80 no cartão" ou "25 no vale antigo e o resto no cartão" — na legenda da foto da nota, logo depois dela, ou respondendo à mensagem do lançamento.
+🧪 "Testa a ia" — laboratório com mensagens e textos inventados: quantas a IA acertou, tempo e custo; "testa a ia com <modelo>" compara um candidato antes de trocar.
 👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -2331,7 +2332,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t)));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;

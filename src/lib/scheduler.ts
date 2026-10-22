@@ -27,11 +27,48 @@ let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai
 let ticking = false; // uma volta por vez: se a anterior ainda roda, pula esta
 let dbPushChecked = false; // start.sh deixa /tmp/db-push-falhou quando recusou mudar as tabelas
 
+// "Já fiz hoje" de cada rotina, guardado no banco (FlowState "scheduler:flags"):
+// um deploy na hora de um aviso não manda o aviso de novo. Lido a cada volta
+// (a versão nova e a antiga convivem uns segundos durante o deploy).
+const FLAGS_KEY = "scheduler:flags";
+let flagsJson = "";
+async function loadFlags(): Promise<void> {
+  const row = await prisma.flowState.findUnique({ where: { key: FLAGS_KEY } });
+  if (!row) return;
+  const f = row.value as Record<string, unknown>;
+  if (f.lastSummaryDate !== undefined) lastSummaryDate = f.lastSummaryDate as typeof lastSummaryDate;
+  if (f.lastWeeklyDate !== undefined) lastWeeklyDate = f.lastWeeklyDate as typeof lastWeeklyDate;
+  if (f.lastFinanceReminderDate !== undefined) lastFinanceReminderDate = f.lastFinanceReminderDate as typeof lastFinanceReminderDate;
+  if (f.lastMonthClosingDate !== undefined) lastMonthClosingDate = f.lastMonthClosingDate as typeof lastMonthClosingDate;
+  if (f.lastWishCheckDate !== undefined) lastWishCheckDate = f.lastWishCheckDate as typeof lastWishCheckDate;
+  if (f.lastReminderHour !== undefined) lastReminderHour = f.lastReminderHour as typeof lastReminderHour;
+  if (f.lastWorkBriefDate !== undefined) lastWorkBriefDate = f.lastWorkBriefDate as typeof lastWorkBriefDate;
+  if (f.lastMorningDate !== undefined) lastMorningDate = f.lastMorningDate as typeof lastMorningDate;
+  if (f.lastTireDate !== undefined) lastTireDate = f.lastTireDate as typeof lastTireDate;
+  if (f.lastSalaryNudgeDate !== undefined) lastSalaryNudgeDate = f.lastSalaryNudgeDate as typeof lastSalaryNudgeDate;
+  if (f.lastCreditWarnDate !== undefined) lastCreditWarnDate = f.lastCreditWarnDate as typeof lastCreditWarnDate;
+  if (f.lastForecastRollDate !== undefined) lastForecastRollDate = f.lastForecastRollDate as typeof lastForecastRollDate;
+  if (f.lastBuddyInvoiceDate !== undefined) lastBuddyInvoiceDate = f.lastBuddyInvoiceDate as typeof lastBuddyInvoiceDate;
+  if (f.lastInvoiceEveDate !== undefined) lastInvoiceEveDate = f.lastInvoiceEveDate as typeof lastInvoiceEveDate;
+  if (f.lastWorkAlertSlot !== undefined) lastWorkAlertSlot = f.lastWorkAlertSlot as typeof lastWorkAlertSlot;
+  if (f.lastEscalaSync !== undefined) lastEscalaSync = f.lastEscalaSync as typeof lastEscalaSync;
+  if (f.lastAnsweredRequest !== undefined) lastAnsweredRequest = f.lastAnsweredRequest as typeof lastAnsweredRequest;
+  flagsJson = JSON.stringify({ lastSummaryDate, lastWeeklyDate, lastFinanceReminderDate, lastMonthClosingDate, lastWishCheckDate, lastReminderHour, lastWorkBriefDate, lastMorningDate, lastTireDate, lastSalaryNudgeDate, lastCreditWarnDate, lastForecastRollDate, lastBuddyInvoiceDate, lastInvoiceEveDate, lastWorkAlertSlot, lastEscalaSync, lastAnsweredRequest });
+}
+async function saveFlags(): Promise<void> {
+  const json = JSON.stringify({ lastSummaryDate, lastWeeklyDate, lastFinanceReminderDate, lastMonthClosingDate, lastWishCheckDate, lastReminderHour, lastWorkBriefDate, lastMorningDate, lastTireDate, lastSalaryNudgeDate, lastCreditWarnDate, lastForecastRollDate, lastBuddyInvoiceDate, lastInvoiceEveDate, lastWorkAlertSlot, lastEscalaSync, lastAnsweredRequest });
+  if (json === flagsJson) return;
+  const value = JSON.parse(json);
+  await prisma.flowState.upsert({ where: { key: FLAGS_KEY }, create: { key: FLAGS_KEY, value }, update: { value } });
+  flagsJson = json;
+}
+
 export function startScheduler(): void {
   setInterval(async () => {
     if (ticking) return;
     ticking = true;
     try {
+      await loadFlags().catch((err) => console.error("[agendador] não leu as marcas do banco", err));
       const config = await prisma.agentConfig.findFirst();
       if (!config) return;
 
@@ -395,6 +432,7 @@ export function startScheduler(): void {
     } catch {
       // scheduler errors are non-fatal
     } finally {
+      await saveFlags().catch((err) => console.error("[agendador] não gravou as marcas", err));
       ticking = false;
     }
   }, 60_000);
