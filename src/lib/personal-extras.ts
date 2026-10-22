@@ -193,21 +193,31 @@ async function unitPriceReport(q: string): Promise<string> {
 }
 
 // ── 4) Caixa de ideias e links ────────────────────────────────────────────
-/** Endereço público? (nada de rede interna, loopback, link-local…) */
+/**
+ * Endereço público? IPv4 fora de rede interna/loopback/link-local/CGNAT; IPv6
+ * só da faixa pública 2000::/3 (sem 6to4, Teredo e documentação) — mapeado
+ * (::ffff:…), loopback, link-local e local ficam de fora. O link é guardado
+ * de qualquer jeito; só não busca o título. Risco que sobra (nome que troca de
+ * IP entre a conferência e a conexão) é aceito: só o dono manda links aqui.
+ */
+function ipPublico(address: string, family: number): boolean {
+  if (family === 4) {
+    const [x, y] = address.split(".").map(Number);
+    return !(x === 0 || x === 10 || x === 127 || (x === 100 && y >= 64 && y <= 127) || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && (y === 168 || y === 0)) || (x === 198 && (y === 18 || y === 19)) || x >= 224);
+  }
+  const a = address.toLowerCase();
+  if (!/^[23][0-9a-f]{0,3}:/.test(a)) return false; // fora de 2000::/3
+  const h = a.split(":");
+  const p1 = parseInt(h[0], 16), p2 = parseInt(h[1] || "0", 16);
+  return !(p1 === 0x2002 || (p1 === 0x2001 && (p2 === 0 || p2 === 0xdb8)));
+}
+
 async function hostPublico(host: string): Promise<boolean> {
   const { lookup } = await import("node:dns/promises");
   const { isIP } = await import("node:net");
-  const ips = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => []);
-  if (!ips.length) return false;
-  return ips.every(({ address: a }) => {
-    const v4 = a.replace(/^::ffff:/i, "");
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) {
-      const [x, y] = v4.split(".").map(Number);
-      return !(x === 0 || x === 10 || x === 127 || (x === 100 && y >= 64 && y <= 127) || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || x >= 224);
-    }
-    const h = a.toLowerCase();
-    return !(h === "::1" || h === "::" || h.startsWith("fe80") || h.startsWith("fc") || h.startsWith("fd"));
-  });
+  const v = isIP(host);
+  const ips = v ? [{ address: host, family: v }] : await lookup(host, { all: true }).catch(() => []);
+  return ips.length > 0 && ips.every((i) => ipPublico(i.address, i.family));
 }
 
 /** Título da página (só endereço público, até 3 redirecionamentos conferidos um a um). */
