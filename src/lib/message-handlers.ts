@@ -677,6 +677,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🛒 "O que preciso comprar?" — pelas notas fiscais: o que você compra sempre e já passou do intervalo de costume.
 🏷️ "Preço do café" / "o café ficou mais caro?" — compara por quilo/litro (pega o tamanho do nome do item), não só pelo preço da embalagem.
 📥 Caixa de ideias e links: "guarda: …", "guarda esse link https://…", "ideia: …"; "o que eu guardei sobre X?", "minhas notas", "apaga nota 3".
+📊 "Uso da extensão" — quantas vezes você usou cada função da Central (botões de IA, ⚡, corretor, CRM…) e o que nunca usou. Atalhos de texto não entram.
 👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -2420,7 +2421,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await (await import("./personal-extras")).applyExtrasCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await (await import("./personal-extras")).applyExtrasCommand(joinedText)) ?? (await (await import("./work-usage")).applyUsageCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;

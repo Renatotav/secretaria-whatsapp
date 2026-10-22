@@ -534,3 +534,14 @@ model Note {
 
   @@index([createdAt])
 }
+
+/// Uso das funções da extensão por dia (só o nome da função e quantas vezes —
+/// nenhum texto). Para ele decidir o que tirar. feature ex.: "⚡ painel aberto",
+/// "ia:corrigir", "👥 CRM aberto".
+model WorkUsage {
+  day     String
+  feature String
+  count   Int    @default(0)
+
+  @@id([day, feature])
+}

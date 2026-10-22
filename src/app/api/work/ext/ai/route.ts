@@ -10,6 +10,8 @@ export async function POST(request: Request) {
   const key = String(body?.skill || "");
   try {
     const r = await runWorkSkill(key, String(body?.text || ""), body?.ticketId ? String(body.ticketId) : undefined, body?.plain === true);
+    // Conta qual botão de IA foi usado (só o nome da skill).
+    import("@/lib/work-usage").then(({ addUsage }) => addUsage({ [`ia:${key}${r.skill !== key ? `→${r.skill}` : ""}`]: 1 })).catch(() => {});
     console.log(`[trabalho] IA ${key}: ${r.model} · ${r.tokens.input}+${r.tokens.output} tokens`);
     return NextResponse.json(r);
   } catch (err) {
