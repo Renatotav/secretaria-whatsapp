@@ -21,6 +21,7 @@ type Dados = {
   tireDue: boolean;
   tireNext: string;
   tirePsi: { front: number; rear: number };
+  economia: { corrida: number; corridasBase: number; dias: number; diasMes: number; total: number; mes: number; uberMes: number } | null;
   tireDays: number | null;
   cargas: Carga[];
   leituras: Leitura[];
@@ -113,6 +114,30 @@ function Painel({ d }: { d: Dados }) {
         <Kpi titulo="ODO" valor={d.odoNow != null ? `${n(d.odoNow)} km` : "—"} dica={d.leituras.length ? `última: ${dia(d.leituras.at(-1)!.at)}` : ""}
           explica="Último km que você mandou (texto ou vídeo do painel). Mande todo dia ao chegar para o gráfico ficar certo." />
       </div>
+
+      {d.economia && (
+        <div style={{ ...card, display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600 }}>💸 Quanto a scooter me economizou</h2>
+            <span style={muted}>em vez de Uber</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
+            <div style={{ display: "grid", gap: 2 }}>
+              <span style={muted}>Neste mês</span>
+              <strong style={{ fontSize: 22, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{brl(Math.max(0, d.economia.mes))}</strong>
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Uber seria {brl(d.economia.uberMes)} · energia {brl(d.mesKwh * d.price)}</span>
+            </div>
+            <div style={{ display: "grid", gap: 2 }}>
+              <span style={muted}>Desde que começou</span>
+              <strong style={{ fontSize: 22, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{brl(Math.max(0, d.economia.total))}</strong>
+              <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{d.economia.dias} dias úteis rodando</span>
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
+            Estimativa: dias úteis em que o ODO subiu × 2 corridas (ida e volta) × {brl(d.economia.corrida)}, a média das suas {d.economia.corridasBase} corridas de Uber lançadas — menos a energia das cargas. Não desconta as parcelas da moto.
+          </div>
+        </div>
+      )}
 
       <GraficoKm leituras={d.leituras} cargas={d.cargas} media={d.kmDia} />
 

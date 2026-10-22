@@ -941,6 +941,37 @@ export async function cardLimitLine(): Promise<string> {
     : `🔴 ${month[0].toUpperCase()}${month.slice(1)} já passou do salário em ${brl(-left)}${note}. Até ${formatDayMonth(close)}, cada compra no cartão aumenta isso — comida, no VR.`) + comida;
 }
 
+/**
+ * 🏁 Desafio do limite (pedido dele, 22/10/2026): dias seguidos em que o gasto
+ * no cartão ficou dentro do que cabe por dia até o fechamento da fatura.
+ * Conta de hoje para trás; mostra também o recorde desta fatura.
+ */
+export async function limitChallengeLine(): Promise<string> {
+  const { left, close, days } = await cardLimitData();
+  const porDia = Math.max(0, left / days);
+  const ini = new Date(close.getFullYear(), close.getMonth() - 1, close.getDate() + 1, 12); // 1º dia desta fatura
+  const hoje = todayBRT();
+  const compras = await prisma.financeEntry.findMany({
+    where: { type: "expense", paymentMethod: "cartão", card: "", purchaseDate: { gte: dayRange(ini).gte, lte: dayRange(hoje).lte }, NOT: [{ description: { contains: "Parcela" } }, { description: { contains: "(previsto)" } }] },
+    select: { amount: true, purchaseDate: true },
+  });
+  const chave = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  const porData = new Map<string, number>();
+  for (const c of compras) if (c.purchaseDate) porData.set(chave(c.purchaseDate), (porData.get(chave(c.purchaseDate)) ?? 0) + c.amount);
+  let atual = 0, recorde = 0, corrida = 0, contandoAtual = true;
+  // De hoje para trás: a sequência atual; e o maior trecho desde o início da fatura.
+  for (let d = new Date(hoje); d >= ini; d.setDate(d.getDate() - 1)) {
+    const dentro = (porData.get(chave(d)) ?? 0) <= porDia + 0.01;
+    if (dentro) { corrida++; if (contandoAtual) atual++; } else { recorde = Math.max(recorde, corrida); corrida = 0; contandoAtual = false; }
+  }
+  recorde = Math.max(recorde, corrida);
+  const fechaHoje = hoje.getDate() === close.getDate() && hoje.getMonth() === close.getMonth();
+  if (fechaHoje) return left >= 0 ? "🏆 *Fatura fechada sem passar do salário!* Parabéns, segurou firme." : `😬 A fatura fechou ${brl(-left)} acima do salário. Próxima rodada começa amanhã.`;
+  const meta = porDia >= 1 ? `até ${brl(porDia)}/dia` : "sem gastar no cartão";
+  if (!atual) return `🏁 Desafio: hoje passou do limite. Amanhã recomeça (${meta}). Recorde desta fatura: ${recorde} dia(s).`;
+  return `🔥 Desafio: ${atual} dia(s) seguido(s) dentro do limite (${meta})${recorde > atual ? ` · recorde desta fatura: ${recorde}` : " · é o seu recorde nesta fatura!"}`;
+}
+
 const MESES_FALA = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const reaisFala = (v: number) => `${Math.round(v)} reais`;
 
@@ -1122,6 +1153,7 @@ export async function buildDailyDigest(): Promise<string> {
   }
   lines.push((await monthForecastLine(today.getFullYear(), today.getMonth())).trim());
   lines.push(await cardLimitLine());
+  lines.push(await limitChallengeLine().catch(() => ""));
   const vr = await vrBalanceShort();
   if (vr) {
     lines.push(vr);
