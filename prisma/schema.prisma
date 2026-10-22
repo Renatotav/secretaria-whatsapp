@@ -511,3 +511,26 @@ model FinanceLog {
   @@index([entryId])
   @@index([at])
 }
+
+/// Regras de categoria aprovadas pelo dono ("farmácia pague menos é Saúde ›
+/// Farmácia"): valem antes da IA e da memória por loja. pattern = trecho da
+/// descrição, minúsculo e sem acento.
+model CategoryRule {
+  id          String   @id @default(cuid())
+  pattern     String   @unique
+  category    String
+  subcategory String   @default("")
+  hits        Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+/// Caixa de ideias e links ("guarda esse link …", "ideia: …").
+model Note {
+  id        String   @id @default(cuid())
+  text      String
+  url       String   @default("")
+  title     String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

@@ -673,6 +673,10 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🧪 "Testa a ia" — laboratório com mensagens e textos inventados: quantas a IA acertou, tempo e custo; "testa a ia com <modelo>" compara um candidato antes de trocar.
 🧮 "Por que meu limite é esse?" — a conta do limite do cartão aberta: entradas, fatura, contas e o que sobra por dia.
 📦 Vários pedidos numa mensagem: "gastei 25 no mercado, registra 120 km na scooter e me lembra de calibrar sábado" — ela separa e faz um por um (gasto a partir de R$ 500 vai sozinho, para confirmar).
+📏 Regras de categoria: "regra: farmácia pague menos é Saúde › Farmácia" (vale antes da IA); "minhas regras" lista e sugere lojas que você corrigiu várias vezes; "apaga regra 2".
+🛒 "O que preciso comprar?" — pelas notas fiscais: o que você compra sempre e já passou do intervalo de costume.
+🏷️ "Preço do café" / "o café ficou mais caro?" — compara por quilo/litro (pega o tamanho do nome do item), não só pelo preço da embalagem.
+📥 Caixa de ideias e links: "guarda: …", "guarda esse link https://…", "ideia: …"; "o que eu guardei sobre X?", "minhas notas", "apaga nota 3".
 👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
@@ -2416,7 +2420,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t)));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await (await import("./personal-extras")).applyExtrasCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
@@ -2487,6 +2491,12 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       });
       break;
     case "finance": {
+      // Regra de categoria aprovada por ele vale antes da escolha da IA.
+      if (route.financeType === "expense") {
+        const { categoryRuleFor } = await import("./personal-extras");
+        const regra = await categoryRuleFor(route.description || "", joinedText).catch(() => null);
+        if (regra) Object.assign(route, { category: regra.category, subcategory: regra.subcategory });
+      }
       // Sem valor ("gastei com uber"): não grava, pergunta e espera a resposta.
       if (!(route.amount > 0)) {
         if ((imageReading || pendingImageDraft) && Date.now() - imageArrivedAt < IMAGE_NOTE_WINDOW_MS && route.financeType !== "income") {
@@ -2749,8 +2759,12 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
         if (!targetGoal) {
           response = `❌ Não encontrei a meta "${route.goalName}". As metas que você tem são: ${goals.map((g) => g.name).join(", ")}.`;
         } else {
-          // "Tirei/usei/saquei X da reserva" = retirada, mesmo se a IA mandar positivo.
-          const isWithdraw = route.amount < 0 || /\b(tirei|retirei|saquei|usei|peguei)\b/i.test(joinedText);
+          // "Tirei/usei/saquei X da reserva" = retirada, mesmo se a IA mandar positivo;
+          // "guarda/coloca/deposita X" = depósito, mesmo se a IA mandar negativo
+          // (teste de 22/10: "guarda 100 na reserva" voltou com -100 e virou retirada).
+          const saida = /\b(tira|tirei|retira|retirei|saca|saquei|usa|usei|pega|peguei)\b/i.test(joinedText);
+          const entrada = /\b(guarda|guardei|guardar|coloca|coloquei|deposita|depositei|p[oõ]e|pus|junta|juntei)\b/i.test(joinedText);
+          const isWithdraw = saida || (route.amount < 0 && !entrada);
           const delta = isWithdraw ? -Math.abs(route.amount) : Math.abs(route.amount);
           const newAmount = Math.max(0, targetGoal.currentAmount + delta);
           await prisma.savingsGoal.update({
@@ -2984,8 +2998,18 @@ async function applyMerchantMemory(entries: StatementEntry[]): Promise<Statement
     const key = merchantKey(h.description);
     if (key && !known.has(key)) known.set(key, { category: h.category, subcategory: h.subcategory });
   }
-  return entries.map((e) => {
-    if (e.type !== "expense") return e;
+  const { categoryRuleFor } = await import("./personal-extras");
+  const out: StatementEntry[] = [];
+  const porRegra = new Set<StatementEntry>();
+  for (const e of entries) {
+    // Regra aprovada por ele vem antes da memória por loja.
+    const regra = e.type === "expense" ? await categoryRuleFor(e.description).catch(() => null) : null;
+    const x = regra ? { ...e, category: regra.category, subcategory: regra.subcategory } : e;
+    if (regra) porRegra.add(x);
+    out.push(x);
+  }
+  return out.map((e) => {
+    if (e.type !== "expense" || porRegra.has(e)) return e;
     const key = merchantKey(e.description);
     if (!key || MARKETPLACE_RE.test(key)) return e;
     const k = known.get(key);
