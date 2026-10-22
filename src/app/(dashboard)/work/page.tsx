@@ -317,7 +317,7 @@ function SnippetsEditor() {
     setMsg(
       rejeitados.length
         ? `⚠️ Salvei ${data.snippets.length}, mas ${rejeitados.length === 1 ? "1 não foi salvo" : `${rejeitados.length} não foram salvos`} (ficaram no fim da lista): ${rejeitados.map((r) => r.motivo).join("; ")}.`
-        : `✅ Salvo (${data.snippets.length} atalho(s)). A extensão pega em até 10 minutos — ou clique em ⚡ › Atualizar atalhos.`
+        : `✅ Salvo (${data.snippets.length} atalho(s)). Volte para a aba do Assyst e a extensão pega na hora (3.10.1+) — ou clique em ⚡ › ⌨️ Atualizar atalhos.`
     );
   }
   return (
