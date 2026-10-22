@@ -31,6 +31,7 @@ export async function writePendingKb(limit = 2): Promise<number> {
         temperature: 0,
         max_tokens: 2500,
         ...({ reasoning: { max_tokens: 1024 } } as object),
+        ...({ provider: { zdr: true, data_collection: "deny" } } as object), // texto do trabalho: só provedor que não guarda
         messages: [{ role: "system", content: PROMPT }, { role: "user", content: texto }],
       });
       const art = (r.choices[0]?.message?.content || "").trim();

@@ -36,6 +36,7 @@ export async function planFor(question: string): Promise<Plan | null> {
     // Com raciocínio ligado, 300 tokens acabavam antes do JSON sair.
     max_tokens: 2500,
     ...({ reasoning: { max_tokens: 1024 } } as object),
+    ...({ provider: { zdr: true, data_collection: "deny" } } as object), // texto do trabalho: só provedor que não guarda
     messages: [
       {
         role: "system",

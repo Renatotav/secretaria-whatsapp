@@ -8,6 +8,14 @@ import { conferirInicial, conferirFinal } from "./cnj-check";
 // vai para o computador do Tribunal). As instruções de cada skill ficam no
 // banco (WorkSkill). Nada do texto enviado é gravado.
 
+/**
+ * Texto do tribunal só vai para provedor que NÃO guarda nem treina com os dados
+ * (ZDR — ex.: Google Vertex, Amazon Bedrock). Sem um disponível, a chamada falha
+ * em vez de cair num que guarda (AI Studio guarda 55 dias, Anthropic direto 30).
+ * Mesmo preço nos modelos atuais (conferido em 21/10/2026).
+ */
+export const SO_ZDR = { provider: { zdr: true, data_collection: "deny" } } as const;
+
 export const WORK_SKILLS: Record<string, string> = {
   auto: "✨ Automático",
   resumo: "Resumir erro",
@@ -190,6 +198,7 @@ export async function runWorkSkill(
     // longos (Redmine) gastavam tudo pensando e não sobrava resposta.
     max_tokens: inteligente ? 12000 : 6000,
     ...({ reasoning: (raciocinioForcado || raciocinio) > 0 ? { max_tokens: raciocinioForcado || raciocinio } : { enabled: false } } as object),
+    ...(SO_ZDR as object),
     messages: [
       {
         role: "system",

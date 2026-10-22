@@ -17,6 +17,9 @@ export interface ProviderOptions {
   openrouterModel?: string;
 }
 
+/** Modelos que não têm provedor ZDR na OpenRouter (descoberto na 1ª chamada). */
+const SEM_ZDR = new Set<string>();
+
 export async function generateResponse(
   messages: ChatMessage[],
   systemPrompt: string,
@@ -68,11 +71,21 @@ export async function generateResponse(
       baseURL: "https://openrouter.ai/api/v1",
     });
     const model = providerOpts.openrouterModel ?? "openai/gpt-4o-mini";
-    const response = await openrouter.chat.completions.create({
-      model,
-      temperature,
-      max_tokens: maxTokens,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    // Finanças e conversas dele: prefere provedor que não guarda (ZDR); se nenhum
+    // estiver disponível agora, usa o normal para a secretária não parar.
+    const pedir = (zdr: boolean) =>
+      openrouter.chat.completions.create({
+        model,
+        temperature,
+        max_tokens: maxTokens,
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        ...(zdr ? { provider: { zdr: true, data_collection: "deny" } } : {}),
+      } as Parameters<typeof openrouter.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>;
+    const response = await (SEM_ZDR.has(model) ? pedir(false) : pedir(true)).catch((err) => {
+      // Modelo sem nenhum provedor ZDR (ex.: gemini-2.5-flash-lite, só no AI Studio): lembra e vai direto nas próximas.
+      if (/data policy|zero data retention/i.test(String(err?.message))) SEM_ZDR.add(model);
+      else console.warn("[ia] provedor ZDR falhou, indo pelo normal:", err instanceof Error ? err.message.slice(0, 120) : err);
+      return pedir(false);
     });
     return {
       content: response.choices[0]?.message?.content ?? "",
@@ -146,7 +159,8 @@ export async function generateVisionResponse(
         max_tokens: 8192,
         messages: [{ role: "system", content: systemPrompt }, ...messages],
         // DeepSeek (modelo aberto): só provedores que não guardam nem treinam com os dados.
-        ...(model.startsWith("deepseek/") ? { provider: { data_collection: "deny", order: ["deepinfra", "cloudflare"] } } : {}),
+        // Só provedor que não guarda nem treina (ZDR); DeepSeek pelos americanos.
+        provider: { zdr: true, data_collection: "deny", ...(model.startsWith("deepseek/") ? { order: ["deepinfra", "cloudflare"] } : {}) },
       } as Parameters<typeof openrouter.chat.completions.create>[0]);
       return (response as { choices: { message?: { content?: string | null } }[] }).choices[0]?.message?.content ?? "";
     };
