@@ -3820,7 +3820,8 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
   // forte e fica com a leitura que fechou melhor.
   if (!daSefaz && gapOf(invoice) > 15 && providerOpts.openrouterApiKey) {
     console.log(`[invoice] conta não fechou (diferença ${gapOf(invoice).toFixed(2)}): relendo com modelo mais forte`);
-    const again = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption, "google/gemini-2.5-pro");
+    const { VISION_FALLBACK } = await import("./openai");
+    const again = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption, VISION_FALLBACK);
     if (gapOf(again) < gapOf(invoice)) invoice = again;
   }
 

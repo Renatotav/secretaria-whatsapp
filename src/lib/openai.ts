@@ -137,7 +137,10 @@ export async function generateResponse(
  * barato (os "flash-lite" erraram itens). O Gemini fica de reserva.
  */
 export const VISION_MODEL = "deepseek/deepseek-v4.1-flash-1017";
-const VISION_FALLBACK = "google/gemini-2.5-flash";
+// Reserva e releitura de nota longa: precisa ter provedor ZDR (o Gemini 2.5
+// não tem — em 22/10/2026 a nota caiu nas duas reservas com "No endpoints
+// found matching your data policy"). Gemini 3.5 Flash tem ZDR pelo Google.
+export const VISION_FALLBACK = "google/gemini-3.5-flash";
 
 export async function generateVisionResponse(
   base64: string,
