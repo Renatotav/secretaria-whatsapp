@@ -456,3 +456,20 @@ model ExtRelease {
   notes     String   @default("")
   createdAt DateTime @default(now())
 }
+
+/// Ids das mensagens do WhatsApp já processadas: um reenvio da Evolution
+/// (mesmo depois de um reinício) não lança o gasto em dobro. Limpo após 7 dias.
+model ProcessedMessage {
+  id String   @id
+  at DateTime @default(now())
+
+  @@index([at])
+}
+
+/// Conversas esperando resposta ("sim", "soma", o valor que faltou…), para não
+/// se perderem num reinício. key = nome do estado; value = o estado em JSON.
+model FlowState {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

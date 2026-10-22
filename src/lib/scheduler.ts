@@ -25,6 +25,7 @@ let lastEscalaSync: number | null = null; // fim da última cópia do escala já
 let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai uma vez só)
 
 let ticking = false; // uma volta por vez: se a anterior ainda roda, pula esta
+let dbPushChecked = false; // start.sh deixa /tmp/db-push-falhou quando recusou mudar as tabelas
 
 export function startScheduler(): void {
   setInterval(async () => {
@@ -33,6 +34,15 @@ export function startScheduler(): void {
     try {
       const config = await prisma.agentConfig.findFirst();
       if (!config) return;
+
+      if (!dbPushChecked && config.ownerPhone) {
+        dbPushChecked = true;
+        const { existsSync } = await import("node:fs");
+        if (existsSync("/tmp/db-push-falhou")) {
+          await sendTextWithTyping(config.evolutionUrl, config.evolutionApiKey, config.instanceId, config.ownerPhone,
+            "⚠️ *Atualização do banco recusada.* A versão nova queria mudar as tabelas de um jeito que apagaria dados, então eu não mudei. Estou no ar com o banco como estava; peça ao Claude para olhar.", 20, 5).catch(() => {});
+        }
+      }
 
       const now = new Date();
       const brtMillis = now.getTime() - (3 * 60 * 60 * 1000);
@@ -258,6 +268,8 @@ export function startScheduler(): void {
         } catch (err) {
           console.error("[previsões] renovação falhou", err);
         }
+        const { pruneProcessedMessages } = await import("./flow-state");
+        await pruneProcessedMessages().catch((err) => console.error("[webhook] limpeza dos ids falhou", err));
       }
 
       // Crédito da IA (OpenRouter): confere 3x por dia; abaixo de US$ 2 avisa (1x por dia).

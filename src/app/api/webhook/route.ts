@@ -17,21 +17,24 @@ import {
   noteImageArriving,
   handleInvoiceImage,
   notifyOwner,
+  restoreFlowStates,
 } from "@/lib/message-handlers";
+import { claimMessageId } from "@/lib/flow-state";
 import { extractPdfText, pdfPasswordError } from "@/lib/pdf";
 
-// Ids das últimas mensagens recebidas (só na memória; um reinício zera).
+// Ids das últimas mensagens recebidas (atalho na memória; o banco garante
+// mesmo depois de um reinício, em ProcessedMessage).
 const seenMessageIds = new Set<string>();
 
 export async function GET() {
   return NextResponse.json({ status: "webhook online" });
 }
 
-/** Só a Evolution conhece a chave (cabeçalho x-webhook-token). Sem chave cadastrada, ainda aceita. */
+/** Só a Evolution conhece a chave (cabeçalho x-webhook-token). Sem chave cadastrada, recusa tudo. */
 async function fromEvolution(request: Request): Promise<boolean> {
   const cfg = await prisma.agentConfig.findFirst({ select: { webhookToken: true } });
   const expected = cfg?.webhookToken || "";
-  if (!expected) return true;
+  if (!expected) return false;
   const got = Buffer.from(request.headers.get("x-webhook-token") || "");
   const want = Buffer.from(expected);
   return got.length === want.length && timingSafeEqual(got, want);
@@ -71,7 +74,12 @@ export async function POST(request: Request) {
       }
       seenMessageIds.add(key.id);
       if (seenMessageIds.size > 1000) seenMessageIds.delete(seenMessageIds.values().next().value as string);
+      if (!(await claimMessageId(key.id))) {
+        console.log("[webhook] mensagem repetida ignorada (já estava no banco)");
+        return NextResponse.json({ ok: true });
+      }
     }
+    await restoreFlowStates();
 
     const config = await prisma.agentConfig.findFirst();
     if (!config) {

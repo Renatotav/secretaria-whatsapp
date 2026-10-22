@@ -16,6 +16,7 @@ import {
 } from "./personal-router";
 import { extractAndSaveTickets } from "./ticket-extractor";
 import { parseLocalDate, todayBRT, creditCardBillDate } from "./dates";
+import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
 import type { AgentConfig } from "@prisma/client";
 
 export function extractText(message: Record<string, unknown>): string {
@@ -664,6 +665,7 @@ const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio): "gast
 🎯 "Como está meu orçamento?" — cada categoria com teto: 🟢 tranquilo, 🟡 passou de 70%, 🔴 estourou (com gráfico). Ao lançar um gasto ou importar a fatura, ela avisa a partir de 70% e mostra a previsão do mês (sobra ou falta, e se vai sair da Reserva).
 🍔 VR (vale): "gastei 45 no almoço no VR" lança na conta do VR; "quanto tenho no VR?" mostra o saldo e quanto dá pra gastar por dia.
 🛍️ Lista de desejos: "quero comprar um tênis de 300 em 3x" anota e diz se cabe; "minha lista de desejos" mostra tudo; ela avisa sozinha quando um desejo passar a caber.
+👀 "O que precisa da minha atenção?" (ou "pendências") — só o que pede ação: contas vencendo ou atrasadas, salário sem baixa, mês no vermelho, perguntas esperando sua resposta, lembretes de hoje e crédito da IA.
 📋 "O que falta pagar?" — contas do mês com 🔴 vencida / 🟡 vence logo, e a fatura do cartão numa linha só. Às 9h ela avisa sozinha o que vence em até 3 dias.
 📂 "Como está meu gasto com moradia?" (ou mercado, luz, transporte...) — total da categoria no mês, comparação com o mês passado e gráfico.
 🎯 "Por que estourei o mês?" / "Como está meu mês?" — diagnóstico com a causa principal e gráfico por categoria.
@@ -1013,6 +1015,51 @@ ${await cardLimitLine()}`;
 ${itens.join("\n")}${spent.length > 8 ? "\n…" : ""}
 
 ${await cardLimitLine()}`;
+}
+
+const ATTENTION_RE = /^\s*(?:(?:o\s*)?q(?:ue)?\s+(?:é\s+que\s+)?(?:precisa|tem|falta)\s+(?:de\s+)?(?:da\s+)?(?:minha\s+aten[cç][aã]o|(?:pra|para)\s+eu\s+(?:fazer|resolver|ver)|eu\s+(?:fazer|resolver|ver))|(?:minhas\s+)?pend[eê]ncias|tem\s+alguma\s+pend[eê]ncia)\s*\??\s*$/i;
+
+/**
+ * "o que precisa da minha atenção?": só o que pede uma ação dele — contas
+ * vencendo ou atrasadas, salário sem baixa, limite do cartão estourado,
+ * perguntas esperando resposta, lembretes de hoje e crédito da IA. Sem IA.
+ */
+export async function applyAttentionCommand(text: string): Promise<string | null> {
+  if (!ATTENTION_RE.test(text)) return null;
+  const parts: string[] = [];
+
+  const bills = await buildBillsDue("reminder");
+  if (bills) parts.push(bills.replace(/\nJá pagou\?[\s\S]*$/, ""));
+
+  const t = todayBRT();
+  const salario = await prisma.financeEntry.findFirst({
+    where: { type: "income", status: "pending", category: "Salário", ...SO_SALARIO, date: { gte: new Date(t.getFullYear(), t.getMonth(), 1), lt: new Date(t.getFullYear(), t.getMonth(), t.getDate()) } },
+    orderBy: { date: "asc" },
+  });
+  if (salario) parts.push(`💼 Salário de ${formatDayMonth(salario.date)} ainda sem baixa (previsto ${brl(salario.amount)}). Quando cair, mande "recebi X de salário".`);
+
+  const lim = await cardLimitData();
+  if (lim.left < 0) parts.push(`🔴 O mês de ${lim.month} está ${brl(-lim.left)} no vermelho${lim.note}. Segure o cartão até ${formatDayMonth(lim.close)}.`);
+
+  const fresh = (at: number, min: number) => Date.now() - at < min * 60 * 1000;
+  const waiting: string[] = [];
+  if (pendingHighValue && fresh(pendingHighValue.at, 30)) waiting.push(`gasto alto esperando "sim": ${pendingHighValue.text}`);
+  if (pendingInvoiceDraft && fresh(pendingInvoiceDraft.at, 60)) waiting.push(`nota fiscal de ${brl(pendingInvoiceDraft.invoice.total)} esperando "soma" ou o total certo`);
+  if (pendingImageDraft && fresh(pendingImageDraft.at, 60)) waiting.push(`print esperando "sim" para lançar`);
+  if (pendingStatement && fresh(pendingStatement.at, 60)) waiting.push("fatura esperando você escolher o cartão");
+  if (pendingAmount && fresh(pendingAmount.at, 30)) waiting.push(`faltou o valor de: ${pendingAmount.text}`);
+  if (pendingCommitment && fresh(pendingCommitment.at, 24 * 60)) waiting.push(`compromisso para pôr na agenda: ${pendingCommitment.title}`);
+  if (waiting.length) parts.push(`❓ *Esperando sua resposta*\n${waiting.map((w) => `• ${w}`).join("\n")}`);
+
+  const ini = new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate(), 3)); // 00:00 em Brasília
+  const lembretes = await prisma.agendaItem.findMany({ where: { source: { not: "group" }, done: false, dueDate: { gte: ini, lt: new Date(ini.getTime() + 86_400_000) } }, orderBy: { dueDate: "asc" }, take: 8 });
+  if (lembretes.length) parts.push(`📅 *Hoje*\n${lembretes.map((l) => `• ${l.dueDate ? formatTime(l.dueDate.getTime() / 1000) + " " : ""}${l.title}`).join("\n")}`);
+
+  const { creditWarning } = await import("./ai-credit");
+  const credito = await creditWarning().catch(() => "");
+  if (credito) parts.push(credito);
+
+  return parts.length ? `👀 *Precisa da sua atenção*\n\n${parts.join("\n\n")}` : "✅ Nada precisa de você agora. Tudo em dia!";
 }
 
 /**
@@ -1942,6 +1989,7 @@ let pendingHighValue: { text: string; at: number } | null = null;
 let confirmedHighValueText: string | null = null;
 
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
+  await restoreFlowStates();
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
 
@@ -1984,7 +2032,7 @@ export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMe
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
@@ -3855,4 +3903,48 @@ export async function billsDueSpeech(): Promise<string> {
   const quando = (d: number) => (d < 0 ? "está vencida" : d === 0 ? "vence hoje" : "vence amanhã");
   const frases = itens.map((g) => `${g.nome}, de ${Math.round(g.valor)} reais, ${quando(g.dia)}`);
   return `Renato, lembrete de contas: ${frases.join("; ")}.`;
+}
+
+// ── Estados de conversa guardados no banco ─────────────────────────────────
+// As perguntas que esperam resposta ("sim?", "soma?", o valor que faltou, o
+// "desfazer") ficam nas variáveis acima; aqui elas vão para o banco a cada
+// poucos segundos e voltam depois de um reinício. O PDF com senha não vai
+// (é grande: depois de um reinício ela pede o PDF de novo).
+function flowSnapshot(): Record<string, unknown> {
+  return {
+    lastSaved, pendingAmount, lastInvoicePayment, pendingHighValue, confirmedHighValueText,
+    pendingStatement, pendingImageDraft, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment,
+  };
+}
+
+let flowsRestored: Promise<void> | null = null;
+/** Traz os estados do banco uma vez por processo; depois grava as mudanças a cada 3 s. */
+export function restoreFlowStates(): Promise<void> {
+  flowsRestored ??= (async () => {
+    try {
+      const s = await loadFlowStates();
+      type S = Record<string, never>;
+      const g = s as S;
+      if (g.lastSaved) lastSaved = g.lastSaved;
+      if (g.pendingAmount) pendingAmount = g.pendingAmount;
+      if (g.lastInvoicePayment) lastInvoicePayment = g.lastInvoicePayment;
+      if (g.pendingHighValue) pendingHighValue = g.pendingHighValue;
+      if (g.confirmedHighValueText) confirmedHighValueText = g.confirmedHighValueText;
+      if (g.pendingStatement) pendingStatement = g.pendingStatement;
+      if (g.pendingImageDraft) pendingImageDraft = g.pendingImageDraft;
+      if (g.imageNote) imageNote = g.imageNote;
+      if (g.pendingMoodAsk) pendingMoodAsk = g.pendingMoodAsk;
+      if (g.pendingInvoiceDraft) pendingInvoiceDraft = g.pendingInvoiceDraft;
+      if (g.pendingCommitment) pendingCommitment = g.pendingCommitment;
+      markFlowStatesLoaded(flowSnapshot());
+      const voltaram = Object.keys(s);
+      if (voltaram.length) console.log(`[estado] recuperado do banco: ${voltaram.join(", ")}`);
+    } catch (e) {
+      console.error("[estado] não leu do banco:", e);
+    }
+    setInterval(() => {
+      saveFlowStates(flowSnapshot()).catch((e) => console.error("[estado] não gravou:", e));
+    }, 3000).unref?.();
+  })();
+  return flowsRestored;
 }
