@@ -623,6 +623,10 @@ export interface InvoiceEntry {
   itemCount?: number;
   /** Chave de acesso (44 dígitos) impressa na NFC-e, se aparecer na foto. */
   accessKey?: string;
+  /** CNPJ da loja, série e número da NFC-e impressos (para consertar a chave lida com um dígito errado). */
+  issuerCnpj?: string;
+  nfceSeries?: string;
+  nfceNumber?: string;
   /** Itens e total vieram da consulta da SEFAZ (não da leitura da foto). */
   fromSefaz?: boolean;
   items: InvoiceItemEntry[];
@@ -665,6 +669,7 @@ CUPOM COM LINHA "DESCONTO" EMBAIXO DO ITEM (muito comum em supermercado):
 - Cada item numerado (001, 002, 003…) é UMA entrada, mesmo que se repita igual várias vezes (14 cervejas iguais = 14 entradas, ou 1 entrada com quantity 14 e o amount somado). Não pule linhas repetidas.
 - itemCount: o número de "Qtde. Total de Itens" (ou "Qtd. total de itens") impresso no fim do cupom; 0 se não houver.
 - accessKey: a "Chave de acesso" da NFC-e (44 números, impressos em blocos de 4 perto do QR Code), só os dígitos, sem espaços. Se não aparecer inteira e legível na foto, "".
+- issuerCnpj: o CNPJ da LOJA (emitente), só os 14 dígitos; nfceSeries: a "Série" da NFC-e; nfceNumber: o número da NFC-e ("NFC-e n. 000053639" → "000053639"). "" se não aparecer. (Mesmo que a foto mostre só o rodapé, sem itens, preencha esses campos e o total; items pode vir vazio.)
 
 IMPORTANTE:
 - Retorne APENAS um JSON válido. Não coloque texto antes ou depois.
@@ -680,6 +685,9 @@ Formato esperado:
   "status": "pending",
   "itemCount": 22,
   "accessKey": "",
+  "issuerCnpj": "",
+  "nfceSeries": "",
+  "nfceNumber": "",
   "items": [
     { "name": "Cerveja", "category": "Bebidas Alcoólicas", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
   ]

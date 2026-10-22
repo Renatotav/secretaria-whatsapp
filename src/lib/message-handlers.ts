@@ -3793,15 +3793,20 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
   // de cada item e a forma de pagamento — o VR aparece como "débito" lá).
   let daSefaz = false;
   if (invoice?.accessKey) {
-    const { fetchNfce } = await import("./nfce");
-    const nf = await fetchNfce(invoice.accessKey);
+    const { fetchNfce, repairNfeKey } = await import("./nfce");
+    const chave = repairNfeKey(invoice.accessKey, { cnpj: invoice.issuerCnpj, serie: invoice.nfceSeries, numero: invoice.nfceNumber });
+    if (chave && chave !== invoice.accessKey.replace(/\D/g, "")) console.log("[nfce] chave lida com dígito errado: consertada pelo CNPJ/série/número da nota");
+    const nf = chave ? await fetchNfce(chave) : null;
     if (nf) {
       const n = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
       const lidos = invoice.items;
+      // Categoria do item: a da leitura da foto; se a foto não tinha os itens
+      // (só o rodapé com a chave), a da última compra do mesmo produto.
+      const antes = await prisma.invoiceItem.findMany({ where: { name: { in: nf.items.map((i) => i.name) } }, select: { name: true, category: true }, orderBy: { createdAt: "desc" } });
       const categoriaDe = (nome: string) => {
         const a = n(nome);
         const igual = lidos.find((i) => n(i.name) === a) ?? lidos.find((i) => a.startsWith(n(i.name).slice(0, 10)) || n(i.name).startsWith(a.slice(0, 10)));
-        return igual?.category || invoice!.category || "Outros";
+        return igual?.category || antes.find((x) => x.name === nome)?.category || invoice!.category || "Outros";
       };
       invoice = {
         ...invoice,
@@ -3811,6 +3816,10 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
         items: nf.items.map((i) => ({ name: i.name, category: categoriaDe(i.name), quantity: i.quantity, unitPrice: i.unitPrice, amount: i.amount })),
         fromSefaz: true,
       };
+      // Desconto/acréscimo da nota (a SEFAZ dá à parte: "Descontos R$ 23,02"):
+      // valores oficiais, então entra como item e a conta fecha sem perguntar.
+      const dif = Math.round((nf.total - invoice.items.reduce((a, i) => a + i.amount, 0)) * 100) / 100;
+      if (Math.abs(dif) >= 0.01) invoice.items.push({ name: dif < 0 ? "Desconto da Nota" : "Acréscimo da Nota", category: "Desconto / Ajuste", quantity: 1, unitPrice: dif, amount: dif });
       daSefaz = true;
       console.log(`[nfce] nota da SEFAZ: ${nf.items.length} itens, total ${nf.total}`);
     }

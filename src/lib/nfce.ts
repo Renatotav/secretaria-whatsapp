@@ -20,6 +20,24 @@ export function validNfeKey(raw: string): string | null {
   return dv === Number(k[43]) ? k : null;
 }
 
+/**
+ * Chave lida com um dígito errado (a IA troca 9 por 3, 8 por 6…): refaz as
+ * partes que também estão impressas na nota — CNPJ da loja (posições 7–20),
+ * série (23–25) e número (26–34) — e confere o dígito de novo.
+ */
+export function repairNfeKey(raw: string, parts: { cnpj?: string; serie?: string; numero?: string }): string | null {
+  const k = (raw || "").replace(/\D/g, "");
+  if (validNfeKey(k)) return k;
+  if (k.length !== 44) return null;
+  const cnpj = (parts.cnpj || "").replace(/\D/g, "");
+  const serie = (parts.serie || "").replace(/\D/g, "");
+  const numero = (parts.numero || "").replace(/\D/g, "");
+  const comCnpj = cnpj.length === 14 ? k.slice(0, 6) + cnpj + k.slice(20) : k;
+  const comTudo =
+    comCnpj.slice(0, 22) + (serie ? serie.padStart(3, "0").slice(-3) : comCnpj.slice(22, 25)) + (numero ? numero.padStart(9, "0").slice(-9) : comCnpj.slice(25, 34)) + comCnpj.slice(34);
+  return validNfeKey(comCnpj) ?? validNfeKey(comTudo);
+}
+
 /** NFC-e (modelo 65) emitida no Ceará (código 23)? */
 export const isCearaNfce = (key: string) => key.startsWith("23") && key.slice(20, 22) === "65";
 
@@ -36,7 +54,7 @@ export function parseNfceHtml(key: string, html: string): Nfce | null {
     const g = (cls: string) => tr.match(new RegExp(`class='${cls}'>([\\s\\S]*?)</span>`))?.[1] ?? "";
     const name = limpa(g("txtTit"));
     const quantity = num(limpa(g("Rqtd")).replace(/^Qtde\.:\s*/i, ""));
-    const unit = limpa(g("RUN")).replace(/^UN:\s*/i, "");
+    const unit = limpa(g("RUN")).replace(/^UN:\s*/i, "").replace(/\d+$/, "");
     const unitPrice = num(limpa(g("RvlUnit")).replace(/^Vl\. Unit\.:\s*/i, ""));
     const amount = num(limpa(g("valor")));
     if (name && amount > 0) items.push({ name, quantity: quantity || 1, unit, unitPrice: unitPrice || amount, amount });
