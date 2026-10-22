@@ -17,19 +17,40 @@ export async function getSnippets(): Promise<Snippet[]> {
 /** Atalho válido: "/" + letras, números, - ou _ (ex: /padrao, /retorno-2). */
 export const SHORTCUT_RE = /^\/[a-z0-9_-]{1,30}$/;
 
-export async function saveSnippets(list: Partial<Snippet>[]): Promise<Snippet[]> {
+/** "/Olá Mundo" → "/ola-mundo": sem acento, minúsculo, espaço vira "-", "/" na frente. */
+export function normalizeShortcut(raw: string): string {
+  return String(raw || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .trim().toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/^([^/])/, "/$1");
+}
+
+export type Rejected = { shortcut: string; title: string; body: string; motivo: string };
+
+/**
+ * Grava a lista. Atalho com problema não some calado: volta em "rejected" com
+ * o motivo (o painel mantém na tela para ele corrigir). Antes um atalho
+ * inválido sumia e a tela dizia "Salvo".
+ */
+export async function saveSnippets(list: Partial<Snippet>[]): Promise<{ snippets: Snippet[]; rejected: Rejected[] }> {
   const seen = new Set<string>();
-  const clean = list
-    .map((s) => ({
-      shortcut: String(s.shortcut || "").trim().toLowerCase().replace(/^([^/])/, "/$1"),
-      title: String(s.title || "").trim().slice(0, 80),
-      body: String(s.body || "").slice(0, 5000),
-    }))
-    .filter((s) => SHORTCUT_RE.test(s.shortcut) && s.body.trim() && !seen.has(s.shortcut) && seen.add(s.shortcut))
-    .slice(0, 200);
+  const clean: Snippet[] = [];
+  const rejected: Rejected[] = [];
+  for (const s of list) {
+    const item = { shortcut: normalizeShortcut(s.shortcut || ""), title: String(s.title || "").trim().slice(0, 80), body: String(s.body || "").slice(0, 5000) };
+    const motivo = !SHORTCUT_RE.test(item.shortcut)
+      ? `o atalho "${s.shortcut}" só pode ter letras sem acento, números, - ou _ (até 30)`
+      : !item.body.trim() ? "o texto está vazio"
+      : seen.has(item.shortcut) ? `"${item.shortcut}" está repetido`
+      : "";
+    if (motivo) rejected.push({ ...item, shortcut: String(s.shortcut || ""), motivo });
+    else { seen.add(item.shortcut); clean.push(item); }
+  }
+  const lista = clean.slice(0, 200);
   await prisma.$transaction([
-    prisma.workSnippet.deleteMany({ where: { shortcut: { notIn: clean.map((s) => s.shortcut) } } }),
-    ...clean.map((s, i) => prisma.workSnippet.upsert({ where: { shortcut: s.shortcut }, create: { ...s, sortOrder: i }, update: { ...s, sortOrder: i } })),
+    prisma.workSnippet.deleteMany({ where: { shortcut: { notIn: lista.map((s) => s.shortcut) } } }),
+    ...lista.map((s, i) => prisma.workSnippet.upsert({ where: { shortcut: s.shortcut }, create: { ...s, sortOrder: i }, update: { ...s, sortOrder: i } })),
   ]);
-  return getSnippets();
+  return { snippets: await getSnippets(), rejected };
 }

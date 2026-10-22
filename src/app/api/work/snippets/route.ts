@@ -12,5 +12,5 @@ export async function PUT(request: Request) {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const body = await request.json().catch(() => null);
   if (!Array.isArray(body?.snippets)) return NextResponse.json({ error: "Envie a lista" }, { status: 400 });
-  return NextResponse.json({ snippets: await saveSnippets(body.snippets) });
+  return NextResponse.json(await saveSnippets(body.snippets));
 }

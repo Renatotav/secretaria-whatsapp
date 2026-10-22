@@ -311,8 +311,14 @@ function SnippetsEditor() {
     const res = await fetch("/api/work/snippets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ snippets: rows }) });
     const data = await res.json();
     if (!res.ok) return setMsg(data.error || "Não consegui salvar.");
-    setRows(data.snippets);
-    setMsg(`✅ Salvo (${data.snippets.length} atalho(s)). A extensão pega em até 10 minutos — ou clique em ⚡ › Atualizar atalhos.`);
+    // Atalho com problema continua na tela (antes sumia e a tela dizia "Salvo").
+    const rejeitados: (Snippet & { motivo: string })[] = data.rejected ?? [];
+    setRows([...data.snippets, ...rejeitados.map(({ shortcut, title, body }) => ({ shortcut, title, body }))]);
+    setMsg(
+      rejeitados.length
+        ? `⚠️ Salvei ${data.snippets.length}, mas ${rejeitados.length === 1 ? "1 não foi salvo" : `${rejeitados.length} não foram salvos`} (ficaram no fim da lista): ${rejeitados.map((r) => r.motivo).join("; ")}.`
+        : `✅ Salvo (${data.snippets.length} atalho(s)). A extensão pega em até 10 minutos — ou clique em ⚡ › Atualizar atalhos.`
+    );
   }
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14, marginBottom: 16 }}>
