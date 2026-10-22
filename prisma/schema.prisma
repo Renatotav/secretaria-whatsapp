@@ -126,6 +126,9 @@ model Conversation {
   messages    Message[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  // Índices (22/10/2026): consultas por data/conversa sem ler a tabela inteira.
+  @@index([phone])
 }
 
 model Message {
@@ -136,6 +139,9 @@ model Message {
   content        String
   tokens         Int?
   createdAt      DateTime     @default(now())
+
+  // Índices (22/10/2026): consultas por data/conversa sem ler a tabela inteira.
+  @@index([conversationId, createdAt])
 }
 
 // ─── MODELOS NOVOS ────────────────────────────────────────────────────────────
@@ -181,6 +187,9 @@ model AgendaItem {
   followUpNote String    @default("")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  // Índices (22/10/2026): consultas por data/conversa sem ler a tabela inteira.
+  @@index([done, dueDate])
 }
 
 model GroupMessage {
@@ -245,6 +254,11 @@ model FinanceEntry {
   source      String   @default("dashboard")
   createdAt   DateTime @default(now())
   invoiceItems InvoiceItem[]
+
+  // Índices (22/10/2026): consultas por data/conversa sem ler a tabela inteira.
+  @@index([date])
+  @@index([status, date])
+  @@index([purchaseDate])
 }
 
 model Budget {
@@ -287,6 +301,9 @@ model InvoiceItem {
   quantity       Float        @default(1)
   unitPrice      Float        @default(0)
   createdAt      DateTime     @default(now())
+
+  // Índices (22/10/2026): consultas por data/conversa sem ler a tabela inteira.
+  @@index([financeEntryId])
 }
 
 /// Lista de desejos: o que o dono quer comprar; a secretária avisa quando cabe no mês.
