@@ -14,16 +14,16 @@ export async function getSnippets(): Promise<Snippet[]> {
   return rows.map(({ shortcut, title, body }) => ({ shortcut, title, body }));
 }
 
-/** Atalho válido: "/" + letras, números, - ou _ (ex: /padrao, /retorno-2). */
-export const SHORTCUT_RE = /^\/[a-z0-9_-]{1,30}$/;
+/** Atalho válido: "/" ou "\" + letras, números, - ou _ (ex: /padrao, \w, /retorno-2). */
+export const SHORTCUT_RE = /^[/\\][a-z0-9_-]{1,30}$/;
 
-/** "/Olá Mundo" → "/ola-mundo": sem acento, minúsculo, espaço vira "-", "/" na frente. */
+/** "/Olá Mundo" → "/ola-mundo": sem acento, minúsculo, espaço vira "-", "/" na frente (quem começa com "\" fica com "\"). */
 export function normalizeShortcut(raw: string): string {
   return String(raw || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .trim().toLowerCase()
     .replace(/\s+/g, "-")
-    .replace(/^([^/])/, "/$1");
+    .replace(/^([^/\\])/, "/$1");
 }
 
 export type Rejected = { shortcut: string; title: string; body: string; motivo: string };
@@ -40,7 +40,7 @@ export async function saveSnippets(list: Partial<Snippet>[]): Promise<{ snippets
   for (const s of list) {
     const item = { shortcut: normalizeShortcut(s.shortcut || ""), title: String(s.title || "").trim().slice(0, 80), body: String(s.body || "").slice(0, 5000) };
     const motivo = !SHORTCUT_RE.test(item.shortcut)
-      ? `o atalho "${s.shortcut}" só pode ter letras sem acento, números, - ou _ (até 30)`
+      ? `o atalho "${s.shortcut}" tem que começar com / ou \\ e ter só letras, números, - ou _ (até 30)`
       : !item.body.trim() ? "o texto está vazio"
       : seen.has(item.shortcut) ? `"${item.shortcut}" está repetido`
       : "";
