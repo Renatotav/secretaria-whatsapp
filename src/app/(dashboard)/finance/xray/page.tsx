@@ -86,10 +86,20 @@ function XRayContent() {
   }, [items]);
 
   // Itens da subcategoria tocada, um por compra (mais recente primeiro).
-  const daCategoria = useMemo(
-    () => (cat ? items.filter((i) => i.category === cat).sort((a, b) => b.financeEntry.date.localeCompare(a.financeEntry.date) || b.amount - a.amount) : []),
-    [items, cat]
-  );
+  // Mesmo produto, mesma nota (dia + loja): uma linha só ("14 un. × R$ 6,99").
+  const daCategoria = useMemo(() => {
+    if (!cat) return [];
+    const g = new Map<string, InvoiceItem & { n: number }>();
+    for (const i of items.filter((x) => x.category === cat)) {
+      const k = `${i.name.toUpperCase()}|${i.financeEntry.date.slice(0, 10)}|${i.financeEntry.description}`;
+      const atual = g.get(k);
+      if (atual) g.set(k, { ...atual, amount: atual.amount + i.amount, quantity: atual.quantity + i.quantity, n: atual.n + 1 });
+      else g.set(k, { ...i, n: 1 });
+    }
+    return [...g.values()].sort((a, b) => b.financeEntry.date.localeCompare(a.financeEntry.date) || b.amount - a.amount);
+  }, [items, cat]);
+  const totalCategoria = useMemo(() => (cat ? items.filter((x) => x.category === cat) : []).reduce((a, i) => a + i.amount, 0), [items, cat]);
+  const qtdItens = useMemo(() => (cat ? items.filter((x) => x.category === cat).length : 0), [items, cat]);
   const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const loja = (d: string) => d.replace(/^Nota Fiscal \(\d+ itens\)\s*-?\s*/i, "").replace(/\s*\(parte n[oa] [^)]*\)\s*$/i, "").trim() || "Nota fiscal";
   const dia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -197,7 +207,7 @@ function XRayContent() {
             {cat && (
               <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: 12, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                  <h2 style={{ fontSize: 15, fontWeight: 600 }}>🔎 {cat}: {daCategoria.length} {daCategoria.length === 1 ? "item" : "itens"} · {brl(daCategoria.reduce((a, i) => a + i.amount, 0))}</h2>
+                  <h2 style={{ fontSize: 15, fontWeight: 600 }}>🔎 {cat}: {qtdItens} {qtdItens === 1 ? "item" : "itens"} · {brl(totalCategoria)}</h2>
                   <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setCat(null)}>Fechar</button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -206,7 +216,7 @@ function XRayContent() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, overflowWrap: "anywhere" }}>{it.name}</div>
                         <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                          {dia(it.financeEntry.date)} · {loja(it.financeEntry.description)} · {qtd(it.quantity)}{it.quantity !== 1 && it.unitPrice ? ` × ${brl(it.unitPrice)}` : ""}
+                          {dia(it.financeEntry.date)} · {loja(it.financeEntry.description)} · {qtd(Math.round(it.quantity * 1000) / 1000)}{it.quantity !== 1 && it.unitPrice ? ` × ${brl(it.n > 1 && Number.isInteger(it.quantity) ? it.amount / it.quantity : it.unitPrice)}` : ""}
                         </div>
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{brl(it.amount)}</div>

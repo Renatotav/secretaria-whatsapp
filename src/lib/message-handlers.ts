@@ -18,6 +18,7 @@ import { extractAndSaveTickets } from "./ticket-extractor";
 import { parseLocalDate, todayBRT, creditCardBillDate, billDaysFor, cardInText, autoEntryDates } from "./dates";
 import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
 import { withReason } from "./finance-reason";
+import { normalizeItemCategory } from "./finance-taxonomy";
 import type { AgentConfig, Prisma } from "@prisma/client";
 
 export function extractText(message: Record<string, unknown>): string {
@@ -4001,7 +4002,7 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
       invoiceItems: {
         create: invoice.items.map(i => ({
           name: i.name,
-          category: i.category,
+          category: normalizeItemCategory(i),
           amount: i.amount,
           quantity: i.quantity,
           unitPrice: i.unitPrice

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { isBesteiraItem } from "@/lib/finance-taxonomy";
+import { normalizeItemCategory } from "@/lib/finance-taxonomy";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) {
@@ -44,6 +44,6 @@ export const GET = withErrorHandling(async (request: Request) => {
     }
   });
 
-  // Cerveja, salgadinho, doce… aparecem juntos como "Besteira" (mesma regra do teto de R$ 250).
-  return NextResponse.json(items.map((i) => (isBesteiraItem(i) ? { ...i, category: "Besteira" } : i)));
+  // Subcategorias fixas (as antigas da IA são traduzidas aqui); cerveja/salgadinho/doce = "Besteira".
+  return NextResponse.json(items.map((i) => ({ ...i, category: normalizeItemCategory(i) })));
 });

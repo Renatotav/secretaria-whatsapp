@@ -78,6 +78,29 @@ export function merchantKey(description: string): string {
  */
 export function isBesteiraItem(i: { name: string; category: string }): boolean {
   const n = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (/besteira|(?<!nao )alcoolic|cervej|destilad|vinho|salgadinh|chocolate|\bdoces?\b|sorvete|snack/.test(n(i.category))) return true;
-  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|original|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|salgadinho|chocolate|bombom|sorvete|picole/.test(n(i.name));
+  if (/besteira|(?<!nao )alcoolic|cervej|destilad|vinho|salgadinh|petisco|chocolate|\bdoces?\b|sorvete|snack/.test(n(i.category))) return true;
+  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|pippos|salgadinho|chocolate|bombom|sorvete|picole/.test(n(i.name));
+}
+
+/**
+ * Subcategorias FIXAS dos itens de nota (pedido dele, 23/10/2026: a IA
+ * inventava "Petiscos", "Essenciais", "Enlatados"… para coisas iguais).
+ * Vale para as notas novas (gravado assim) e para as antigas (na hora de mostrar).
+ */
+export const ITEM_CATEGORIES = ["Carnes", "Frios e laticínios", "Hortifruti", "Padaria", "Mercearia", "Congelados", "Bebidas", "Besteira", "Limpeza", "Higiene e beleza", "Descontos"] as const;
+
+export function normalizeItemCategory(i: { name: string; category: string; amount?: number }): string {
+  if (isBesteiraItem(i)) return "Besteira";
+  const c = i.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/desconto|ajuste|acrescimo/.test(c) || (i.amount ?? 0) < 0) return "Descontos";
+  if (/carne|acougue|frango|peixe|bovin|suin/.test(c)) return "Carnes";
+  if (/latic|frio|queijo|iogurte|leite/.test(c)) return "Frios e laticínios";
+  if (/hortifruti|fruta|verdura|legume/.test(c)) return "Hortifruti";
+  if (/padaria|panifica|paes|pao/.test(c)) return "Padaria";
+  if (/congelad|salgados/.test(c)) return "Congelados";
+  if (/bebida|refrigerante|suco|agua/.test(c)) return "Bebidas";
+  if (/limpeza/.test(c)) return "Limpeza";
+  if (/higiene|beleza|cuidado|perfum|cosmetic/.test(c)) return "Higiene e beleza";
+  if (/mercearia|enlatad|tempero|condiment|essenciais|basico|alimento|alimentacao|biscoito|graos|massa|cereal|processad/.test(c)) return "Mercearia";
+  return ITEM_CATEGORIES.find((x) => x.toLowerCase() === i.category.toLowerCase()) ?? "Mercearia";
 }
