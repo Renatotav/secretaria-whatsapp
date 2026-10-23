@@ -24,6 +24,10 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
     "Assinaturas": ["Streaming", "Apps/Softwares", "Academia"],
     "Compras": ["Eletrônicos", "Casa", "Roupas", "Online"],
     "Pessoal": ["Lazer", "Beleza/Cuidados", "Presentes"],
+    // Gasto de vontade, com teto próprio (pedido dele, 22/10/2026): cerveja,
+    // salgadinho, doce, delivery por impulso. Itens assim dentro da nota de
+    // mercado também contam aqui (ver isBesteiraItem).
+    "Besteira": ["Bebida alcoólica", "Salgadinho/Doces", "Delivery por vontade"],
     "Educação": ["Cursos", "Livros", "Mensalidade"],
     "Impostos e taxas": ["IOF", "IR", "IPVA", "Tarifas bancárias", "Juros", "Empréstimos"],
     "Outros": ["Imprevistos"],
@@ -46,7 +50,9 @@ REGRAS:
   da scooter = Scooter › Seguro; peças/acessórios da scooter ou moto = Scooter › Manutenção/peças; farmácia = Saúde › Farmácia; academia =
   Assinaturas › Academia (cobrança mensal); Spotify/Netflix = Assinaturas › Streaming; Claude/ChatGPT/hospedagem
   de site = Assinaturas › Apps/Softwares; IOF de compra internacional = Impostos e taxas › IOF;
-  marmita/restaurante/bar = Alimentação › Restaurantes; iFood = Alimentação › Delivery;
+  marmita/restaurante = Alimentação › Restaurantes; iFood = Alimentação › Delivery;
+  cerveja/bebida alcoólica/bar/adega = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete
+  comprados à parte = Besteira › Salgadinho/Doces; se ele disser "besteira", use Besteira;
   Amazon/Mercado Livre = Compras (Eletrônicos, Casa, Roupas ou Online, pelo produto).
 - Só use "Outros › Imprevistos" se nada da lista servir.`;
 }
@@ -64,4 +70,14 @@ export function merchantKey(description: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .toUpperCase();
+}
+
+/**
+ * Item de nota fiscal que conta como Besteira (bebida alcoólica, salgadinho,
+ * chocolate, doce, sorvete), pela categoria que a leitura deu ou pelo nome.
+ */
+export function isBesteiraItem(i: { name: string; category: string }): boolean {
+  const n = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/besteira|(?<!nao )alcoolic|cervej|destilad|vinho|salgadinh|chocolate|\bdoces?\b|sorvete|snack/.test(n(i.category))) return true;
+  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|original|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|salgadinho|chocolate|bombom|sorvete|picole/.test(n(i.name));
 }

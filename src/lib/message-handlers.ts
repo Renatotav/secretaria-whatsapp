@@ -162,8 +162,9 @@ const signed = (v: number) => `${v >= 0 ? "+" : "−"}${brl(Math.abs(v))}`;
 async function monthTotals(year: number, monthIndex: number) {
   const entries = await prisma.financeEntry.findMany({
     where: { date: { gte: new Date(year, monthIndex, 1), lte: new Date(year, monthIndex + 1, 0, 23, 59, 59) } },
-    select: { type: true, amount: true, category: true },
+    select: { type: true, amount: true, category: true, invoiceItems: { select: { name: true, category: true, amount: true } } },
   });
+  const { isBesteiraItem } = await import("./finance-taxonomy");
   const byCategory: Record<string, number> = {};
   let income = 0;
   let expense = 0;
@@ -171,7 +172,11 @@ async function monthTotals(year: number, monthIndex: number) {
     if (e.type === "income") income += e.amount;
     else {
       expense += e.amount;
-      byCategory[e.category || "Outros"] = (byCategory[e.category || "Outros"] || 0) + e.amount;
+      // Cerveja/salgadinho dentro da nota de mercado conta na Besteira (sai da categoria da nota).
+      const besteira = e.category === "Besteira" ? 0 : e.invoiceItems.filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
+      const cat = e.category || "Outros";
+      byCategory[cat] = (byCategory[cat] || 0) + e.amount - besteira;
+      if (besteira > 0) byCategory.Besteira = (byCategory.Besteira || 0) + besteira;
     }
   }
   return { income, expense, byCategory };
@@ -4049,6 +4054,15 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
         // sem dica, o número acima já avisa
       }
     }
+  }
+  // Nota com cerveja/salgadinho: mostra o teto da Besteira (ele pediu para não passar).
+  const { isBesteiraItem } = await import("./finance-taxonomy");
+  const besteiraNaNota = invoice.items.filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
+  if (besteiraNaNota > 0 && invoice.category !== "Besteira") {
+    const bs = items.find((x) => x.category === "Besteira");
+    response += bs
+      ? `\n\n🍺 *Besteira:* ${brl(besteiraNaNota)} nesta nota · ${brl(bs.spent)} de ${brl(bs.limit)} no mês ${bs.spent >= bs.limit ? `🔴 passou ${brl(bs.spent - bs.limit)}` : bs.spent / bs.limit >= 0.7 ? `🟡 restam ${brl(bs.limit - bs.spent)}` : `🟢 restam ${brl(bs.limit - bs.spent)}`}.`
+      : `\n\n🍺 *Besteira nesta nota:* ${brl(besteiraNaNota)}.`;
   }
   response += await monthForecastLine(entry.date.getFullYear(), entry.date.getMonth());
   return response;

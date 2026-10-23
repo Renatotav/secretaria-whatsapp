@@ -657,7 +657,7 @@ ${FINANCE_TAXONOMY}
 Itens (produtos/serviços):
 Para CADA linha de produto/serviço, extraia:
 - name: nome do item como aparece na nota (ex: "HEINEKEN LATA 350ML")
-- category: classifique este PRODUTO específico com uma macro-categoria. Por exemplo, num supermercado, pode ser "Bebidas Alcoólicas", "Limpeza", "Carnes", "Petiscos", "Essenciais", etc.
+- category: classifique este PRODUTO específico com uma macro-categoria. Por exemplo, num supermercado, pode ser "Limpeza", "Carnes", "Hortifruti", "Padaria", "Essenciais", etc. Bebida alcoólica (cerveja, vinho, destilado), salgadinho/chips, chocolate, doce e sorvete = "Besteira".
 - quantity: quantidade comprada (número)
 - unitPrice: valor unitário do item (número)
 - amount: valor total pago pelo item (número, com desconto já deduzido do item se houver "desconto sobre item").
@@ -689,7 +689,7 @@ Formato esperado:
   "nfceSeries": "",
   "nfceNumber": "",
   "items": [
-    { "name": "Cerveja", "category": "Bebidas Alcoólicas", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
+    { "name": "Cerveja", "category": "Besteira", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
   ]
 }`;
 
