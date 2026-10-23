@@ -657,7 +657,7 @@ ${FINANCE_TAXONOMY}
 Itens (produtos/serviços):
 Para CADA linha de produto/serviço, extraia:
 - name: nome do item como aparece na nota (ex: "HEINEKEN LATA 350ML")
-- category: classifique este PRODUTO com EXATAMENTE uma destas (nenhuma outra): "Carnes", "Frios e laticínios", "Hortifruti", "Padaria", "Mercearia", "Congelados", "Bebidas" (refrigerante, suco, água), "Besteira" (bebida alcoólica, salgadinho/chips, chocolate, doce, sorvete), "Limpeza", "Higiene e beleza", "Descontos".
+- category: classifique este PRODUTO com EXATAMENTE uma destas (nenhuma outra): "Carnes", "Frios e laticínios", "Hortifruti", "Padaria", "Mercearia", "Congelados", "Bebidas" (refrigerante, suco, água), "Besteira" (bebida alcoólica, salgadinho/chips, biscoito/bolacha, chocolate, doce, sorvete), "Limpeza", "Higiene e beleza", "Descontos".
 - quantity: quantidade comprada (número)
 - unitPrice: valor unitário do item (número)
 - amount: valor total pago pelo item (número, com desconto já deduzido do item se houver "desconto sobre item").

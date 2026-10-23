@@ -25,7 +25,7 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
     "Compras": ["Eletrônicos", "Casa", "Roupas", "Online"],
     "Pessoal": ["Lazer", "Beleza/Cuidados", "Presentes"],
     // Gasto de vontade, com teto próprio (pedido dele, 22/10/2026): cerveja,
-    // salgadinho, doce, delivery por impulso. Itens assim dentro da nota de
+    // salgadinho, biscoito/bolacha, doce, delivery por impulso. Itens assim dentro da nota de
     // mercado também contam aqui (ver isBesteiraItem).
     "Besteira": ["Bebida alcoólica", "Salgadinho/Doces", "Delivery por vontade"],
     "Educação": ["Cursos", "Livros", "Mensalidade"],
@@ -78,8 +78,8 @@ export function merchantKey(description: string): string {
  */
 export function isBesteiraItem(i: { name: string; category: string }): boolean {
   const n = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  if (/besteira|(?<!nao )alcoolic|cervej|destilad|vinho|salgadinh|petisco|chocolate|\bdoces?\b|sorvete|snack/.test(n(i.category))) return true;
-  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|pippos|salgadinho|chocolate|bombom|sorvete|picole/.test(n(i.name));
+  if (/besteira|(?<!nao )alcoolic|cervej|destilad|vinho|salgadinh|petisco|biscoito|bolacha|chocolate|\bdoces?\b|sorvete|snack/.test(n(i.category))) return true;
+  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|pippos|salgadinho|\bbisc\b|biscoito|bolacha|cookie|wafer|piraque|club social|chocolate|bombom|sorvete|picole/.test(n(i.name));
 }
 
 /**
