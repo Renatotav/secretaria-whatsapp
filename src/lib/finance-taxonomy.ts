@@ -89,9 +89,28 @@ export function isBesteiraItem(i: { name: string; category: string }): boolean {
  */
 export const ITEM_CATEGORIES = ["Carnes", "Frios e laticínios", "Hortifruti", "Padaria", "Mercearia", "Congelados", "Bebidas", "Besteira", "Limpeza", "Higiene e beleza", "Descontos"] as const;
 
+/** Subcategoria pelo NOME do produto, quando a categoria lida é genérica ("Alimentação"). */
+function categoriaPeloNome(name: string): string | null {
+  const n = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/coxinha|congelad|\bcong\b|lasanha|hamburguer|empanad|nuggets|pizza|pao de queijo|batata (palito|frita)|sorvet/.test(n) && !/costela|file|frango inteiro/.test(n)) return "Congelados";
+  if (/costela|\bfile\b|filez|frango|\bcarne|bovin|suin|\bpeito\b|coxa|sobrecoxa|alcatra|picanha|patinho|acem|musculo|linguica|bacon|calabresa|peixe|tilapia|sardinha fresca|\bbife/.test(n)) return "Carnes";
+  if (/\bpao\b|paes|bisnaguinha|torrada|bolo\b/.test(n)) return "Padaria";
+  if (/queijo|mussarela|muçarela|presunto|mortadela|requeij|iogurte|\bleite\b|manteiga|margarina|creme de leite|nata/.test(n)) return "Frios e laticínios";
+  if (/limao|banana|maca\b|laranja|tomate|cebola|alho|batata|cenoura|alface|couve|abacate|mamao|melancia|uva|pepino|pimentao|chuchu|abobrinha|batata doce|hortifruti|\bkg\b.*(fruta|legume)/.test(n)) return "Hortifruti";
+  if (/refri|suco|agua mineral|\bagua\b|cha gelado|isotonico|energetico|coca|guarana|pepsi|fanta|sprite/.test(n)) return "Bebidas";
+  if (/detergente|sabao|amaciante|desinfet|agua sanitaria|esponja|limpador|multiuso|papel toalha|saco de lixo/.test(n)) return "Limpeza";
+  if (/shampoo|condicionador|sabonete|desodorante|creme dental|escova dental|papel higien|pap htg|pap hig|absorvente|perfume|hidratante|cond dove/.test(n)) return "Higiene e beleza";
+  return null;
+}
+
 export function normalizeItemCategory(i: { name: string; category: string; amount?: number }): string {
   if (isBesteiraItem(i)) return "Besteira";
   const c = i.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // Categoria genérica (a da nota inteira): decide pelo nome do produto.
+  if (!c || /^(aliment|supermercado|mercado|outros|geral|compras|essenciais|basico)/.test(c)) {
+    const pelo = categoriaPeloNome(i.name);
+    if (pelo) return pelo;
+  }
   if (/desconto|ajuste|acrescimo/.test(c) || (i.amount ?? 0) < 0) return "Descontos";
   if (/carne|acougue|frango|peixe|bovin|suin/.test(c)) return "Carnes";
   if (/latic|frio|queijo|iogurte|leite/.test(c)) return "Frios e laticínios";
