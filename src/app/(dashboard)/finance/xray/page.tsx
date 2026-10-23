@@ -45,6 +45,7 @@ function XRayContent() {
   const [todos, setTodos] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [pag, setPag] = useState<Pag[]>([]); // vazio = tudo; pode marcar mais de um (ex.: VR + cartão)
+  const [cat, setCat] = useState<string | null>(null); // tocou numa subcategoria: lista os itens dela
   const somaPag = useMemo(() => {
     const s: Record<Pag, number> = { vr: 0, cartao: 0, outros: 0 };
     todos.forEach((i) => (s[pagDe(i.financeEntry)] += i.amount));
@@ -54,6 +55,7 @@ function XRayContent() {
 
   useEffect(() => {
     setLoading(true);
+    setCat(null);
     fetch(`/api/finance/xray?month=${month}`)
       .then(res => res.json())
       .then(data => {
@@ -82,6 +84,16 @@ function XRayContent() {
     });
     return Object.values(groups).sort((a, b) => b.amount - a.amount).slice(0, 50); // Top 50
   }, [items]);
+
+  // Itens da subcategoria tocada, um por compra (mais recente primeiro).
+  const daCategoria = useMemo(
+    () => (cat ? items.filter((i) => i.category === cat).sort((a, b) => b.financeEntry.date.localeCompare(a.financeEntry.date) || b.amount - a.amount) : []),
+    [items, cat]
+  );
+  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const loja = (d: string) => d.replace(/^Nota Fiscal \(\d+ itens\)\s*-?\s*/i, "").replace(/\s*\(parte n[oa] [^)]*\)\s*$/i, "").trim() || "Nota fiscal";
+  const dia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+  const qtd = (q: number) => (Number.isInteger(q) ? `${q} un.` : `${q.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`);
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
@@ -157,20 +169,52 @@ function XRayContent() {
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", alignItems: "start" }}>
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>💰 Gastos por Subcategoria</h2>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {byCategory.map(([cat, val]) => (
-                  <div key={cat}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13 }}>
-                      <span>{cat}</span>
-                      <span style={{ fontWeight: 600 }}>{val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                    </div>
-                    <div style={{ width: "100%", height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{ width: `${(val / total) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
-                    </div>
-                  </div>
-                ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {byCategory.map(([nome, val]) => {
+                  const ativo = cat === nome;
+                  return (
+                    <button
+                      key={nome}
+                      type="button"
+                      aria-pressed={ativo}
+                      onClick={() => setCat(ativo ? null : nome)}
+                      title="Toque para ver os itens"
+                      style={{ display: "block", width: "100%", textAlign: "left", background: ativo ? "var(--accent-dim)" : "transparent", border: `1px solid ${ativo ? "var(--accent-border)" : "transparent"}`, borderRadius: 8, padding: "6px 8px", boxSizing: "border-box", color: "var(--text)", cursor: "pointer" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 13, gap: 8 }}>
+                        <span>{nome} <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ativo ? "▾" : "›"}</span></span>
+                        <span style={{ fontWeight: 600 }}>{brl(val)}</span>
+                      </div>
+                      <div style={{ width: "100%", height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ width: `${(val / total) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {cat && (
+              <div style={{ background: "var(--bg-card)", border: "1px solid var(--accent-border)", borderRadius: 12, padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 600 }}>🔎 {cat}: {daCategoria.length} {daCategoria.length === 1 ? "item" : "itens"} · {brl(daCategoria.reduce((a, i) => a + i.amount, 0))}</h2>
+                  <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setCat(null)}>Fechar</button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {daCategoria.map((it) => (
+                    <div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, paddingBottom: 10, borderBottom: "1px solid var(--border-light)" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, overflowWrap: "anywhere" }}>{it.name}</div>
+                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
+                          {dia(it.financeEntry.date)} · {loja(it.financeEntry.description)} · {qtd(it.quantity)}{it.quantity !== 1 && it.unitPrice ? ` × ${brl(it.unitPrice)}` : ""}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{brl(it.amount)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
               <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>🏆 Ranking de Produtos (Top 50)</h2>
@@ -179,7 +223,7 @@ function XRayContent() {
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 10, borderBottom: "1px solid var(--border-light)" }}>
                     <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i + 1}. {prod.name}</div>
-                      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{Number.isInteger(prod.quantity) ? `${prod.quantity} un.` : `${prod.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{Number.isInteger(prod.quantity) ? `${prod.quantity} un.` : `${prod.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`}</div>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 600, flexShrink: 0 }}>{prod.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                   </div>
