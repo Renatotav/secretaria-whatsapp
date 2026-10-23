@@ -1188,26 +1188,229 @@ export default function FinancePage() {
           </div>
           <form
             onSubmit={addEntry}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: 12,
-              padding: 16,
-              display: "grid",
-              gap: 12,
-              alignItems: "end",
-            }}
-            className="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, display: "grid", gap: 14 }}
           >
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Tipo</label>
-              <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
-                <option value="expense">Despesa</option>
-                <option value="income">Receita</option>
-              </select>
+            {/* 1. Despesa ou receita */}
+            <div role="radiogroup" aria-label="Tipo" style={{ display: "flex", gap: 6 }}>
+              {([["expense", "↓ Despesa", "var(--danger)"], ["income", "↑ Receita", "var(--success)"]] as const).map(([v, t, cor]) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.type === v}
+                  onClick={() => setForm((f) => ({ ...f, type: v }))}
+                  style={{ flex: "1 1 0", padding: "8px 10px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: `1px solid ${form.type === v ? cor : "var(--border)"}`, background: form.type === v ? `color-mix(in srgb, ${cor} 14%, transparent)` : "transparent", color: form.type === v ? cor : "var(--text-muted)" }}
+                >
+                  {t}
+                </button>
+              ))}
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Conta (Carteira)</label>
+
+            {/* 2. Quanto e o que foi */}
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))" }}>
+              <label style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Quanto</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid var(--border)", borderRadius: 10, padding: "0 12px", background: "var(--bg)" }}>
+                  <span style={{ fontSize: 18, color: "var(--text-muted)", fontWeight: 600 }}>R$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={form.amount}
+                    onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                    placeholder="0,00"
+                    required
+                    aria-label="Valor"
+                    style={{ border: 0, background: "transparent", fontSize: 24, fontWeight: 700, padding: "8px 0", width: "100%", minWidth: 0, fontVariantNumeric: "tabular-nums" }}
+                  />
+                </div>
+              </label>
+              <label style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>O que foi</span>
+                <input
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder={form.type === "income" ? "ex.: salário, freela" : "ex.: almoço, mercado Guará"}
+                  style={{ fontSize: 15, padding: "12px" }}
+                />
+              </label>
+            </div>
+
+            {/* 3. Como pagou (toque) */}
+            <div style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{form.type === "income" ? "Como recebeu" : "Como pagou"}</span>
+              <div role="radiogroup" aria-label="Forma de pagamento" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {(form.type === "income"
+                  ? [["pix", "Pix"], ["dinheiro", "Dinheiro"], ["ticket", "VR"], ["cartão", "Estorno no cartão"]]
+                  : [["cartão", "💳 Cartão"], ["pix", "Pix"], ["débito", "Débito"], ["ticket", "🍽️ VR"], ["dinheiro", "Dinheiro"], ["boleto", "Boleto"]]
+                ).map(([v, t]) => {
+                  const on = form.paymentMethod === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          paymentMethod: v,
+                          installments: v === "cartão" ? f.installments : "1",
+                          // VR vai para a conta do vale; sair do VR volta para a Principal.
+                          account: v === "ticket" ? allAccounts.find((a) => isVoucherAccount(a)) || "VR" : isVoucherAccount(f.account) ? "Principal" : f.account,
+                        }))
+                      }
+                      style={{ padding: "7px 12px", borderRadius: 999, fontSize: 13, border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`, background: on ? "var(--accent-dim)" : "transparent", color: on ? "var(--text)" : "var(--text-muted)", fontWeight: on ? 600 : 400 }}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4. Quando (+ parcelas no cartão) */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{isCardForm ? "Dia da compra" : form.type === "income" ? "Dia que recebeu" : "Quando"}</span>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  {[["Hoje", 0], ["Ontem", 1]].map(([t, n]) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - (n as number));
+                    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                    const atual = isCardForm ? form.purchaseDate || form.date : form.date;
+                    const on = atual === iso;
+                    return (
+                      <button
+                        key={t as string}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setForm((f) => (isCardForm ? { ...f, purchaseDate: iso, date: iso } : { ...f, date: iso }))}
+                        style={{ padding: "7px 12px", borderRadius: 999, fontSize: 13, border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`, background: on ? "var(--accent-dim)" : "transparent", color: on ? "var(--text)" : "var(--text-muted)" }}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                  <input
+                    type="date"
+                    aria-label="Outro dia"
+                    value={isCardForm ? form.purchaseDate || form.date : form.date}
+                    onChange={(e) => setForm((f) => (isCardForm ? { ...f, purchaseDate: e.target.value, date: e.target.value } : { ...f, date: e.target.value }))}
+                    style={{ width: "auto" }}
+                  />
+                </div>
+              </div>
+              {isCardForm && (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Parcelas</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="96"
+                      step="1"
+                      inputMode="numeric"
+                      value={form.installments}
+                      onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))}
+                      aria-label="Número de parcelas"
+                      style={{ width: 64, textAlign: "center" }}
+                    />
+                    <span style={{ fontSize: 13, color: "var(--text-muted)" }}>x</span>
+                  </div>
+                </div>
+              )}
+              {isCardForm && (
+                <div style={{ fontSize: 12, color: "var(--text-muted)", paddingBottom: 9 }}>
+                  💳 Fatura de <b style={{ color: "var(--text)" }}>{formAuto.date.toLocaleDateString("pt-BR")}</b>
+                  {parseInt(form.installments || "1", 10) > 1 && <> · {form.installments}x de {formatMoney(Number(form.amount) || 0)}</>}
+                </div>
+              )}
+            </div>
+
+            {/* 5. Categoria */}
+            <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(min(180px, 100%), 1fr))" }}>
+<div style={{ gridColumn: "span 1" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Categoria</label>
+              {categoryOptions.includes(form.category) || form.category === "" ? (
+                <select
+                  value={form.category || ""}
+                  onChange={(e) => {
+                    if (e.target.value === "NEW") {
+                      setForm((f) => ({ ...f, category: "Nova Categoria" }));
+                    } else {
+                      setForm((f) => ({ ...f, category: e.target.value }));
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                >
+                  <option value="" disabled>Selecione...</option>
+                  {categoryOptions.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                  <option value="NEW">➕ Digitar Nova...</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={form.category}
+                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                    placeholder="Alimentação"
+                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
+                    autoFocus
+                  />
+                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, category: categoryOptions[0] || "" }))} style={{ padding: "0 8px" }} title="Voltar">
+                    x
+                  </button>
+                </div>
+              )}
+            </div>
+<div style={{ gridColumn: "span 1" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
+              {subcategoryOptions.includes(form.subcategory) || form.subcategory === "" ? (
+                <select
+                  value={form.subcategory || ""}
+                  onChange={(e) => {
+                    if (e.target.value === "NEW") {
+                      setForm((f) => ({ ...f, subcategory: "Nova Subcategoria" }));
+                    } else {
+                      setForm((f) => ({ ...f, subcategory: e.target.value }));
+                    }
+                  }}
+                  style={{ width: "100%" }}
+                >
+                  <option value="" disabled>Selecione...</option>
+                  {subcategoryOptions.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                  <option value="NEW">➕ Digitar Nova...</option>
+                </select>
+              ) : (
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={form.subcategory}
+                    onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
+                    placeholder="Mercado"
+                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
+                    autoFocus
+                  />
+                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, subcategory: subcategoryOptions[0] || "" }))} style={{ padding: "0 8px" }} title="Voltar">
+                    x
+                  </button>
+                </div>
+              )}
+            </div>
+            </div>
+
+            {/* Raro: conta, status, humor, recorrente */}
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--text-muted)", minHeight: 32, display: "flex", alignItems: "center" }}>
+                Mais opções <span style={{ marginLeft: 6, fontSize: 12 }}>· {form.account || "Principal"} · {form.status === "paid" ? (form.type === "income" ? "recebido" : "pago") : form.type === "income" ? "a receber" : "a pagar"}{form.recurring ? " · recorrente" : ""}</span>
+              </summary>
+              <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(min(160px, 100%), 1fr))", marginTop: 10 }}>
+<div>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Conta (Carteira)</label>
               {allAccounts.includes(form.account) || form.account === "" ? (
                 <select
                   value={form.account || "Principal"}
@@ -1252,182 +1455,32 @@ export default function FinancePage() {
                 </div>
               )}
             </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Valor</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                placeholder="0,00"
-                required
-              />
-            </div>
-            <div style={{ gridColumn: "span 1" }}>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Categoria</label>
-              {categoryOptions.includes(form.category) || form.category === "" ? (
-                <select
-                  value={form.category || ""}
-                  onChange={(e) => {
-                    if (e.target.value === "NEW") {
-                      setForm((f) => ({ ...f, category: "Nova Categoria" }));
-                    } else {
-                      setForm((f) => ({ ...f, category: e.target.value }));
-                    }
-                  }}
-                  style={{ width: "100%" }}
-                >
-                  <option value="" disabled>Selecione...</option>
-                  {categoryOptions.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                  <option value="NEW">➕ Digitar Nova...</option>
-                </select>
-              ) : (
-                <div style={{ display: "flex", gap: 4 }}>
-                  <input
-                    value={form.category}
-                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                    placeholder="Alimentação"
-                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
-                    autoFocus
-                  />
-                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, category: categoryOptions[0] || "" }))} style={{ padding: "0 8px" }} title="Voltar">
-                    x
-                  </button>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Situação {statusTouched ? "" : "(automática)"}</label>
+                  <select value={form.status} onChange={(e) => { setStatusTouched(true); setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" })); }}>
+                    <option value="paid">{form.type === "income" ? "Recebido" : "Pago"}</option>
+                    <option value="pending">{form.type === "income" ? "A receber" : "A pagar"}</option>
+                  </select>
                 </div>
-              )}
-            </div>
-            <div style={{ gridColumn: "span 1" }}>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Subcategoria</label>
-              {subcategoryOptions.includes(form.subcategory) || form.subcategory === "" ? (
-                <select
-                  value={form.subcategory || ""}
-                  onChange={(e) => {
-                    if (e.target.value === "NEW") {
-                      setForm((f) => ({ ...f, subcategory: "Nova Subcategoria" }));
-                    } else {
-                      setForm((f) => ({ ...f, subcategory: e.target.value }));
-                    }
-                  }}
-                  style={{ width: "100%" }}
-                >
-                  <option value="" disabled>Selecione...</option>
-                  {subcategoryOptions.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                  <option value="NEW">➕ Digitar Nova...</option>
-                </select>
-              ) : (
-                <div style={{ display: "flex", gap: 4 }}>
-                  <input
-                    value={form.subcategory}
-                    onChange={(e) => setForm((f) => ({ ...f, subcategory: e.target.value }))}
-                    placeholder="Mercado"
-                    style={{ flex: 1, minWidth: 0, padding: "8px 6px" }}
-                    autoFocus
-                  />
-                  <button type="button" className="btn-ghost" onClick={() => setForm(f => ({ ...f, subcategory: subcategoryOptions[0] || "" }))} style={{ padding: "0 8px" }} title="Voltar">
-                    x
-                  </button>
+                <div>
+                  <label style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginBottom: 4 }}>Como você estava</label>
+                  <select value={form.mood} onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))}>
+                    {MOODS.map((m) => (
+                      <option key={m.key} value={m.key}>{m.emoji} {m.label}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-            </div>
-            <div style={{ gridColumn: "span 1" }}>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Descrição</label>
-              <input
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Opcional"
-              />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
-                {form.type === "income" ? "Forma Rec." : "Forma Pag."}
-              </label>
-              <select 
-                value={form.paymentMethod} 
-                onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}
-                disabled={isVoucherAccount(form.account)}
-                title={isVoucherAccount(form.account) ? "Conta de vale (VR) só aceita a forma VR / Ticket" : undefined}
-              >
-                <option value="pix">Pix</option>
-                <option value="cartão">Cartão</option>
-                <option value="débito">Débito</option>
-                <option value="dinheiro">Dinheiro</option>
-                <option value="boleto">Boleto</option>
-                <option value="ticket">Ticket / Vale</option>
-              </select>
-            </div>
-            {isCardForm ? (
-              <div>
-                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Data da compra</label>
-                <input type="date" value={form.purchaseDate || form.date} onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value, date: e.target.value }))} />
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>💳 Fatura: {formAuto.date.toLocaleDateString("pt-BR")}</div>
-              </div>
-            ) : (
-              <div>
-                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
-                  {form.type === "income" ? "Data (receb.)" : "Data"}
+                <label title="Repete todo mês (ex.: salário, aluguel)" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-muted)", minHeight: 40, cursor: "pointer" }}>
+                  <input type="checkbox" checked={form.recurring} onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))} style={{ width: "auto" }} />
+                  🔁 Repete todo mês
                 </label>
-                <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
               </div>
-            )}
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Status {statusTouched ? "" : "(automático)"}</label>
-              <select value={form.status} onChange={(e) => { setStatusTouched(true); setForm((f) => ({ ...f, status: e.target.value as "paid" | "pending" })); }}>
-                <option value="paid">{form.type === "income" ? "Recebido" : "Pago"}</option>
-                <option value="pending">{form.type === "income" ? "A receber" : "Pendente"}</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>Humor</label>
-              <select value={form.mood} onChange={(e) => setForm((f) => ({ ...f, mood: e.target.value }))} title="Como você estava se sentindo?">
-                {MOODS.map(m => (
-                  <option key={m.key} value={m.key}>{m.emoji} {m.label}</option>
-                ))}
-              </select>
-            </div>
-            {/* Parcelas — só aparece quando forma de pagamento for Cartão */}
-            {form.paymentMethod === "cartão" && form.type === "expense" && (
-              <div>
-                <label style={{ display: "block", fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>
-                  💳 Parcelas
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="96"
-                  step="1"
-                  value={form.installments}
-                  onChange={(e) => setForm((f) => ({ ...f, installments: e.target.value }))}
-                  title="Número de parcelas. Ex: 12 para 12x"
-                  placeholder="1"
-                />
-                {parseInt(form.installments || "1", 10) > 1 && (
-                  <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>
-                    Criará {form.installments}x de {formatMoney(Number(form.amount) || 0)}
-                  </p>
-                )}
-              </div>
-            )}
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <label
-                title="Repete todo mês automaticamente (ex: salário, aluguel)"
-                style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", height: 38, cursor: "pointer" }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.recurring}
-                  onChange={(e) => setForm((f) => ({ ...f, recurring: e.target.checked }))}
-                  style={{ width: "auto" }}
-                />
-                🔁 Recorrente
-              </label>
-            </div>
-            <button className="btn-primary" type="submit" disabled={saving}>
-              {saving ? "..." : `Adicionar${parseInt(form.installments || "1", 10) > 1 ? ` (${form.installments}x)` : ""}`}
+            </details>
+
+            <button className="btn-primary" type="submit" disabled={saving} style={{ fontSize: 15, padding: "12px 16px", fontWeight: 700 }}>
+              {saving
+                ? "Salvando…"
+                : `Adicionar${Number(form.amount) > 0 ? ` ${formatMoney(Number(form.amount))}` : ""}${parseInt(form.installments || "1", 10) > 1 && isCardForm ? ` em ${form.installments}x` : ""}`}
             </button>
           </form>
         </div>
