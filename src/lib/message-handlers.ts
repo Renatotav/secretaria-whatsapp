@@ -165,7 +165,7 @@ async function monthTotals(year: number, monthIndex: number) {
     where: { date: { gte: new Date(year, monthIndex, 1), lte: new Date(year, monthIndex + 1, 0, 23, 59, 59) } },
     select: { type: true, amount: true, category: true, invoiceItems: { select: { name: true, category: true, amount: true } } },
   });
-  const { isBesteiraItem } = await import("./finance-taxonomy");
+  const { isBesteiraItem, spreadDiscount } = await import("./finance-taxonomy");
   const byCategory: Record<string, number> = {};
   let income = 0;
   let expense = 0;
@@ -174,7 +174,7 @@ async function monthTotals(year: number, monthIndex: number) {
     else {
       expense += e.amount;
       // Cerveja/salgadinho dentro da nota de mercado conta na Besteira (sai da categoria da nota).
-      const besteira = e.category === "Besteira" ? 0 : e.invoiceItems.filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
+      const besteira = e.category === "Besteira" ? 0 : spreadDiscount(e.invoiceItems).filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
       const cat = e.category || "Outros";
       byCategory[cat] = (byCategory[cat] || 0) + e.amount - besteira;
       if (besteira > 0) byCategory.Besteira = (byCategory.Besteira || 0) + besteira;
@@ -4057,8 +4057,8 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
     }
   }
   // Nota com cerveja/salgadinho: mostra o teto da Besteira (ele pediu para não passar).
-  const { isBesteiraItem } = await import("./finance-taxonomy");
-  const besteiraNaNota = invoice.items.filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
+  const { isBesteiraItem, spreadDiscount } = await import("./finance-taxonomy");
+  const besteiraNaNota = spreadDiscount(invoice.items).filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
   if (besteiraNaNota > 0 && invoice.category !== "Besteira") {
     const bs = items.find((x) => x.category === "Besteira");
     response += bs

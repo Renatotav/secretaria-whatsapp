@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { normalizeItemCategory } from "@/lib/finance-taxonomy";
+import { normalizeItemCategory, spreadDiscount } from "@/lib/finance-taxonomy";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) {
@@ -45,5 +45,9 @@ export const GET = withErrorHandling(async (request: Request) => {
   });
 
   // Subcategorias fixas (as antigas da IA são traduzidas aqui); cerveja/salgadinho/doce = "Besteira".
-  return NextResponse.json(items.map((i) => ({ ...i, category: normalizeItemCategory(i) })));
+  // Desconto da nota espalhado pelos itens dela (cada produto com o preço pago de verdade).
+  const porNota = new Map<string, typeof items>();
+  for (const i of items) porNota.set(i.financeEntryId, [...(porNota.get(i.financeEntryId) ?? []), i]);
+  const pagos = [...porNota.values()].flatMap((lista) => spreadDiscount(lista));
+  return NextResponse.json(pagos.map((i) => ({ ...i, category: normalizeItemCategory(i) })));
 });

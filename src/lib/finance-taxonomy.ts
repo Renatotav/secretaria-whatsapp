@@ -104,3 +104,21 @@ export function normalizeItemCategory(i: { name: string; category: string; amoun
   if (/mercearia|enlatad|tempero|condiment|essenciais|basico|alimento|alimentacao|biscoito|graos|massa|cereal|processad/.test(c)) return "Mercearia";
   return ITEM_CATEGORIES.find((x) => x.toLowerCase() === i.category.toLowerCase()) ?? "Mercearia";
 }
+
+/**
+ * Desconto da nota (linha negativa, ex.: "Desconto da Nota −23,02") espalhado
+ * entre os itens da MESMA nota, na proporção do valor de cada um: cada produto
+ * fica com o preço pago de verdade e a linha de desconto some. O total da nota
+ * não muda. Recebe os itens de uma nota só.
+ */
+export function spreadDiscount<T extends { amount: number; unitPrice?: number; name?: string }>(items: T[]): T[] {
+  // Linha de ajuste = desconto (negativo) ou "Ajuste / Acréscimo" da nota.
+  // "Itens não lidos" não é ajuste: é compra que a foto não mostrou.
+  const ajuste = (i: T) => i.amount < 0 || /ajuste|acr[eé]scimo|desconto/i.test(i.name ?? "");
+  const pos = items.filter((i) => !ajuste(i) && i.amount > 0);
+  const delta = items.filter(ajuste).reduce((a, i) => a + i.amount, 0);
+  const somaPos = pos.reduce((a, i) => a + i.amount, 0);
+  if (!items.some(ajuste) || somaPos <= 0) return items;
+  const f = Math.max(0, (somaPos + delta) / somaPos);
+  return pos.map((i) => ({ ...i, amount: Math.round(i.amount * f * 100) / 100, ...(i.unitPrice ? { unitPrice: Math.round(i.unitPrice * f * 100) / 100 } : {}) }));
+}
