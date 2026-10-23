@@ -47,6 +47,8 @@ export const GET = withErrorHandling(async (request: Request) => {
         faltam: abertas.length,
         restante: abertas.reduce((a, p) => a + p.valor, 0),
         ultima,
+        // Parcelas que faltam, mês a mês (o gráfico da tela recalcula com os filtros).
+        abertas: abertas.map((p) => ({ n: p.n, mes: p.mes, valor: p.valor })),
       };
     })
     .filter((s) => s.faltam > 0)
