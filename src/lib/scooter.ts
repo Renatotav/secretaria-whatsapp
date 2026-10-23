@@ -286,7 +286,7 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
   if (!config?.openrouterApiKey) return "⚠️ Sem chave do OpenRouter para ler o vídeo. Manda em texto: *scooter 50 km 79v 6 barras*.";
   const prompt =
     "Vídeo do painel de uma scooter elétrica ANGIE (sistema 72 V, bateria LiFePO4) sendo ligada. Na sequência de inicialização aparece primeiro \"72V\" " +
-    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos, ex: 00043 — o número GRANDE ao lado é a velocidade/marcha, NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
+    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos, ex: 00043 — o caractere GRANDE no meio é a marcha "P" (estacionado; parece um 2) ou a velocidade: NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
     "indicador de bateria com até 6 barras. Leia: o ODO, a tensão real (nunca 72) e quantas barras estão acesas. Se não for o painel de uma scooter, " +
     'diga painel=false. Responda SÓ JSON: {"painel":true|false,"odo":number|null,"volts":number|null,"barras":number|null,"trip":number|null}';
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -318,8 +318,8 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
     return `🎥 Não consegui ver o ODO no vídeo.${extra} Me manda o km em texto: *scooter 50 km*.`;
   }
   const last = await lastOdo();
-  // A leitura às vezes gruda o número grande do painel (velocidade/marcha) no
-  // ODO: "00090" + "2" virou 902 (23/10/2026). Se tirar o último dígito cabe
+  // A leitura às vezes gruda o caractere grande do painel (o "P" de estacionado,
+  // que parece um 2) no ODO: "00090" + "P" virou 902 (23/10/2026). Se tirar o último dígito cabe
   // entre o último ODO e +400 km, é isso (o ODO do painel é inteiro).
   let virgula = "";
   if (last !== null && odo > last + 400 && Math.floor(odo / 10) >= last && Math.floor(odo / 10) <= last + 400) {
