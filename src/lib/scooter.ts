@@ -286,7 +286,7 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
   if (!config?.openrouterApiKey) return "⚠️ Sem chave do OpenRouter para ler o vídeo. Manda em texto: *scooter 50 km 79v 6 barras*.";
   const prompt =
     "Vídeo do painel de uma scooter elétrica ANGIE (sistema 72 V, bateria LiFePO4) sendo ligada. Na sequência de inicialização aparece primeiro \"72V\" " +
-    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos, ex: 00043 — o caractere GRANDE no meio é a marcha "P" (estacionado; parece um 2) ou a velocidade: NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
+    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos, ex: 00043 — o caractere GRANDE no meio é a marcha \"P\" (estacionado; parece um 2) ou a velocidade: NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
     "indicador de bateria com até 6 barras. Leia: o ODO, a tensão real (nunca 72) e quantas barras estão acesas. Se não for o painel de uma scooter, " +
     'diga painel=false. Responda SÓ JSON: {"painel":true|false,"odo":number|null,"volts":number|null,"barras":number|null,"trip":number|null}';
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
