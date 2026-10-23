@@ -3845,6 +3845,38 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
     return;
   }
 
+  // Nome lido pela foto com 1–2 letras trocadas ("CUXINHA", "CERU HEINEKEN",
+  // "2200" no lugar de "220G"): se já existe o mesmo produto nas compras
+  // anteriores, usa o nome que já está lá. A SEFAZ já vem com o nome certo.
+  if (!invoice.fromSefaz) {
+    const conhecidos = [...new Set((await prisma.invoiceItem.findMany({ select: { name: true }, orderBy: { createdAt: "desc" }, take: 3000 })).map((x) => x.name))];
+    const dist = (a: string, b: string) => {
+      if (Math.abs(a.length - b.length) > 2) return 99;
+      const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+      for (let i = 1; i <= a.length; i++) {
+        let prev = d[0];
+        d[0] = i;
+        for (let j = 1; j <= b.length; j++) {
+          const tmp = d[j];
+          d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+          prev = tmp;
+        }
+      }
+      return d[b.length];
+    };
+    for (const it of invoice.items) {
+      const nome = it.name.toUpperCase().trim();
+      if (nome.length < 8 || conhecidos.includes(it.name)) continue;
+      // Números (tamanho/peso) têm que bater: "80G" ≠ "90G", "1L" ≠ "2L" são produtos diferentes.
+      const nums = (t: string) => (t.match(/\d+/g) || []).join(",");
+      const parecido = conhecidos.find((c) => nums(c) === nums(it.name) && dist(nome, c.toUpperCase()) <= 2);
+      if (parecido) {
+        console.log(`[invoice] nome corrigido pelo histórico: "${it.name}" → "${parecido}"`);
+        it.name = parecido;
+      }
+    }
+  }
+
   let calculatedTotal = sumOf(invoice);
   const diff = Number((invoice.total - calculatedTotal).toFixed(2));
 
