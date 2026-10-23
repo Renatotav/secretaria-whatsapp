@@ -52,9 +52,10 @@ const EMPTY_FORM: FormState = {
   description: "",
   date: "",
   purchaseDate: "",
-  paymentMethod: "pix",
+  // Quase tudo dele é no cartão (igual ao WhatsApp): o formulário já começa nele.
+  paymentMethod: "cartão",
   account: "Principal",
-  status: "paid",
+  status: "pending",
   mood: "neutro",
   recurring: false,
   installments: "1",
