@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { isBesteiraItem } from "@/lib/finance-taxonomy";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) {
@@ -43,5 +44,6 @@ export const GET = withErrorHandling(async (request: Request) => {
     }
   });
 
-  return NextResponse.json(items);
+  // Cerveja, salgadinho, doce… aparecem juntos como "Besteira" (mesma regra do teto de R$ 250).
+  return NextResponse.json(items.map((i) => (isBesteiraItem(i) ? { ...i, category: "Besteira" } : i)));
 });
