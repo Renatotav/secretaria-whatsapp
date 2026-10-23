@@ -32,6 +32,7 @@ export const GET = withErrorHandling(async (request: Request) => {
       financeEntry: {
         select: {
           date: true,
+          purchaseDate: true,
           category: true,
           description: true,
           paymentMethod: true,
