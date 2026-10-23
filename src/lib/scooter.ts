@@ -286,7 +286,7 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
   if (!config?.openrouterApiKey) return "⚠️ Sem chave do OpenRouter para ler o vídeo. Manda em texto: *scooter 50 km 79v 6 barras*.";
   const prompt =
     "Vídeo do painel de uma scooter elétrica ANGIE (sistema 72 V, bateria LiFePO4) sendo ligada. Na sequência de inicialização aparece primeiro \"72V\" " +
-    "(nominal, IGNORE), depois o ODO (km total, ex: 00043 ou com uma casa decimal, ex: 90.2 — mantenha o ponto) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
+    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos, ex: 00043 — o número GRANDE ao lado é a velocidade/marcha, NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
     "indicador de bateria com até 6 barras. Leia: o ODO, a tensão real (nunca 72) e quantas barras estão acesas. Se não for o painel de uma scooter, " +
     'diga painel=false. Responda SÓ JSON: {"painel":true|false,"odo":number|null,"volts":number|null,"barras":number|null,"trip":number|null}';
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -318,12 +318,13 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
     return `🎥 Não consegui ver o ODO no vídeo.${extra} Me manda o km em texto: *scooter 50 km*.`;
   }
   const last = await lastOdo();
-  // O painel mostra o ODO com uma casa decimal ("90.2") e a leitura às vezes
-  // perde o ponto (902). Se dividir por 10 cabe entre o último e +400 km, é isso.
+  // A leitura às vezes gruda o número grande do painel (velocidade/marcha) no
+  // ODO: "00090" + "2" virou 902 (23/10/2026). Se tirar o último dígito cabe
+  // entre o último ODO e +400 km, é isso (o ODO do painel é inteiro).
   let virgula = "";
-  if (last !== null && odo > last + 400 && odo / 10 >= last && odo / 10 <= last + 400) {
-    virgula = `\n(Li "${fmt(odo, 0)}" — entendi ${fmt(odo / 10, 1)} km, com a vírgula do painel. Se não for, mande *scooter corrigir X km*.)`;
-    odo = odo / 10;
+  if (last !== null && odo > last + 400 && Math.floor(odo / 10) >= last && Math.floor(odo / 10) <= last + 400) {
+    virgula = `\n(Li "${fmt(odo, 0)}" — entendi ${fmt(Math.floor(odo / 10), 0)} km; o último número era do outro mostrador. Se não for, mande *scooter corrigir X km*.)`;
+    odo = Math.floor(odo / 10);
   }
   if (last !== null && (odo < last || odo > last + 400)) {
     return `🎥 Li ODO ${fmt(odo, 1)} km, mas o último registrado é ${fmt(last, 1)} km. Parece leitura errada — confere e manda em texto: *scooter X km*.`;
