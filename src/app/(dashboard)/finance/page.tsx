@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import Link from "next/link";
 import { GoalsSection } from "./GoalsSection";
 import { BudgetsManager } from "./BudgetsManager";
@@ -712,6 +712,20 @@ export default function FinancePage() {
   const [previousBalance, setPreviousBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [ordem, setOrdem] = useState<"compra" | "fatura">("compra");
+  const [busca, setBusca] = useState("");
+  const [resultadosBusca, setResultadosBusca] = useState<FinanceEntry[] | null>(null);
+  useEffect(() => {
+    const q = busca.trim();
+    if (q.length < 2) return setResultadosBusca(null);
+    const t = setTimeout(() => {
+      fetch(`/api/finance?q=${encodeURIComponent(q)}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => setResultadosBusca(Array.isArray(d) ? d : []))
+        .catch(() => setResultadosBusca([]));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [busca]);
   // A data de hoje sai do relógio do navegador (o servidor roda em UTC).
   useEffect(() => setForm((f) => (f.date ? f : { ...f, date: currentDay() })), []);
   const [saving, setSaving] = useState(false);
@@ -872,7 +886,26 @@ export default function FinancePage() {
   const monthBalance = income - expense;
   const accumulatedBalance = previousBalance + monthBalance;
 
-  let visibleEntries = entries;
+  // Lista segue o DIA DA COMPRA (mais recente primeiro) — pela fatura quase tudo
+  // caía no mesmo dia (10/11) e a compra se perdia. Busca: qualquer mês.
+  const diaDe = (e: FinanceEntry) => (e.purchaseDate || e.date).slice(0, 10);
+  // "23/10" (com o ano só se for de outro ano): cabe no cartão do celular.
+  const curta = (iso: string) => {
+    const d = new Date(iso);
+    const dm = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return d.getFullYear() === new Date().getFullYear() ? dm : `${dm}/${String(d.getFullYear()).slice(2)}`;
+  };
+  const rotuloDia = (d: string) => {
+    const hoje = currentDay();
+    const ontem = (() => { const x = new Date(); x.setDate(x.getDate() - 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; })();
+    const [y, m, dd] = d.split("-");
+    const sem = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(Number(y), Number(m) - 1, Number(dd)).getDay()];
+    return d === hoje ? `Hoje · ${dd}/${m}` : d === ontem ? `Ontem · ${dd}/${m}` : `${sem} · ${dd}/${m}${y !== hoje.slice(0, 4) ? `/${y}` : ""}`;
+  };
+  let visibleEntries = busca.trim().length >= 2 && resultadosBusca ? resultadosBusca : entries;
+  visibleEntries = ordem === "compra"
+    ? [...visibleEntries].sort((a, b) => diaDe(b).localeCompare(diaDe(a)) || b.amount - a.amount)
+    : visibleEntries;
   if (selectedType) {
     visibleEntries = visibleEntries.filter((e) => e.type === selectedType);
   }
@@ -1498,6 +1531,38 @@ export default function FinancePage() {
           </div>
         )}
 
+        {/* Busca e ordem da lista */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 10 }}>
+          <input
+            type="search"
+            value={busca}
+            onChange={(ev) => setBusca(ev.target.value)}
+            placeholder="🔎 Procurar compra (qualquer mês)…"
+            aria-label="Procurar compra"
+            style={{ flex: "1 1 220px", minWidth: 0 }}
+          />
+          <div role="radiogroup" aria-label="Ordem da lista" style={{ display: "flex", gap: 4 }}>
+            {([["compra", "Dia da compra"], ["fatura", "Vencimento"]] as const).map(([v, t]) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={ordem === v}
+                onClick={() => setOrdem(v)}
+                style={{ padding: "7px 12px", borderRadius: 999, fontSize: 12, border: `1px solid ${ordem === v ? "var(--accent)" : "var(--border)"}`, background: ordem === v ? "var(--accent-dim)" : "transparent", color: ordem === v ? "var(--text)" : "var(--text-muted)" }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        {busca.trim().length >= 2 && (
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+            {resultadosBusca === null ? "Procurando…" : `${resultadosBusca.length} resultado(s) para "${busca.trim()}" em todos os meses`} ·{" "}
+            <button type="button" onClick={() => setBusca("")} style={{ background: "none", border: 0, color: "var(--accent)", cursor: "pointer", padding: 0, fontSize: 12 }}>voltar ao mês</button>
+          </div>
+        )}
+
         {/* Table */}
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
           {loading && <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>Carregando...</div>}
@@ -1524,7 +1589,14 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleEntries.map((e) => {
+                  {visibleEntries.map((e, idx) => {
+                    // Cabeçalho do dia da compra ("Hoje", "Ontem", "20/10") quando a lista segue a compra.
+                    const cab = ordem === "compra" && (idx === 0 || diaDe(visibleEntries[idx - 1]) !== diaDe(e)) ? (
+                      <tr className="day-row">
+                        <td colSpan={10}>{rotuloDia(diaDe(e))}</td>
+                      </tr>
+                    ) : null;
+                    const linha = (() => {
                     if (editingId === e.id) {
                       return (
                         <tr key={e.id} className="edit-row" style={{ borderBottom: "1px solid var(--border-light)", background: "var(--bg-hover)" }}>
@@ -1709,9 +1781,15 @@ export default function FinancePage() {
 
                     return (
                       <tr key={e.id} className="entry-row" style={{ borderBottom: "1px solid var(--border-light)" }}>
-                        <td className="c-date" style={{ padding: "8px 8px", whiteSpace: "nowrap" }}>
-                          <div><span className="entry-extra">{e.paymentMethod === "cartão" ? "Fatura " : ""}</span>{new Date(e.date).toLocaleDateString("pt-BR")}</div>
-                          {e.purchaseDate && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Compra: {new Date(e.purchaseDate).toLocaleDateString("pt-BR")}</div>}
+                        <td className="c-date" style={{ padding: "8px 8px" }}>
+                          {e.purchaseDate && e.paymentMethod === "cartão" ? (
+                            <>
+                              <div>Compra {curta(e.purchaseDate)}</div>
+                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>💳 fatura {curta(e.date)}</div>
+                            </>
+                          ) : (
+                            <div>{curta(e.date)}</div>
+                          )}
                         </td>
                         <td className="c-cat" style={{ padding: "8px 8px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1766,6 +1844,13 @@ export default function FinancePage() {
                           </button>
                         </td>
                       </tr>
+                    );
+                  })();
+                    return (
+                      <Fragment key={e.id}>
+                        {cab}
+                        {linha}
+                      </Fragment>
                     );
                   })}
                 </tbody>

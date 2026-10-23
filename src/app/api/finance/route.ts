@@ -50,6 +50,18 @@ export const GET = withErrorHandling(async (request: Request) => {
     };
   }
 
+  // Busca em todos os meses ("procurar compra"): nome, categoria ou subcategoria.
+  const q = (searchParams.get("q") || "").trim();
+  if (q.length >= 2) {
+    const found = await prisma.financeEntry.findMany({
+      where: { OR: ["description", "category", "subcategory"].map((f) => ({ [f]: { contains: q, mode: "insensitive" as const } })) },
+      orderBy: [{ purchaseDate: "desc" }, { date: "desc" }],
+      take: 150,
+      include: { _count: { select: { invoiceItems: true } } },
+    });
+    return NextResponse.json(found);
+  }
+
   const dateOrPurchase = searchParams.get("dateOrPurchase") === "true";
 
   const whereClause: any = dateFilter 
