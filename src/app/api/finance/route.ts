@@ -62,6 +62,21 @@ export const GET = withErrorHandling(async (request: Request) => {
     return NextResponse.json(found);
   }
 
+  // Compras FEITAS no mês (dia da compra), de qualquer fatura. Série de parcelas
+  // aparece uma vez só (na parcela 1, que é a compra).
+  if (searchParams.get("compra") === "1" && dateFilter) {
+    const found = await prisma.financeEntry.findMany({
+      where: {
+        OR: [{ purchaseDate: dateFilter }, { purchaseDate: null, date: dateFilter }],
+        NOT: { description: { contains: "(previsto)" } },
+        ...(account && account !== "all" ? { account: { equals: account, mode: "insensitive" as const } } : {}),
+      },
+      orderBy: [{ purchaseDate: "desc" }, { date: "desc" }],
+      include: { _count: { select: { invoiceItems: true } } },
+    });
+    return NextResponse.json(found.filter((e) => !/Parcela ([2-9]|\d{2,})\/\d+/.test(e.description)));
+  }
+
   const dateOrPurchase = searchParams.get("dateOrPurchase") === "true";
 
   const whereClause: any = dateFilter 

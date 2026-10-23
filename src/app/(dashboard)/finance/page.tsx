@@ -715,6 +715,8 @@ export default function FinancePage() {
   const [ordem, setOrdem] = useState<"compra" | "fatura">("compra");
   const [busca, setBusca] = useState("");
   const [resultadosBusca, setResultadosBusca] = useState<FinanceEntry[] | null>(null);
+  // "Dia da compra": a lista mostra as compras FEITAS no mês escolhido (de qualquer fatura).
+  const [comprasDoMes, setComprasDoMes] = useState<FinanceEntry[] | null>(null);
   useEffect(() => {
     const q = busca.trim();
     if (q.length < 2) return setResultadosBusca(null);
@@ -850,6 +852,11 @@ export default function FinancePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // Lista "dia da compra" (não trava a tela: chega quando chegar).
+      fetch(`/api/finance?month=${month}&compra=1&account=${encodeURIComponent(selectedAccount)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setComprasDoMes(Array.isArray(d) ? d : null))
+        .catch(() => setComprasDoMes(null));
       const [monthRes, yearRes, budgetsRes, balanceRes, accountsRes] = await Promise.all([
         fetch(`/api/finance?month=${month}&account=${encodeURIComponent(selectedAccount)}`),
         fetch(`/api/finance?year=${year}&account=${encodeURIComponent(selectedAccount)}`),
@@ -902,7 +909,7 @@ export default function FinancePage() {
     const sem = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][new Date(Number(y), Number(m) - 1, Number(dd)).getDay()];
     return d === hoje ? `Hoje · ${dd}/${m}` : d === ontem ? `Ontem · ${dd}/${m}` : `${sem} · ${dd}/${m}${y !== hoje.slice(0, 4) ? `/${y}` : ""}`;
   };
-  let visibleEntries = busca.trim().length >= 2 && resultadosBusca ? resultadosBusca : entries;
+  let visibleEntries = busca.trim().length >= 2 && resultadosBusca ? resultadosBusca : ordem === "compra" && comprasDoMes ? comprasDoMes : entries;
   visibleEntries = ordem === "compra"
     ? [...visibleEntries].sort((a, b) => diaDe(b).localeCompare(diaDe(a)) || b.amount - a.amount)
     : visibleEntries;
@@ -1556,6 +1563,13 @@ export default function FinancePage() {
             ))}
           </div>
         </div>
+        {busca.trim().length < 2 && (
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
+            {ordem === "compra"
+              ? `Compras feitas em ${new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString("pt-BR", { month: "long" })} (de qualquer fatura; parcelado aparece uma vez)`
+              : `O que vence em ${new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString("pt-BR", { month: "long" })} (faturas e contas)`}
+          </div>
+        )}
         {busca.trim().length >= 2 && (
           <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>
             {resultadosBusca === null ? "Procurando…" : `${resultadosBusca.length} resultado(s) para "${busca.trim()}" em todos os meses`} ·{" "}
