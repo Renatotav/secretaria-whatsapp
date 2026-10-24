@@ -24,6 +24,8 @@ const COLUMNS: { field: string; test: (h: string) => boolean }[] = [
   { field: "resolution", test: (h) => h.startsWith("DESCRICAO DA RESOLUCAO") || h === "RESOLUCAO" },
   // "STATUS" (ENCERRADO, PENDENTE, AGUARDANDO ABERTURA DE REDMINE, RELÓGIO PARADO…)
   { field: "sheetStatus", test: (h) => h === "STATUS" || h.startsWith("STATUS DO CHAMADO") },
+  // Fórmula da planilha: carimba a data quando o STATUS é preenchido.
+  { field: "closedAt", test: (h) => h.startsWith("DATA ENCERRAMENTO") || h.startsWith("DATA DO ENCERRAMENTO") },
   { field: "redmineText", test: (h) => h.startsWith("ABERTURA DO REDMINE") || h.startsWith("ABERTURA REDMINE") || h.startsWith("TEXTO DO REDMINE") },
 ];
 
@@ -86,6 +88,10 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
       const origin = norm(r[col.origin]);
       const openedAt = col.openedAt !== undefined ? toISO(r[col.openedAt]) : null;
       const resolution = col.resolution !== undefined ? String(r[col.resolution] ?? "").trim() : "";
+      const sheetStatus = col.sheetStatus !== undefined ? sheetStatusText(r[col.sheetStatus]) : undefined;
+      // ENCERRADO na planilha fecha na Central mesmo sem resolução escrita (a planilha é a verdade dele).
+      const closed = !!resolution || /^ENCERRAD/.test(sheetStatus ?? "");
+      const closedAt = (col.closedAt !== undefined ? toISO(r[col.closedAt]) : null) ?? openedAt;
       try {
         await upsertWorkTicket(
           {
@@ -98,13 +104,13 @@ export async function importWorkSpreadsheet(buffer: Buffer): Promise<ImportResul
             origin: origin.includes("EXTERNO") ? "externo" : origin.includes("INTERNO") ? "interno" : undefined,
             resolution: resolution || undefined,
             // Sem os emojis/ícones da célula (✅, 🔴…): só o texto, como na planilha.
-            sheetStatus: col.sheetStatus !== undefined ? sheetStatusText(r[col.sheetStatus]) : undefined,
+            sheetStatus,
             redmineText: col.redmineText !== undefined ? String(r[col.redmineText] ?? "").trim() || undefined : undefined,
-            // Com resolução preenchida, o chamado está resolvido (o upsert nunca rebaixa um Redmine).
-            status: resolution ? "resolvido" : undefined,
-            // A planilha não tem data de resolução: usa a de abertura (o atendimento é no
+            // Com resolução preenchida ou ENCERRADO, o chamado está resolvido (o upsert nunca rebaixa um Redmine).
+            status: closed ? "resolvido" : undefined,
+            // Data do encerramento da planilha; sem ela, a de abertura (o atendimento é no
             // mesmo dia ou no seguinte), para histórico não contar como "resolvido hoje".
-            resolvedAt: resolution ? openedAt : undefined,
+            resolvedAt: closed ? closedAt : undefined,
           },
           "planilha"
         );
