@@ -44,7 +44,10 @@ export async function POST(request: Request) {
   {
     const { spokenAnswer } = await import("@/lib/message-handlers");
     const fala = await spokenAnswer(texto).catch(() => null);
-    if (fala) return NextResponse.json(continua(fala));
+    if (fala) {
+      console.log(`[alexa-skill] respondeu (fala pronta): "${fala.slice(0, 80)}"`);
+      return NextResponse.json(continua(fala));
+    }
   }
   const { replyCapture } = await import("@/lib/reply-capture");
   const { handleSelfMessage } = await import("@/lib/message-handlers");
@@ -60,7 +63,10 @@ export async function POST(request: Request) {
   while (!terminou && !respostas.length && Date.now() - inicio < ESPERA_MS) await new Promise((r) => setTimeout(r, 150));
   if (respostas.length) {
     await new Promise((r) => setTimeout(r, 300)); // às vezes vêm 2 mensagens seguidas
-    return NextResponse.json(continua(vozDaResposta(respostas.join("\n")) || "Feito."));
+    const voz = vozDaResposta(respostas.join("\n")) || "Feito.";
+    console.log(`[alexa-skill] respondeu: "${voz.slice(0, 80)}"`);
+    return NextResponse.json(continua(voz));
   }
+  console.log(`[alexa-skill] ${terminou ? "terminou sem resposta" : "demorou: respondo no WhatsApp"}`);
   return NextResponse.json(terminou ? continua("Feito.") : falar("Tá, já te respondo no WhatsApp."));
 }

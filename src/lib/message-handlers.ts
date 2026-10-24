@@ -1411,6 +1411,22 @@ export async function spokenAnswer(text: string): Promise<string | null> {
     .replace(/\bv[eê]\s*err?e\b/g, "vr")
     .replace(/\b(tempo|tenho)\s+(n[oa]\s+)?br\b/g, "tenho no vr")
     .replace(/\bno\s+br\b/g, "no vr");
+  // "o que precisa da minha atenção?": versão falada curta (o texto do WhatsApp é longo).
+  if (ATTENTION_RE.test(t)) {
+    const txt = (await applyAttentionCommand(t)) || "";
+    if (/Nada precisa de você/.test(txt)) return "Nada precisa de você agora. Tudo em dia.";
+    const partes: string[] = [];
+    const contas = (txt.match(/^[🔴🟡⚪] .+$/gmu) || []).length;
+    if (contas) partes.push(`${contas} ${contas === 1 ? "conta vencendo" : "contas vencendo"}`);
+    if (/Salário de/.test(txt)) partes.push("o salário ainda sem baixa");
+    if (/no vermelho/.test(txt)) partes.push("o mês no vermelho");
+    const esperando = txt.split("Esperando sua resposta")[1]?.split("\n\n")[0].split("\n").filter((l) => l.startsWith("•")).length ?? 0;
+    if (esperando) partes.push(`${esperando} ${esperando === 1 ? "pergunta esperando" : "perguntas esperando"} sua resposta`);
+    const hoje = txt.split("*Hoje*")[1]?.split("\n\n")[0].split("\n").filter((l) => l.startsWith("•")).length ?? 0;
+    if (hoje) partes.push(`${hoje} ${hoje === 1 ? "lembrete" : "lembretes"} para hoje`);
+    if (/Crédito da IA/.test(txt)) partes.push("o crédito da IA baixo");
+    return partes.length ? `Você tem ${partes.length > 1 ? partes.slice(0, -1).join(", ") + " e " + partes[partes.length - 1] : partes[0]}. Os detalhes estão no WhatsApp.` : "Nada urgente agora.";
+  }
   // Ação (lançar, pagar, lembrar…) não é pergunta: segue o caminho normal da secretária.
   if (/^\s*(anota|anote|lan[cç]a|paguei|pago|gastei|comprei|recebi|caiu|marca|me lembra|lembra|agenda\s+\w+\s+(dia|amanh|hoje|às)|tirei|guarda|calibrei|carreguei|desfazer|na verdade)/.test(t) && !/^\s*gastei\s+(hoje|ontem)\s*\??$/.test(t)) return null;
   const r = (v: number) => `${Math.round(Math.abs(v)).toLocaleString("pt-BR")} ${Math.round(Math.abs(v)) === 1 ? "real" : "reais"}`;

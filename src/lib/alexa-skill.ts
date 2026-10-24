@@ -131,7 +131,22 @@ export function vozDaResposta(t: string): string {
 
 /** Tira o nome da skill que às vezes vem junto na frase ("a bússola financeira quanto gastei"). */
 export function semInvocacao(t: string): string {
-  return t.replace(/^\s*(?:(?:para|pra|pro|à|a|ao|o)\s+)?(?:b[uú]ssola\s+financeira|secret[aá]ria\s+tavares|tavares\s+secret[aá]ria)[,\s]*/i, "").trim() || t;
+  // A Alexa às vezes manda o nome da skill colado na pergunta, e mal ouvido:
+  // "para brucela financeira quanto gastei", "a bússula financeira…". Qualquer
+  // palavra parecida + "financeira" no começo sai (log de 23/10/2026).
+  const sem = t
+    .replace(/^\s*(?:(?:pergunt\w*|pe[çc]a|pede|diz|fala)\s+)?(?:(?:para|pra|pro|à|a|ao|o|na|da|com)\s+)?(?:a\s+)?(?:[bv]\S{2,9}\s+financeira|secret[aá]ria\s+tavares|tavares\s+secret[aá]ria)[,\s]*/i, "")
+    .trim();
+  return corrigirOuvido(sem || t);
+}
+
+/** Palavras que a Alexa costuma ouvir errado nas perguntas de dinheiro. */
+export function corrigirOuvido(t: string): string {
+  return t
+    .replace(/\bgases\b/gi, "gastos")
+    .replace(/\bgasta\s+hoje\b/gi, "gastei hoje")
+    .replace(/\bgás(?=\s+(?:hoje|ontem|esse|este|do|no)\b)/gi, "gastos")
+    .replace(/\b(?:limitei|limiti)\b/gi, "limite");
 }
 
 /** "não", "só isso", "obrigado", "tchau": fim da conversa. */
