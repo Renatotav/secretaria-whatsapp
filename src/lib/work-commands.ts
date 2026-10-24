@@ -77,6 +77,14 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
     return `🔄 Pedido feito: em até 2 minutos a extensão confere${r ? ` (a mais nova é a ${r.version})` : ""} e se atualiza sozinha. Se o Chrome perguntar da pasta, escolha *Permitir sempre*.`;
   }
 
+  // "o que falta na planilha?": fechados na Central que a planilha ainda não tem.
+  if (/^\s*(?:o\s+)?que\s+falta\s+(?:na|lan[cç]ar\s+na)\s+planilha\s*\??\s*$|^\s*faltando\s+na\s+planilha\s*\??\s*$/i.test(msg)) {
+    const { missingFromSheet } = await import("./work");
+    const f = await missingFromSheet();
+    if (!f.length) return "📋 Nada faltando: todo chamado seu fechado desde o começo da planilha já está nela (pela última importação).";
+    return `📋 *Faltam na planilha* (${f.length}): ${f.map((t) => t.ticketId).join(", ")}\nNo computador: ⚡ › *📋 Faltando na planilha* copia todas as linhas de uma vez. Depois de colar, importe a planilha de novo para a lista zerar.`;
+  }
+
   // "como está meu trabalho?" / "resumo do trabalho": o briefing das 8h na hora.
   if (/^\s*(?:como\s+(?:est[aá]|t[aá])\s+(?:o\s+)?meu\s+trabalho|resumo\s+do\s+trabalho|briefing(?:\s+do\s+trabalho)?)\s*\??\s*$/i.test(msg)) {
     const { buildWorkBriefing } = await import("./work");

@@ -13,6 +13,7 @@ let lastMonthClosingDate = "";
 let lastWishCheckDate = "";
 let lastReminderHour = -1;
 let lastWorkBriefDate = "";
+const meetingWarned = new Set<string>(); // reuniões do Outlook já avisadas
 let lastMorningDate = "";
 let lastTireDate = "";
 let lastSalaryNudgeDate = "";
@@ -226,6 +227,25 @@ export function startScheduler(): void {
         } catch (err) {
           if (!sent) lastWorkBriefDate = "";
           console.error("Erro no briefing do trabalho:", err);
+        }
+      }
+      // Reunião do Outlook: aviso no WhatsApp 10 min antes (as escondidas com
+      // "ignorar reunião" não avisam). Uma vez por reunião; a agenda vem do cache de 15 min.
+      if (config.ownerPhone) {
+        try {
+          const { outlookMeetings } = await import("./outlook-calendar");
+          const nowMin = Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+          for (const m of (await outlookMeetings()) ?? []) {
+            if (m.allDay || !m.start) continue;
+            const falta = Number(m.start.slice(0, 2)) * 60 + Number(m.start.slice(3, 5)) - nowMin;
+            const key = `${todayDate} ${m.start} ${m.title}`;
+            if (falta < 1 || falta > 10 || meetingWarned.has(key)) continue;
+            meetingWarned.add(key);
+            await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})`, 10, 2);
+          }
+          if (meetingWarned.size > 200) meetingWarned.clear();
+        } catch (err) {
+          console.error("[outlook] aviso de reunião falhou:", err);
         }
       }
       // Alertas logo depois de cada cópia do escala (agendada às 11h/16h ou

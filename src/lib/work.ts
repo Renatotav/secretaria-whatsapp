@@ -94,6 +94,28 @@ export async function upsertWorkTicket(input: WorkTicketInput, source: "painel" 
   return saved;
 }
 
+/**
+ * Fechados na Central que a planilha ainda não conhece: o STATUS da planilha só
+ * chega pela importação, então sem ele = sem linha lá. Só os que foram dele
+ * (chegaram para ele ou ele registrou: o escala traz também os da equipe) e
+ * desde o começo da planilha atual (o 1º encerrado que ela tem).
+ */
+export async function missingFromSheet() {
+  const first = await prisma.workTicket.findFirst({ where: { NOT: { sheetStatus: "" }, resolvedAt: { not: null } }, orderBy: { resolvedAt: "asc" }, select: { resolvedAt: true } });
+  const since = new Date(Math.max(first?.resolvedAt?.getTime() ?? 0, Date.now() - 60 * 86400_000));
+  return prisma.workTicket.findMany({
+    where: {
+      status: { in: ["resolvido", "escalado"] },
+      sheetStatus: "",
+      resolvedAt: { gte: since },
+      OR: [{ receivedAt: { not: null } }, { source: { in: ["extensao", "painel", "whatsapp"] } }],
+    },
+    orderBy: { resolvedAt: "asc" },
+    take: 50,
+    select: { ticketId: true, status: true, origin: true, errorType: true, resolution: true, redmine: true, description: true, receivedAt: true, openedAt: true, resolvedAt: true },
+  });
+}
+
 /** Início do dia/semana/mês no horário de Brasília (em UTC, para comparar com o banco). */
 function periodStarts() {
   const brt = new Date(Date.now() - 3 * 3600_000);
