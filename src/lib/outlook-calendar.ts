@@ -127,11 +127,22 @@ export function meetingsOn(events: Ev[], dayIso: string): Meeting[] {
 
 let cache: { at: number; url: string; events: Ev[] } | null = null;
 
-export async function outlookUrl(): Promise<string | null> {
+type Cfg = { url?: string; ignorar?: string[] };
+async function cfg(): Promise<Cfg> {
   const r = await prisma.flowState.findUnique({ where: { key: KEY } });
-  const url = (r?.value as { url?: string } | null)?.url;
+  return (r?.value as Cfg | null) ?? {};
+}
+async function saveCfg(c: Cfg): Promise<void> {
+  const value = { url: c.url ?? "", ignorar: c.ignorar ?? [] };
+  await prisma.flowState.upsert({ where: { key: KEY }, create: { key: KEY, value }, update: { value } });
+}
+
+export async function outlookUrl(): Promise<string | null> {
+  const url = (await cfg()).url;
   return typeof url === "string" && url ? url : null;
 }
+
+const semAcento = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /** Eventos do calendário (guardados por 15 min). Se o Outlook não responder, usa a última cópia. null = sem link. */
 async function loadEvents(): Promise<Ev[] | null> {
@@ -157,7 +168,10 @@ const brtIso = (offsetDays = 0) => new Date(Date.now() - 3 * 3600_000 + offsetDa
 export async function outlookMeetings(offsetDays = 0): Promise<Meeting[] | null> {
   try {
     const ev = await loadEvents();
-    return ev ? meetingsOn(ev, brtIso(offsetDays)) : null;
+    if (!ev) return null;
+    // Reuniões que ele mandou esconder ("ignorar reunião daily"): pelo trecho do título.
+    const fora = ((await cfg()).ignorar ?? []).map(semAcento).filter(Boolean);
+    return meetingsOn(ev, brtIso(offsetDays)).filter((m) => !fora.some((f) => semAcento(m.title).includes(f)));
   } catch {
     return null;
   }
@@ -180,12 +194,12 @@ export function meetingsSpeech(list: Meeting[]): string {
     .join("; ");
 }
 
-/** "reuniões", "reuniões amanhã", "agenda do outlook <link>", "tirar agenda do outlook". */
+/** "reuniões", "reuniões amanhã", "agenda do outlook <link>", "tirar agenda do outlook", "ignorar reunião daily", "voltar reunião daily". */
 export async function applyOutlookCommand(text: string): Promise<string | null> {
   const t = text.trim();
   const link = t.match(/^agenda\s+do\s+outlook\s+(https:\/\/outlook\.office365\.com\/owa\/calendar\/\S+\.ics)\s*$/i);
   if (link) {
-    await prisma.flowState.upsert({ where: { key: KEY }, create: { key: KEY, value: { url: link[1] } }, update: { value: { url: link[1] } } });
+    await saveCfg({ ...(await cfg()), url: link[1] });
     cache = null;
     const hoje = await outlookMeetings();
     return hoje === null ? "⚠️ Guardei o link, mas não consegui ler a agenda agora. Confira se ele termina em .ics." : `📅 Agenda do Outlook ligada. Hoje: ${hoje.length ? `\n${meetingsText(hoje)}` : "nenhuma reunião."}`;
@@ -194,6 +208,18 @@ export async function applyOutlookCommand(text: string): Promise<string | null> 
     await prisma.flowState.deleteMany({ where: { key: KEY } });
     cache = null;
     return "📅 Agenda do Outlook desligada.";
+  }
+  const ign = t.match(/^(ignorar|ignora|esconder|esconde|tirar|tira)\s+(?:a\s+)?reuni[aã]o\s+(?:da\s+|do\s+|de\s+)?(.{3,60}?)\s*[.!]*$/i);
+  const vol = t.match(/^(voltar|volta|mostrar|mostra)\s+(?:a\s+)?reuni[aã]o\s+(?:da\s+|do\s+|de\s+)?(.{3,60}?)\s*[.!]*$/i);
+  if (ign || vol) {
+    const c = await cfg();
+    const termo = semAcento((ign ?? vol)![2]);
+    const lista = (c.ignorar ?? []).filter((x) => x !== termo);
+    if (ign) lista.push(termo);
+    await saveCfg({ ...c, ignorar: lista });
+    return ign
+      ? `🙈 Reuniões com "${termo}" no título não aparecem mais no briefing, na Alexa nem em *reuniões*. Para voltar: *voltar reunião ${termo}*.`
+      : `👀 Reuniões com "${termo}" voltam a aparecer.`;
   }
   const q = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const m = q.match(/^(?:quais\s+(?:sao\s+)?(?:as\s+)?(?:minhas\s+)?|minhas\s+)?reunio(?:es|ao)(?:\s+(?:de\s+)?(hoje|amanha))?\s*\??$/);
