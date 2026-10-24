@@ -30,7 +30,7 @@ async function tratar(m: Rpc) {
     case "ping":
       return ok(m.id, {});
     case "tools/list":
-      return ok(m.id, { tools: FERRAMENTAS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema, annotations: { readOnlyHint: true } })) });
+      return ok(m.id, { tools: FERRAMENTAS.map(({ name, description, inputSchema, escreve }) => ({ name, description, inputSchema, annotations: { readOnlyHint: !escreve } })) });
     case "tools/call": {
       const f = FERRAMENTAS.find((x) => x.name === m.params?.name);
       if (!f) return erro(m.id, -32602, "Ferramenta desconhecida");

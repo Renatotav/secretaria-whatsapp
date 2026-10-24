@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 
-// Ferramentas da secretária para o app do Claude (conector MCP, só leitura).
+// Ferramentas da secretária para o app do Claude (conector MCP, só leitura;
+// a única exceção é avisar o dono no WhatsApp, em conferir_planilha).
 // Chamados: só o que já está mascarado (CPF/telefone/e-mail saem ao gravar).
 
 type Args = Record<string, unknown>;
@@ -9,6 +10,8 @@ export interface Ferramenta {
   description: string;
   inputSchema: { type: "object"; properties: Record<string, unknown>; required?: string[] };
   run: (a: Args) => Promise<string>;
+  /** Faz algo além de ler (ex.: manda WhatsApp para o dono). */
+  escreve?: boolean;
 }
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -56,6 +59,48 @@ export const FERRAMENTAS: Ferramenta[] = [
         (await buildWeeklyWorkReport()).replace(/\*/g, "") || "Semana passada sem movimento.",
       ].join("\n");
     },
+  },
+  {
+    name: "conferir_planilha",
+    description: "Confere as linhas da planilha de chamados da equipe com a Central: chamado que falta na Central, ENCERRADO na planilha mas aberto na Central, fechado na Central mas aberto na planilha. Mande TODAS as linhas lidas (número e STATUS como estão). Com avisar=true, manda o resultado para o WhatsApp do Renato só se houver divergência.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        linhas: { type: "array", items: { type: "object", properties: { numero: { type: "string" }, status: { type: "string" } }, required: ["numero"] }, description: "Linhas da planilha" },
+        avisar: { type: "boolean", description: "Mandar no WhatsApp se houver divergência" },
+      },
+      required: ["linhas"],
+    },
+    run: async (a) => {
+      const linhas = (Array.isArray(a.linhas) ? a.linhas : []).slice(0, 2000) as Args[];
+      const ids = [...new Set(linhas.map((l) => str(l.numero, 20).toUpperCase().replace(/\s+/g, "")).filter((n) => /^[A-Z]?\d{5,}$/.test(n)))];
+      if (!ids.length) return "Nenhum número de chamado válido nas linhas.";
+      const tickets = await prisma.workTicket.findMany({ where: { ticketId: { in: ids } }, select: { ticketId: true, status: true } });
+      const porId = new Map(tickets.map((t) => [t.ticketId, t.status]));
+      const statusDe = new Map(linhas.map((l) => [str(l.numero, 20).toUpperCase().replace(/\s+/g, ""), str(l.status, 60).toUpperCase()]));
+      const fechadoCentral = (s: string) => s === "resolvido" || s === "escalado";
+      const encerradoPlanilha = (s: string) => /ENCERRAD|FINALIZAD|RESOLVID|CONCLU/.test(s);
+      const faltando: string[] = [], abertoCentral: string[] = [], abertoPlanilha: string[] = [];
+      for (const id of ids) {
+        const c = porId.get(id), p = statusDe.get(id) || "";
+        if (c === undefined) faltando.push(id);
+        else if (encerradoPlanilha(p) && !fechadoCentral(c)) abertoCentral.push(id);
+        else if (p && !encerradoPlanilha(p) && fechadoCentral(c)) abertoPlanilha.push(`${id} (${p.toLowerCase()})`);
+      }
+      const total = faltando.length + abertoCentral.length + abertoPlanilha.length;
+      const texto = [
+        `🔎 *Planilha × Central* — ${ids.length} chamado(s) conferido(s): ${total ? `${total} divergência(s)` : "tudo batendo ✅"}`,
+        faltando.length ? `➕ Faltam na Central: ${faltando.join(", ")}` : "",
+        abertoCentral.length ? `✅ Encerrados na planilha, abertos na Central: ${abertoCentral.join(", ")}` : "",
+        abertoPlanilha.length ? `↩️ Fechados na Central, abertos na planilha: ${abertoPlanilha.join(", ")}` : "",
+      ].filter(Boolean).join("\n");
+      if (a.avisar === true && total) {
+        const config = await prisma.agentConfig.findFirst();
+        if (config) await (await import("./message-handlers")).notifyOwner(config, texto);
+      }
+      return texto;
+    },
+    escreve: true,
   },
   {
     name: "chamado",
