@@ -257,9 +257,15 @@ export async function buildWorkBriefing(markAsSent = false): Promise<string> {
   const a = await workAlertsNow();
   // O briefing das 8h conta como aviso: às 11h10 só vem o que mudou depois dele.
   if (markAsSent) await prisma.agentConfig.updateMany({ data: { workAlerted: JSON.stringify(alertKeys(a)) } });
-  if (!a.urgentes.length && !a.atrasados.length && !a.encerrar.length && !a.cobrar.length) return "";
+  // Reuniões do Outlook (se a agenda estiver ligada): vêm mesmo sem chamado pendente.
+  const { outlookMeetings, meetingsText } = await import("./outlook-calendar");
+  const reunioes = (await outlookMeetings()) ?? [];
+  const semChamado = !a.urgentes.length && !a.atrasados.length && !a.encerrar.length && !a.cobrar.length;
+  if (semChamado && !reunioes.length) return "";
+  if (semChamado) return `💼 *Bom dia! Reuniões hoje:*\n${meetingsText(reunioes)}`;
   return [
     "💼 *Bom dia! Seu trabalho hoje:*",
+    reunioes.length ? `📅 Reuniões:\n${meetingsText(reunioes)}` : "",
     a.urgentes.length ? `🚨 ${a.urgentes.length} urgente(s): ${list(a.urgentes)}` : "",
     a.atrasados.length ? `⚠ ${a.atrasados.length} passou(aram) do prazo: ${list(a.atrasados.map((x) => `${x.id} (${x.dias}d)`))}` : "",
     a.encerrar.length ? `⚡ ${a.encerrar.length} com Redmine resolvido para encerrar: ${list(a.encerrar.map((x) => x.id))}` : "",

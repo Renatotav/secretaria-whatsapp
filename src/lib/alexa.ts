@@ -120,6 +120,11 @@ export async function resumoManha(): Promise<string> {
     partes.push(`Na agenda: ${itens.map((i) => `${i.title.replace(/[*_]/g, "").slice(0, 80)}${i.dueDate ? hora(i.dueDate) : ""}`).join("; ")}.`);
   } else partes.push("Nada marcado na agenda para hoje.");
   try {
+    const { outlookMeetings, meetingsSpeech } = await import("./outlook-calendar");
+    const reunioes = await outlookMeetings();
+    if (reunioes?.length) partes.push(`Reuniões do trabalho: ${meetingsSpeech(reunioes)}.`);
+  } catch {}
+  try {
     const { billsDueSpeech } = await import("./message-handlers");
     const contas = (await billsDueSpeech()).replace(/^Renato,\s*lembrete de contas:\s*/i, "");
     if (contas) partes.push(`Contas: ${contas}`);
