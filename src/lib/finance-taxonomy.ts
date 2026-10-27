@@ -28,6 +28,9 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
     // salgadinho, biscoito/bolacha, doce, delivery por impulso. Itens assim dentro da nota de
     // mercado também contam aqui (ver isBesteiraItem).
     "Besteira": ["Bebida alcoólica", "Salgadinho/Doces", "Delivery por vontade"],
+    // Sair de casa (bar, espetinho, festa) com teto próprio (pedido dele, 27/10/2026):
+    // faz parte de se reerguer — fica previsto no mês em vez de brigar com as contas.
+    "Saídas": ["Bar", "Restaurante/Espetinho", "Festa/Show"],
     "Educação": ["Cursos", "Livros", "Mensalidade"],
     "Impostos e taxas": ["IOF", "IR", "IPVA", "Tarifas bancárias", "Juros", "Empréstimos"],
     "Outros": ["Imprevistos"],
@@ -51,7 +54,9 @@ REGRAS:
   Assinaturas › Academia (cobrança mensal); Spotify/Netflix = Assinaturas › Streaming; Claude/ChatGPT/hospedagem
   de site = Assinaturas › Apps/Softwares; IOF de compra internacional = Impostos e taxas › IOF;
   marmita/restaurante = Alimentação › Restaurantes; iFood = Alimentação › Delivery;
-  cerveja/bebida alcoólica/bar/adega = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete
+  bar/boteco/barzinho, espetinho ou restaurante numa saída à noite = Saídas › Bar (ou Restaurante/Espetinho);
+  festa, show, balada, ingresso = Saídas › Festa/Show; cerveja/bebida alcoólica comprada no mercado ou na
+  adega para beber em casa = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete
   comprados à parte = Besteira › Salgadinho/Doces; se ele disser "besteira", use Besteira;
   Amazon/Mercado Livre = Compras (Eletrônicos, Casa, Roupas ou Online, pelo produto).
 - Só use "Outros › Imprevistos" se nada da lista servir.`;
