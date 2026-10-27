@@ -130,7 +130,7 @@ export async function resumoManha(): Promise<string> {
     if (contas) partes.push(`Contas: ${contas}`);
   } catch {}
   try {
-    const { scooterNumbers } = await import("./scooter");
+    const { scooterNumbers, TIRE_PSI } = await import("./scooter");
     const n = await scooterNumbers();
     if (n && n.kmSince !== null) {
       const folga = Math.round(n.safeKm - n.kmSince);
@@ -138,7 +138,7 @@ export async function resumoManha(): Promise<string> {
       else if (folga <= 8) partes.push(`Scooter: dá uns ${folga} quilômetros, é bom carregar hoje.`);
       else partes.push(`Scooter com folga de uns ${folga} quilômetros.`);
     }
-    if (n?.lastTire && n.tireDue) partes.push("E calibre os pneus: 29 na frente e 33 atrás.");
+    if (n?.lastTire && n.tireDue) partes.push(`E calibre os pneus: ${TIRE_PSI.front} na frente e ${TIRE_PSI.rear} atrás.`);
   } catch {}
   try {
     const { cardLimitSpeech } = await import("./message-handlers");
