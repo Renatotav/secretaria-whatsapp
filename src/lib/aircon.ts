@@ -14,6 +14,10 @@ type Cfg = {
   days?: Record<string, number>;
   last?: { at: string; wh: number; w: number | null };
   expiredWarned?: boolean;
+  /** Contas da Enel (casa toda), do print do site: referência "AAAA-MM", kWh e R$. */
+  enel?: { ref: string; kwh: number; valor: number }[];
+  /** Quando o ar entrou no SmartThings (o contador total começa aí). */
+  installed?: string;
 };
 
 async function cfg(): Promise<Cfg> {
@@ -136,6 +140,9 @@ export async function airconData() {
   });
   const mes = (spentSince(c, today.slice(0, 8) + "01") ?? 0) / 1000;
   const hoje = (spentSince(c, today) ?? 0) / 1000;
+  // Média do ar por mês desde a instalação (contador total ÷ meses), para comparar com as contas.
+  const meses = c.installed ? (Date.now() - new Date(c.installed).getTime()) / (30.44 * 86_400_000) : null;
+  const historico = (c.enel ?? []).slice().sort((a, b) => a.ref.localeCompare(b.ref));
   const enel = await prisma.financeEntry.findFirst({
     where: { type: "expense", description: { contains: "ENEL", mode: "insensitive" }, NOT: { description: { contains: "previsto" } } },
     orderBy: { date: "desc" },
@@ -153,5 +160,8 @@ export async function airconData() {
     chaveVencida: !!c.expiredWarned,
     enel: enel ? { valor: enel.amount, data: enel.date } : null,
     dias: dias.slice(-31),
+    historico,
+    instalado: c.installed ?? null,
+    arMediaMesKwh: meses && meses >= 1 ? c.last.wh / 1000 / meses : null,
   };
 }
