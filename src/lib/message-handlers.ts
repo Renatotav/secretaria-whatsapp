@@ -3568,12 +3568,16 @@ async function applyStatementChoice(text: string, config: AgentConfig): Promise<
  * imagem direto.
  */
 // Print de compra/estorno esperando o "sim" dele para ser gravado.
-let pendingImageDraft: {
+type ImageDraft = {
   reading: import("./personal-router").ImageReading;
   at: number;
   /** Pix que bate com uma fatura em aberto: o "sim" dá baixa na fatura em vez de lançar gasto. */
   invoice?: { card: string; dueDate: string; total: number };
-} | null = null;
+};
+let pendingImageDraft: ImageDraft | null = null;
+// Prints que chegaram enquanto outro esperava o "sim": um por vez, na ordem
+// (antes o segundo apagava o primeiro e a compra sumia).
+let imageDraftQueue: ImageDraft[] = [];
 const CONFIRM_YES_RE = /^(sim|s|isso|pode|pode sim|pode salvar|confirma|confirmo|ok|salva|lança|lanca)[.!]*$/i;
 
 // Print + texto mandados juntos ("Pix para água, Zé Alberto" logo depois do
@@ -3638,33 +3642,54 @@ async function readSmartImage(base64: string, mimetype: string, caption: string)
   // Comprovante de Pix com o valor de uma fatura em aberto (ex: o Pix para o
   // irmão que paga o cartão): oferece dar baixa na fatura, sem lançar gasto.
   if (reading.kind === "compra" && reading.paymentMethod !== "cartão" && reading.amount > 0) {
-    const { listOpenInvoices, invoiceLabel } = await import("./invoices");
+    const { listOpenInvoices } = await import("./invoices");
     const match = (await listOpenInvoices()).find((i) => Math.abs(i.total - reading.amount) <= 1);
-    if (match) {
-      pendingImageDraft = { reading, at: Date.now(), invoice: { card: match.card, dueDate: match.dueDate, total: match.total } };
-      await notifyOwner(
-        config,
-        `📸 ${reading.summary || "Comprovante de Pix."}\n\n💳 Esse valor bate com a fatura *${invoiceLabel(match.card)}* de ${match.dueDate.slice(8, 10)}/${match.dueDate.slice(5, 7)} (${brl(match.total)}).\nÉ o pagamento dela? Responda *sim* para dar baixa na fatura ou *não* para lançar como gasto normal.`
-      );
-      return;
-    }
+    if (match) return offerImageDraft({ reading, at: Date.now(), invoice: { card: match.card, dueDate: match.dueDate, total: match.total } }, config);
   }
 
-  if ((reading.kind === "compra" || reading.kind === "estorno") && reading.amount > 0) {
-    pendingImageDraft = { reading, at: Date.now() };
-    const draft = imageDraftEntry(reading, config);
-    const parcels = reading.installments ? `\n🔢 ${reading.installments}× de ${brl(reading.amount / reading.installments)}` : "";
-    await notifyOwner(
-      config,
-      `📸 ${reading.summary || "Entendi o print."}\n\n${entryCard(draft, reading.kind === "estorno" ? "↩️ Lançar este estorno?" : "🧐 Lançar esta compra?")}${parcels}\n\nResponda *sim* para salvar ou *não* para descartar. Se algo estiver errado, salve e depois corrija (ex: "na verdade foi 230").`
-    );
-    return;
-  }
+  if ((reading.kind === "compra" || reading.kind === "estorno") && reading.amount > 0) return offerImageDraft({ reading, at: Date.now() }, config);
 
   await notifyOwner(
     config,
     `📸 ${reading.summary || "Não consegui entender bem esse print."}${reading.suggestion ? `\n💡 ${reading.suggestion}` : ""}\n\nSe for uma compra, manda de novo com a legenda *compra*; se for fatura, com *fatura*.`
   );
+}
+
+/** Texto do cartão de confirmação de um print (compra/estorno ou baixa de fatura). */
+async function draftPrompt(d: ImageDraft, config: AgentConfig): Promise<string> {
+  const { reading } = d;
+  if (d.invoice) {
+    const { invoiceLabel } = await import("./invoices");
+    return `📸 ${reading.summary || "Comprovante de Pix."}\n\n💳 Esse valor bate com a fatura *${invoiceLabel(d.invoice.card)}* de ${d.invoice.dueDate.slice(8, 10)}/${d.invoice.dueDate.slice(5, 7)} (${brl(d.invoice.total)}).\nÉ o pagamento dela? Responda *sim* para dar baixa na fatura ou *não* para lançar como gasto normal.`;
+  }
+  const parcels = reading.installments ? `\n🔢 ${reading.installments}× de ${brl(reading.amount / reading.installments)}` : "";
+  return `📸 ${reading.summary || "Entendi o print."}\n\n${entryCard(imageDraftEntry(reading, config), reading.kind === "estorno" ? "↩️ Lançar este estorno?" : "🧐 Lançar esta compra?")}${parcels}\n\nResponda *sim* para salvar ou *não* para descartar. Se algo estiver errado, salve e depois corrija (ex: "na verdade foi 230").`;
+}
+
+/** Mostra o print para confirmar; se já tem outro esperando, entra na fila (ou é o mesmo print repetido). */
+async function offerImageDraft(d: ImageDraft, config: AgentConfig): Promise<void> {
+  const same = (a: ImageDraft) => Math.abs(a.reading.amount - d.reading.amount) < 0.01 && a.reading.date === d.reading.date;
+  if (pendingImageDraft && Date.now() - pendingImageDraft.at <= 30 * 60 * 1000) {
+    if (same(pendingImageDraft) || imageDraftQueue.some(same)) {
+      await notifyOwner(config, `📸 Esse print é o mesmo de antes (${brl(d.reading.amount)}). Ainda espero o seu *sim* ou *não* para ele.`);
+      return;
+    }
+    imageDraftQueue.push(d);
+    await notifyOwner(config, `📥 Guardei este print (${brl(d.reading.amount)}) na fila. Primeiro responda *sim* ou *não* para o de ${brl(pendingImageDraft.reading.amount)}; depois eu mostro este.`);
+    return;
+  }
+  imageDraftQueue = [];
+  pendingImageDraft = d;
+  await notifyOwner(config, await draftPrompt(d, config));
+}
+
+/** Depois do sim/não: o próximo print da fila vira o que espera resposta ("" se não tem). */
+async function nextQueuedDraft(config: AgentConfig): Promise<string> {
+  const next = imageDraftQueue.shift();
+  if (!next) return "";
+  const d: ImageDraft = { ...next, at: Date.now() };
+  pendingImageDraft = d;
+  return `\n\n➡️ Próximo da fila:\n${await draftPrompt(d, config)}`;
 }
 
 /** Lançamento que o print vira (sem gravar): data/fatura e status pelo meio de pagamento. */
@@ -3702,7 +3727,7 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
       return `Ok! Então lanço como gasto?\n\n${entryCard(imageDraftEntry(draft.reading, config), "🧐 Lançar esta compra?")}\n\nResponda *sim* para salvar ou *não* para descartar.`;
     }
     pendingImageDraft = null;
-    return "👍 Ok, não lancei o print.";
+    return "👍 Ok, não lancei o print." + (await nextQueuedDraft(config));
   }
   if (!CONFIRM_YES_RE.test(t)) return null;
   const { reading } = draft;
@@ -3714,7 +3739,7 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
     const { ids, total } = await payInvoice(draft.invoice.card, draft.invoice.dueDate);
     lastInvoicePayment = { ids, at: Date.now() };
     lastSaved = null;
-    return `✅ Fatura paga: *${invoiceLabel(draft.invoice.card)}* de ${draft.invoice.dueDate.slice(8, 10)}/${draft.invoice.dueDate.slice(5, 7)}\n💳 ${ids.length} compras marcadas como pagas · ${brl(total)}\n↩️ Foi engano? Responda *desfazer*.`;
+    return `✅ Fatura paga: *${invoiceLabel(draft.invoice.card)}* de ${draft.invoice.dueDate.slice(8, 10)}/${draft.invoice.dueDate.slice(5, 7)}\n💳 ${ids.length} compras marcadas como pagas · ${brl(total)}\n↩️ Foi engano? Responda *desfazer*.` + (await nextQueuedDraft(config));
   }
   const d = imageDraftEntry(reading, config);
   lastSaved = { since: new Date() };
@@ -3735,13 +3760,13 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
       account: d.account,
       status: "pending",
     }], "o print");
-    return `↩️ Se algo saiu errado, responda *desfazer*.`;
+    return `↩️ Se algo saiu errado, responda *desfazer*.` + (await nextQueuedDraft(config));
   }
 
   const created = await prisma.financeEntry.create({
     data: { ...d, source: "whatsapp" },
   });
-  return `${entryCard(created)}\n\n${UNDO_HINT}`;
+  return `${entryCard(created)}\n\n${UNDO_HINT}` + (await nextQueuedDraft(config));
 }
 
 export async function handleStatementImage(base64: string, mimetype: string): Promise<void> {
@@ -4452,7 +4477,7 @@ export async function billsDueSpeech(): Promise<string> {
 function flowSnapshot(): Record<string, unknown> {
   return {
     lastSaved, pendingAmount, lastInvoicePayment, pendingHighValue, confirmedHighValueText,
-    pendingStatement, pendingImageDraft, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
+    pendingStatement, pendingImageDraft, imageDraftQueue, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
     pendingQuotedEdit, pendingSplit, lastNotaEntry,
   };
 }
@@ -4472,6 +4497,7 @@ export function restoreFlowStates(): Promise<void> {
       if (g.confirmedHighValueText) confirmedHighValueText = g.confirmedHighValueText;
       if (g.pendingStatement) pendingStatement = g.pendingStatement;
       if (g.pendingImageDraft) pendingImageDraft = g.pendingImageDraft;
+      if (Array.isArray(g.imageDraftQueue)) imageDraftQueue = g.imageDraftQueue;
       if (g.imageNote) imageNote = g.imageNote;
       if (g.pendingMoodAsk) pendingMoodAsk = g.pendingMoodAsk;
       if (g.pendingInvoiceDraft) pendingInvoiceDraft = g.pendingInvoiceDraft;
