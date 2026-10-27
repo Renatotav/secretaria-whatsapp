@@ -229,6 +229,17 @@ export function startScheduler(): void {
           console.error("Erro no briefing do trabalho:", err);
         }
       }
+      // Ar-condicionado (SmartThings): lê o contador de energia de hora em hora;
+      // se a chave de 24 h venceu, avisa uma vez.
+      if (hhmm.endsWith(":05") && config.ownerPhone) {
+        try {
+          const { airconTick } = await import("./aircon");
+          const aviso = await airconTick();
+          if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
+        } catch (err) {
+          console.error("[ar] leitura falhou:", err);
+        }
+      }
       // Reunião do Outlook: aviso no WhatsApp 10 min antes (as escondidas com
       // "ignorar reunião" não avisam). Uma vez por reunião; a agenda vem do cache de 15 min.
       if (config.ownerPhone) {
