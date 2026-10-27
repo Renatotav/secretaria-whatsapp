@@ -162,7 +162,12 @@ export async function airconData() {
     chaveVencida: !!c.expiredWarned,
     enel: enel ? { valor: enel.amount, data: enel.date } : null,
     dias: dias.slice(-31),
-    historico: historico.map((h) => ({ ...h, ar: (c.arMeses ?? []).find((m) => m.ref === h.ref)?.kwh ?? null })),
+    // A conta de um mês mede o consumo do mês ANTERIOR (a de 01/2026, vence 15/01, é dezembro).
+    historico: historico.map((h) => {
+      const [y, m] = h.ref.split("-").map(Number);
+      const antes = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+      return { ...h, ar: (c.arMeses ?? []).find((x) => x.ref === antes)?.kwh ?? null };
+    }),
     instalado: c.installed ?? null,
     arMediaMesKwh: meses && meses >= 1 ? c.last.wh / 1000 / meses : null,
   };

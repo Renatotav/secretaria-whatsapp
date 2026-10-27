@@ -179,7 +179,7 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
             Sem o ar a conta era ~{n(base)} kWh ({brl(base * tarifa)}); com o ar, +{n(extra)} kWh por mês ≈ {brl(extra * tarifa)} a mais.
           </strong>
         )}
-        {h.some((x) => x.ar != null) && "Parte escura = o que o ar gastou (app SmartThings). "}
+        {h.some((x) => x.ar != null) && "Parte escura = o que o ar gastou no mês anterior (a conta mede o mês de antes), pelo app SmartThings. "}
         {instalado && `Em cor: meses com o ar (desde ${MES[Number(instalado.slice(5, 7)) - 1]}/${instalado.slice(2, 4)}). `}
         {arMes != null && `Pelo contador do aparelho, ~${n(arMes)} kWh por mês (≈ ${brl(arMes * tarifa)}). `}
         Estimativa: a conta da Enel fecha em outro período.
