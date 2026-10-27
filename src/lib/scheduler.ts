@@ -246,7 +246,8 @@ export function startScheduler(): void {
             const brief = await meetingTicketBrief(m.title).catch(() => "");
             await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})${brief ? `\n\n${brief}` : ""}`, 10, 2);
           }
-          if (meetingWarned.size > 200) meetingWarned.clear();
+          // Limpa só os avisos de outros dias (os de hoje seguram a repetição).
+          if (meetingWarned.size > 200) for (const k of meetingWarned) if (!k.startsWith(todayDate)) meetingWarned.delete(k);
         } catch (err) {
           console.error("[outlook] aviso de reunião falhou:", err);
         }

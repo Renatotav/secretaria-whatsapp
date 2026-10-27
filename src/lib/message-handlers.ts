@@ -2524,13 +2524,18 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       if (!(route.amount > 0)) {
         if ((imageReading || pendingImageDraft) && Date.now() - imageArrivedAt < IMAGE_NOTE_WINDOW_MS && route.financeType !== "income") {
           imageNote = { description: route.description || "", category: route.category || "", subcategory: route.subcategory || "", at: Date.now() };
-          if (pendingImageDraft) {
+          // O texto é do print que acabou de chegar: o último da fila, se houver fila.
+          const alvo = imageDraftQueue.length ? imageDraftQueue[imageDraftQueue.length - 1] : pendingImageDraft;
+          if (alvo) {
             // O print já foi lido: ajusta o cartão e pergunta de novo.
-            applyNoteToReading(pendingImageDraft.reading);
-            pendingImageDraft.at = Date.now();
+            applyNoteToReading(alvo.reading);
+            alvo.at = Date.now();
             // Ele descreveu um gasto: não é mais a pergunta "é o pagamento da fatura?".
-            pendingImageDraft.invoice = undefined;
-            response = `📝 Juntei com o print:\n\n${entryCard(imageDraftEntry(pendingImageDraft.reading, config), "🧐 Lançar assim?")}\n\nResponda *sim* para salvar ou *não* para descartar.`;
+            alvo.invoice = undefined;
+            response =
+              alvo === pendingImageDraft
+                ? `📝 Juntei com o print:\n\n${entryCard(imageDraftEntry(alvo.reading, config), "🧐 Lançar assim?")}\n\nResponda *sim* para salvar ou *não* para descartar.`
+                : `📝 Juntei com o print de ${brl(alvo.reading.amount)}, que está na fila: ele aparece depois do *sim*/*não* do de ${brl(pendingImageDraft!.reading.amount)}.`;
           } else {
             response = "📸 Beleza, junto essa descrição com o print que estou lendo. Já te mostro.";
           }
@@ -2550,6 +2555,8 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
         !/\b(paguei|quitei|recebi|caiu|entrou)\b/i.test(joinedText)
       ) {
         pendingHighValue = { text: joinedText, at: Date.now() };
+        // O print que esperava volta para a frente da fila (não some).
+        if (pendingImageDraft) imageDraftQueue.unshift(pendingImageDraft);
         pendingImageDraft = null;
         const how = route.installments ? `${route.installments}× de ${brl(route.amount)} (total ${brl(totalValue)})` : brl(route.amount);
         response = `🧐 *Confere antes de eu lançar:*\n📝 ${route.description}\n💰 ${how}\n📂 ${route.category}${route.subcategory ? ` › ${route.subcategory}` : ""}\n\nResponda *sim* para lançar ou *não* para cancelar.`;
@@ -3668,17 +3675,27 @@ async function draftPrompt(d: ImageDraft, config: AgentConfig): Promise<string> 
 
 /** Mostra o print para confirmar; se já tem outro esperando, entra na fila (ou é o mesmo print repetido). */
 async function offerImageDraft(d: ImageDraft, config: AgentConfig): Promise<void> {
-  const same = (a: ImageDraft) => Math.abs(a.reading.amount - d.reading.amount) < 0.01 && a.reading.date === d.reading.date;
-  if (pendingImageDraft && Date.now() - pendingImageDraft.at <= 30 * 60 * 1000) {
-    if (same(pendingImageDraft) || imageDraftQueue.some(same)) {
-      await notifyOwner(config, `📸 Esse print é o mesmo de antes (${brl(d.reading.amount)}). Ainda espero o seu *sim* ou *não* para ele.`);
-      return;
-    }
+  // Parece o mesmo print (mesmo valor e dia)? Não descarta (podem ser dois Uber
+  // iguais): entra na fila com o aviso, e ele responde *não* se for repetido.
+  const same = (a: ImageDraft) => Math.abs(a.reading.amount - d.reading.amount) < 0.01 && (a.reading.date || "") === (d.reading.date || "");
+  const ativo = !!pendingImageDraft && (Date.now() - pendingImageDraft.at <= 30 * 60 * 1000 || imageDraftQueue.length > 0);
+  // Pendente vencido sem resposta: o próximo da fila vira o da vez (nada some calado).
+  if (!ativo && imageDraftQueue.length) {
+    pendingImageDraft = { ...imageDraftQueue.shift()!, at: Date.now() };
     imageDraftQueue.push(d);
-    await notifyOwner(config, `📥 Guardei este print (${brl(d.reading.amount)}) na fila. Primeiro responda *sim* ou *não* para o de ${brl(pendingImageDraft.reading.amount)}; depois eu mostro este.`);
+    await notifyOwner(config, `${await draftPrompt(pendingImageDraft, config)}\n\n📥 Ainda tinha este print esperando; o novo (${brl(d.reading.amount)}) ficou na fila.`);
     return;
   }
-  imageDraftQueue = [];
+  if (ativo) {
+    const repetido = same(pendingImageDraft!) || imageDraftQueue.some(same);
+    imageDraftQueue.push(d);
+    await notifyOwner(
+      config,
+      `📥 Guardei este print (${brl(d.reading.amount)}) na fila. Primeiro responda *sim* ou *não* para o de ${brl(pendingImageDraft!.reading.amount)}; depois eu mostro este.` +
+        (repetido ? `\n⚠️ Parece igual a um que já mandou: se for repetido, responda *não* quando ele aparecer.` : "")
+    );
+    return;
+  }
   pendingImageDraft = d;
   await notifyOwner(config, await draftPrompt(d, config));
 }
@@ -3714,7 +3731,8 @@ function imageDraftEntry(r: import("./personal-router").ImageReading, config: Ag
 /** "sim"/"não" depois do cartão do print. Devolve a resposta, ou null se não for o caso. */
 async function applyImageDraftReply(text: string, config: AgentConfig): Promise<string | null> {
   if (!pendingImageDraft) return null;
-  if (Date.now() - pendingImageDraft.at > 30 * 60 * 1000) {
+  // Vence em 30 min, a não ser que tenha fila atrás (aí espera a resposta, para a fila andar).
+  if (Date.now() - pendingImageDraft.at > 30 * 60 * 1000 && !imageDraftQueue.length) {
     pendingImageDraft = null;
     return null;
   }

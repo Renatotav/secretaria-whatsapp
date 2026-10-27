@@ -117,7 +117,7 @@ export async function missingFromSheet() {
 }
 
 /**
- * Reunião sobre um chamado ("Redmine 290424", "chamado 2036021", "S2359619"):
+ * Reunião sobre um chamado ("Redmine 123456", "chamado 1234567", "S1234567"):
  * resumo do chamado e como ele resolveu parecidos, para o aviso antes da reunião.
  */
 export async function meetingTicketBrief(title: string): Promise<string> {
