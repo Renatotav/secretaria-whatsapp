@@ -24,6 +24,8 @@ export const WORK_SKILLS: Record<string, string> = {
   corrigir: "Corrigir texto",
   "corrigir-whatsapp": "Corrigir mensagem",
   escrever: "Melhorar a escrita",
+  // Sem botão próprio: usada pelo "📋 Linha p/ planilha"/"✅ Encerrar" quando a resolução está vazia.
+  planilha: "Preencher planilha",
 };
 
 // Para quando a skill ainda não foi cadastrada no banco.
@@ -56,6 +58,13 @@ const FALLBACK: Record<string, string> = {
     "",
     "## Resposta",
     "Só o texto reescrito, pronto para colar. Sem título, sem aspas, sem explicação.",
+  ].join("\n"),
+  planilha: [
+    "Você preenche duas colunas da planilha de chamados de um atendente do suporte do PJe (TJCE), a partir do texto do chamado e/ou da conversa com o usuário.",
+    "Responda EXATAMENTE em duas linhas, sem markdown:",
+    "TIPO: <tipo do erro em poucas palavras, como ele costuma escrever (ex: \"Erro de Protocolo do SAJMP\", \"Dúvida Negocial\", \"Processo não encontrado\")>",
+    "RESOLUÇÃO: <o que foi feito/orientado para resolver, em 1 a 3 frases, no estilo dos exemplos dele, se houver>",
+    "Use só o que está no texto. Se o texto não diz como foi resolvido, escreva na RESOLUÇÃO só o que foi verificado ou orientado, sem inventar solução. Não escreva CPF, telefone nem e-mail.",
   ].join("\n"),
   resumo:
     "Você ajuda um atendente do suporte do PJe (TJCE). Leia o chamado e responda em português, curto:\n" +
@@ -113,6 +122,11 @@ export async function runWorkSkill(
       input = maskPersonalData(input);
     }
   }
+  if (key === "planilha") {
+    // Para a planilha a IA não precisa de CPF/telefone/e-mail.
+    const { maskPersonalData } = await import("./work-privacy");
+    input = maskPersonalData(input);
+  }
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
   // Corretores e "melhorar a escrita": a IA não vê CPF/telefone/e-mail
   // (viram ⟦1⟧…) e eles voltam idênticos no texto final.
@@ -161,7 +175,7 @@ export async function runWorkSkill(
 
   // Contexto do chamado (o que a secretária sabe dele), quando houver número.
   // Só para quem usa o contexto; os corretores recebem o texto puro.
-  const usesContext = key === "resumo" || key === "redmine" || key === "whatsapp";
+  const usesContext = key === "resumo" || key === "redmine" || key === "whatsapp" || key === "planilha";
   let context = "";
   if (ticketRaw && usesContext) {
     const t = await prisma.workTicket.findUnique({
@@ -175,6 +189,16 @@ export async function runWorkSkill(
   // Redmine: junta 2–3 aberturas reais dele (coluna "ABERTURA DO REDMINE" da
   // planilha) do mesmo sistema, como modelo de estilo — SAJMP/MP, MNI, PJe…
   if (key === "redmine") context += await redmineModels(input);
+  // Planilha: 3 resoluções recentes dele como modelo de estilo (já mascaradas na Central).
+  if (key === "planilha") {
+    const ex = await prisma.workTicket.findMany({
+      where: { status: "resolvido", NOT: [{ resolution: "" }, { errorType: "" }] },
+      orderBy: { resolvedAt: "desc" },
+      take: 3,
+      select: { errorType: true, resolution: true },
+    });
+    if (ex.length) context += `\n\nExemplos de como ele preenche (só estilo; não copie fatos):\n${ex.map((e) => `TIPO: ${e.errorType.slice(0, 80)}\nRESOLUÇÃO: ${e.resolution.replace(/\s+/g, " ").slice(0, 300)}`).join("\n\n")}`;
+  }
 
   if (conferencia)
     context +=
