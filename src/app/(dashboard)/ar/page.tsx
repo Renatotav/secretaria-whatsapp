@@ -46,7 +46,7 @@ export default function ArPage() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>❄️ Ar-condicionado</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            Gasto lido de hora em hora no SmartThings (só leitura: ligar e desligar continua na Alexa). A chave vence em 24 h: mande no WhatsApp <em>chave smartthings</em> + a chave nova.
+            Gasto lido de hora em hora no SmartThings. Ligar e desligar continua na Alexa.
           </p>
         </div>
         {erro && <div style={{ color: "var(--danger)" }}>Não consegui carregar. Atualize a página.</div>}
@@ -66,6 +66,8 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
   const lido = new Date(d.lidoEm).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const ligado = d.agoraW != null && d.agoraW > 30;
   const fechados = d.dias.filter((x) => x.dia < d.dias.at(-1)!.dia && !x.ate);
+  const ult = d.historico.at(-1);
+  const tarifaReal = ult ? ult.valor / ult.kwh : null;
   const mediaDia = fechados.length ? fechados.reduce((a, x) => a + x.kwh, 0) / fechados.length : null;
   return (
     <>
@@ -78,27 +80,31 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
       <div style={{ ...card, display: "grid", gap: 6 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <strong style={{ fontSize: 22, color: ligado ? "var(--accent)" : "var(--text-muted)" }}>{ligado ? `Ligado · ${n(d.agoraW!)} W` : "Desligado"}</strong>
-          <span style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{brl(d.mes * d.price)}</span>
+          <span style={{ display: "grid", justifyItems: "end" }}>
+            <span style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{brl(d.mes * d.price)}</span>
+            <span style={muted}>no mês</span>
+          </span>
         </div>
         <div style={muted}>
           {n(d.mes, 1)} kWh no mês{d.desde > new Date().toISOString().slice(0, 8) + "01" ? ` (medindo desde ${ddmm(d.desde)})` : ""} · última leitura {lido}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(130px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
         <Kpi titulo="Hoje" valor={brl(d.hoje * d.price)} dica={`${n(d.hoje, 1)} kWh`} explica="Do primeiro registro de hoje até a última leitura." />
         <Kpi titulo="Média por dia" valor={mediaDia != null ? brl(mediaDia * d.price) : "—"} dica={mediaDia != null ? `${n(mediaDia, 1)} kWh · ≈ ${brl(mediaDia * d.price * 30)} por mês` : "precisa de 1 dia completo"}
           explica="Média dos dias já fechados (sem hoje e sem intervalos em que a chave estava vencida)." />
         <Kpi titulo="Na conta da Enel" valor={d.enel && mediaDia != null ? `~${n(Math.min(100, (mediaDia * 30 * d.price * 100) / d.enel.valor))}%` : "—"}
           dica={!d.enel ? "sem conta da Enel lançada" : mediaDia == null ? "precisa de 1 dia completo" : `última conta ${brl(d.enel.valor)}`}
           explica="Gasto do ar em 30 dias (pela média por dia) dividido pela última conta da Enel lançada no financeiro. É uma estimativa: a conta tem outro período." />
-        <Kpi titulo="Tarifa" valor={`${brl(d.price)}/kWh`} dica="a mesma da scooter" explica="Para mudar, mande no WhatsApp: tarifa da luz 0,92." />
+        <Kpi titulo="Tarifa" valor={`${brl(d.price)}/kWh`} dica={tarifaReal ? `conta real: ${brl(tarifaReal)}` : "a mesma da scooter"}
+          explica={`É a tarifa usada aqui e na scooter.${tarifaReal ? ` Pela última conta da Enel (com impostos) dá ${brl(tarifaReal)}/kWh.` : ""} Para mudar, mande no WhatsApp: tarifa da luz ${tarifaReal ? n(tarifaReal, 2) : "0,92"}.`} />
         <Kpi titulo="Contador do aparelho" valor={`${n(d.totalKwh)} kWh`} dica="desde que foi instalado" explica="Total que o próprio ar mediu na vida toda. É dele que sai a conta por dia." />
       </div>
 
       <Grafico dias={d.dias} price={d.price} />
       {d.semanas.length > 0 && <Semanas s={d.semanas} price={d.price} />}
-      {d.historico.length > 0 && <Contas h={d.historico} instalado={d.instalado} arMes={d.arMediaMesKwh} />}
+      {d.historico.length > 0 && <Contas h={d.historico} instalado={d.instalado} />}
     </>
   );
 }
@@ -126,7 +132,7 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 150, overflowX: "auto" }} role="img" aria-label="Gasto do ar por dia">
         {dias.map((x) => (
           <div key={x.dia} title={`${ddmm(x.dia)}${x.ate ? `–${ddmm(x.ate)}` : ""}: ${n(x.kwh, 1)} kWh · ${brl(x.kwh * price)}`}
-            style={{ flex: "1 0 28px", display: "grid", gap: 4, justifyItems: "center", alignContent: "end", height: "100%" }}>
+            style={{ flex: "1 1 0", minWidth: 28, maxWidth: 56, display: "grid", gap: 4, justifyItems: "center", alignContent: "end", height: "100%" }}>
             <span style={{ fontSize: 10, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{brl(x.kwh * price).replace("R$", "").trim()}</span>
             <div style={{ width: "70%", height: `${Math.max(2, (x.kwh / max) * 100)}px`, background: x.ate ? "var(--warning)" : "var(--accent)", borderRadius: 4 }} />
             <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{ddmm(x.dia)}</span>
@@ -141,15 +147,15 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
 const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 /** Contas da Enel por mês (casa toda) e a média do ar desde que foi instalado. */
-function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor: number; ar: number | null }[]; instalado: string | null; arMes: number | null }) {
+function Contas({ h, instalado }: { h: { ref: string; kwh: number; valor: number; ar: number | null }[]; instalado: string | null }) {
   const max = Math.max(...h.map((x) => x.kwh));
   const ultima = h.at(-1)!;
   const tarifa = ultima.valor / ultima.kwh;
   // Conta sem o ar = média dos meses antes dele; o que passa disso nos meses com ar é (quase todo) o ar.
-  const antes = instalado ? h.filter((x) => x.ref < instalado.slice(0, 7)) : [];
-  const com = instalado ? h.filter((x) => x.ref > instalado.slice(0, 7)) : [];
-  const base = antes.length ? antes.reduce((a, x) => a + x.kwh, 0) / antes.length : null;
-  const extra = base != null && com.length ? com.reduce((a, x) => a + x.kwh, 0) / com.length - base : null;
+  // Meses com o gasto do ar medido pelo app (sem o 1º, parcial): parte média do ar na conta.
+  const medidos = h.filter((x) => x.ar != null && x.ar > 50);
+  const arMedio = medidos.length ? medidos.reduce((a, x) => a + x.ar!, 0) / medidos.length : null;
+  const parte = medidos.length ? medidos.reduce((a, x) => a + x.ar! / x.kwh, 0) / medidos.length : null;
   return (
     <div style={{ ...card, display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -160,31 +166,30 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
         {h.map((x) => {
           const depois = instalado != null && x.ref >= instalado.slice(0, 7);
           return (
-            <div key={x.ref} style={{ display: "grid", gridTemplateColumns: "54px minmax(0, 1fr) 84px", gap: 8, alignItems: "center", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
-              <span style={{ color: "var(--text-muted)" }}>{MES[Number(x.ref.slice(5, 7)) - 1]}/{x.ref.slice(2, 4)}</span>
-              <div style={{ position: "relative", height: 18, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }}
-                title={`${x.kwh} kWh na conta${x.ar != null ? ` · ar ${n(x.ar)} kWh (${n((x.ar / x.kwh) * 100)}%)` : ""}`}>
+            <div key={x.ref} style={{ display: "grid", gap: 4, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ color: "var(--text-muted)" }}>{MES[Number(x.ref.slice(5, 7)) - 1]}/{x.ref.slice(2, 4)}</span> · {x.kwh} kWh
+                  {x.ar != null && <span style={{ color: "var(--accent)" }}> · ar {n(x.ar)} ({n((x.ar / x.kwh) * 100)}%)</span>}
+                </span>
+                <strong>{brl(x.valor)}</strong>
+              </div>
+              <div style={{ position: "relative", height: 8, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }} aria-hidden>
                 <div style={{ position: "absolute", inset: 0, width: `${(x.kwh / max) * 100}%`, background: depois ? "var(--accent-border)" : "var(--text-muted)", borderRadius: 4 }} />
                 {x.ar != null && <div style={{ position: "absolute", inset: 0, width: `${(x.ar / max) * 100}%`, background: "var(--accent)", borderRadius: 4 }} />}
-                <span style={{ position: "relative", paddingLeft: 6, fontSize: 11, lineHeight: "18px", color: "var(--text)" }}>
-                  {x.kwh} kWh{x.ar != null ? ` · ar ${n(x.ar)} (${n((x.ar / x.kwh) * 100)}%)` : ""}
-                </span>
               </div>
-              <span style={{ textAlign: "right" }}>{brl(x.valor)}</span>
             </div>
           );
         })}
       </div>
       <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-        {base != null && extra != null && (
+        {arMedio != null && parte != null && (
           <strong style={{ display: "block", fontSize: 14, color: "var(--text)", marginBottom: 4 }}>
-            Sem o ar a conta era ~{n(base)} kWh ({brl(base * tarifa)}); com o ar, +{n(extra)} kWh por mês ≈ {brl(extra * tarifa)} a mais.
+            O ar é ~{n(parte * 100)}% da conta: em média {n(arMedio)} kWh por mês ≈ {brl(arMedio * tarifa)}.
           </strong>
         )}
-        {h.some((x) => x.ar != null) && "Parte escura = o que o ar gastou no mês anterior (a conta mede o mês de antes), pelo app SmartThings. "}
-        {instalado && `Em cor: meses com o ar (desde ${MES[Number(instalado.slice(5, 7)) - 1]}/${instalado.slice(2, 4)}). `}
-        {arMes != null && `Pelo contador do aparelho, ~${n(arMes)} kWh por mês (≈ ${brl(arMes * tarifa)}). `}
-        Estimativa: a conta da Enel fecha em outro período.
+        Barra lilás = o que o ar gastou (app SmartThings) no mês anterior, que é o período que a conta mede.
+        {instalado && ` O ar começou em ${MES[Number(instalado.slice(5, 7)) - 1]}/${instalado.slice(2, 4)}.`}
       </div>
     </div>
   );
