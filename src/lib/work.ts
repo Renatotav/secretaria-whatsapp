@@ -112,8 +112,37 @@ export async function missingFromSheet() {
     },
     orderBy: { resolvedAt: "asc" },
     take: 50,
-    select: { ticketId: true, status: true, origin: true, errorType: true, resolution: true, redmine: true, description: true, receivedAt: true, openedAt: true, resolvedAt: true },
+    select: { ticketId: true, status: true, origin: true, errorType: true, resolution: true, redmine: true, redmineText: true, description: true, receivedAt: true, openedAt: true, resolvedAt: true },
   });
+}
+
+/**
+ * Reunião sobre um chamado ("Redmine 290424", "chamado 2036021", "S2359619"):
+ * resumo do chamado e como ele resolveu parecidos, para o aviso antes da reunião.
+ */
+export async function meetingTicketBrief(title: string): Promise<string> {
+  const ids = [...new Set((title.toUpperCase().match(/\b[RS]?\d{7}\b/g) ?? []))];
+  const redmines = [...new Set((title.match(/\bredmine\s*(?:n[º°.]*\s*)?#?\s*(\d{5,6})\b|#(\d{5,6})\b/gi) ?? []).map((m) => m.replace(/\D/g, "")))];
+  if (!ids.length && !redmines.length) return "";
+  const t = await prisma.workTicket.findFirst({
+    where: { OR: [...(ids.length ? [{ ticketId: { in: ids } }] : []), ...redmines.map((r) => ({ redmine: { contains: r } }))] },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (!t) return "";
+  const lines = [`📂 Chamado *${t.ticketId}* · ${t.status}${t.sheetStatus ? ` (planilha: ${t.sheetStatus.toLowerCase()})` : ""}${t.redmine ? ` · Redmine ${t.redmine}${t.redmineStatus ? ` (${t.redmineStatus})` : ""}` : ""}`];
+  if (t.errorGroup || t.errorType) lines.push(`🏷️ ${t.errorGroup || t.errorType}`);
+  if (t.description) lines.push(`📝 ${t.description.replace(/\s+/g, " ").slice(0, 220)}${t.description.length > 220 ? "…" : ""}`);
+  if (t.resolution) lines.push(`✅ ${t.resolution.replace(/\s+/g, " ").slice(0, 200)}${t.resolution.length > 200 ? "…" : ""}`);
+  if (t.errorGroup) {
+    const parecidos = await prisma.workTicket.findMany({
+      where: { errorGroup: t.errorGroup, status: "resolvido", NOT: [{ ticketId: t.ticketId }, { resolution: "" }] },
+      orderBy: { resolvedAt: "desc" },
+      take: 2,
+      select: { ticketId: true, resolution: true },
+    });
+    for (const p of parecidos) lines.push(`💡 ${p.ticketId}: ${p.resolution.replace(/\s+/g, " ").slice(0, 140)}${p.resolution.length > 140 ? "…" : ""}`);
+  }
+  return lines.join("\n");
 }
 
 /** Início do dia/semana/mês no horário de Brasília (em UTC, para comparar com o banco). */

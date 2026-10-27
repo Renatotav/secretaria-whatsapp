@@ -241,7 +241,10 @@ export function startScheduler(): void {
             const key = `${todayDate} ${m.start} ${m.title}`;
             if (falta < 1 || falta > 10 || meetingWarned.has(key)) continue;
             meetingWarned.add(key);
-            await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})`, 10, 2);
+            // Reunião sobre um chamado/Redmine: junta o resumo dele e como resolveu parecidos.
+            const { meetingTicketBrief } = await import("./work");
+            const brief = await meetingTicketBrief(m.title).catch(() => "");
+            await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})${brief ? `\n\n${brief}` : ""}`, 10, 2);
           }
           if (meetingWarned.size > 200) meetingWarned.clear();
         } catch (err) {
