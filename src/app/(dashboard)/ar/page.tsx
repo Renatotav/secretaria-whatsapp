@@ -143,6 +143,11 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
   const max = Math.max(...h.map((x) => x.kwh));
   const ultima = h.at(-1)!;
   const tarifa = ultima.valor / ultima.kwh;
+  // Conta sem o ar = média dos meses antes dele; o que passa disso nos meses com ar é (quase todo) o ar.
+  const antes = instalado ? h.filter((x) => x.ref < instalado.slice(0, 7)) : [];
+  const com = instalado ? h.filter((x) => x.ref > instalado.slice(0, 7)) : [];
+  const base = antes.length ? antes.reduce((a, x) => a + x.kwh, 0) / antes.length : null;
+  const extra = base != null && com.length ? com.reduce((a, x) => a + x.kwh, 0) / com.length - base : null;
   return (
     <div style={{ ...card, display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -164,8 +169,13 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
         })}
       </div>
       <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-        {instalado && `Em cor: meses com o ar (no SmartThings desde ${ddmm(instalado)}). `}
-        {arMes != null && `Pelo contador do aparelho, o ar gasta em média ~${n(arMes)} kWh por mês (≈ ${brl(arMes * tarifa)}). `}
+        {base != null && extra != null && (
+          <strong style={{ display: "block", fontSize: 14, color: "var(--text)", marginBottom: 4 }}>
+            Sem o ar a conta era ~{n(base)} kWh ({brl(base * tarifa)}); com o ar, +{n(extra)} kWh por mês ≈ {brl(extra * tarifa)} a mais.
+          </strong>
+        )}
+        {instalado && `Em cor: meses com o ar (desde ${MES[Number(instalado.slice(5, 7)) - 1]}/${instalado.slice(2, 4)}). `}
+        {arMes != null && `Pelo contador do aparelho, ~${n(arMes)} kWh por mês (≈ ${brl(arMes * tarifa)}). `}
         Estimativa: a conta da Enel fecha em outro período.
       </div>
     </div>
