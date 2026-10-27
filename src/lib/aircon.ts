@@ -18,6 +18,8 @@ type Cfg = {
   enel?: { ref: string; kwh: number; valor: number }[];
   /** Gasto do ar por mês, do gráfico "Histórico › Mensal" do app SmartThings (print dele). */
   arMeses?: { ref: string; kwh: number }[];
+  /** Gasto por semana, do "Histórico › Semanal" do app (prints dele): datas AAAA-MM-DD. */
+  arSemanas?: { de: string; ate: string; kwh: number }[];
   /** Quando o ar entrou no SmartThings (o contador total começa aí). */
   installed?: string;
 };
@@ -168,6 +170,7 @@ export async function airconData() {
       const antes = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
       return { ...h, ar: (c.arMeses ?? []).find((x) => x.ref === antes)?.kwh ?? null };
     }),
+    semanas: (c.arSemanas ?? []).slice().sort((a, b) => a.de.localeCompare(b.de)),
     instalado: c.installed ?? null,
     arMediaMesKwh: meses && meses >= 1 ? c.last.wh / 1000 / meses : null,
   };

@@ -18,6 +18,7 @@ type Dados =
       enel: { valor: number; data: string } | null;
       dias: Dia[];
       historico: { ref: string; kwh: number; valor: number; ar: number | null }[];
+      semanas: { de: string; ate: string; kwh: number }[];
       instalado: string | null;
       arMediaMesKwh: number | null;
     };
@@ -96,6 +97,7 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
       </div>
 
       <Grafico dias={d.dias} price={d.price} />
+      {d.semanas.length > 0 && <Semanas s={d.semanas} price={d.price} />}
       {d.historico.length > 0 && <Contas h={d.historico} instalado={d.instalado} arMes={d.arMediaMesKwh} />}
     </>
   );
@@ -184,6 +186,30 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
         {arMes != null && `Pelo contador do aparelho, ~${n(arMes)} kWh por mês (≈ ${brl(arMes * tarifa)}). `}
         Estimativa: a conta da Enel fecha em outro período.
       </div>
+    </div>
+  );
+}
+
+/** Gasto por semana (app SmartThings): total e média por dia, para comparar semanas curtas e cheias. */
+function Semanas({ s, price }: { s: { de: string; ate: string; kwh: number }[]; price: number }) {
+  const dias = (x: { de: string; ate: string }) => Math.round((new Date(x.ate).getTime() - new Date(x.de).getTime()) / 86_400_000) + 1;
+  const max = Math.max(...s.map((x) => x.kwh / dias(x)));
+  return (
+    <div style={{ ...card, display: "grid", gap: 8 }}>
+      <h2 style={{ fontSize: 15, fontWeight: 600 }}>🗓️ Por semana</h2>
+      {s.map((x) => {
+        const porDia = x.kwh / dias(x);
+        return (
+          <div key={x.de} style={{ display: "grid", gridTemplateColumns: "96px minmax(0, 1fr) 92px", gap: 8, alignItems: "center", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ color: "var(--text-muted)" }}>{ddmm(x.de)}–{ddmm(x.ate)}</span>
+            <div style={{ height: 16, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }} title={`${n(porDia, 1)} kWh por dia`}>
+              <div style={{ width: `${(porDia / max) * 100}%`, height: "100%", background: "var(--accent)", borderRadius: 4 }} />
+            </div>
+            <span style={{ textAlign: "right" }}>{brl(x.kwh * price)}</span>
+          </div>
+        );
+      })}
+      <div style={muted}>Barra = gasto por dia daquela semana (assim a semana incompleta compara certo). Valor = total da semana.</div>
     </div>
   );
 }
