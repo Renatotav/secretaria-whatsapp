@@ -16,6 +16,8 @@ type Cfg = {
   expiredWarned?: boolean;
   /** Contas da Enel (casa toda), do print do site: referência "AAAA-MM", kWh e R$. */
   enel?: { ref: string; kwh: number; valor: number }[];
+  /** Gasto do ar por mês, do gráfico "Histórico › Mensal" do app SmartThings (print dele). */
+  arMeses?: { ref: string; kwh: number }[];
   /** Quando o ar entrou no SmartThings (o contador total começa aí). */
   installed?: string;
 };
@@ -160,7 +162,7 @@ export async function airconData() {
     chaveVencida: !!c.expiredWarned,
     enel: enel ? { valor: enel.amount, data: enel.date } : null,
     dias: dias.slice(-31),
-    historico,
+    historico: historico.map((h) => ({ ...h, ar: (c.arMeses ?? []).find((m) => m.ref === h.ref)?.kwh ?? null })),
     instalado: c.installed ?? null,
     arMediaMesKwh: meses && meses >= 1 ? c.last.wh / 1000 / meses : null,
   };

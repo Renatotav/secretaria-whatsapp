@@ -17,7 +17,7 @@ type Dados =
       chaveVencida: boolean;
       enel: { valor: number; data: string } | null;
       dias: Dia[];
-      historico: { ref: string; kwh: number; valor: number }[];
+      historico: { ref: string; kwh: number; valor: number; ar: number | null }[];
       instalado: string | null;
       arMediaMesKwh: number | null;
     };
@@ -139,7 +139,7 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
 const MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 /** Contas da Enel por mês (casa toda) e a média do ar desde que foi instalado. */
-function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor: number }[]; instalado: string | null; arMes: number | null }) {
+function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor: number; ar: number | null }[]; instalado: string | null; arMes: number | null }) {
   const max = Math.max(...h.map((x) => x.kwh));
   const ultima = h.at(-1)!;
   const tarifa = ultima.valor / ultima.kwh;
@@ -160,8 +160,13 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
           return (
             <div key={x.ref} style={{ display: "grid", gridTemplateColumns: "54px minmax(0, 1fr) 84px", gap: 8, alignItems: "center", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
               <span style={{ color: "var(--text-muted)" }}>{MES[Number(x.ref.slice(5, 7)) - 1]}/{x.ref.slice(2, 4)}</span>
-              <div style={{ height: 18, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }} title={`${x.kwh} kWh`}>
-                <div style={{ width: `${(x.kwh / max) * 100}%`, height: "100%", background: depois ? "var(--accent)" : "var(--text-muted)", borderRadius: 4, display: "flex", alignItems: "center", paddingLeft: 6, fontSize: 11, color: "var(--bg-card)" }}>{x.kwh} kWh</div>
+              <div style={{ position: "relative", height: 18, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden" }}
+                title={`${x.kwh} kWh na conta${x.ar != null ? ` · ar ${n(x.ar)} kWh (${n((x.ar / x.kwh) * 100)}%)` : ""}`}>
+                <div style={{ position: "absolute", inset: 0, width: `${(x.kwh / max) * 100}%`, background: depois ? "var(--accent-border)" : "var(--text-muted)", borderRadius: 4 }} />
+                {x.ar != null && <div style={{ position: "absolute", inset: 0, width: `${(x.ar / max) * 100}%`, background: "var(--accent)", borderRadius: 4 }} />}
+                <span style={{ position: "relative", paddingLeft: 6, fontSize: 11, lineHeight: "18px", color: "var(--text)" }}>
+                  {x.kwh} kWh{x.ar != null ? ` · ar ${n(x.ar)} (${n((x.ar / x.kwh) * 100)}%)` : ""}
+                </span>
               </div>
               <span style={{ textAlign: "right" }}>{brl(x.valor)}</span>
             </div>
@@ -174,6 +179,7 @@ function Contas({ h, instalado, arMes }: { h: { ref: string; kwh: number; valor:
             Sem o ar a conta era ~{n(base)} kWh ({brl(base * tarifa)}); com o ar, +{n(extra)} kWh por mês ≈ {brl(extra * tarifa)} a mais.
           </strong>
         )}
+        {h.some((x) => x.ar != null) && "Parte escura = o que o ar gastou (app SmartThings). "}
         {instalado && `Em cor: meses com o ar (desde ${MES[Number(instalado.slice(5, 7)) - 1]}/${instalado.slice(2, 4)}). `}
         {arMes != null && `Pelo contador do aparelho, ~${n(arMes)} kWh por mês (≈ ${brl(arMes * tarifa)}). `}
         Estimativa: a conta da Enel fecha em outro período.
