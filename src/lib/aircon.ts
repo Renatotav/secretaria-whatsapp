@@ -16,6 +16,11 @@ type Cfg = {
   expiredWarned?: boolean;
   /** Contas da Enel (casa toda), do print do site: referência "AAAA-MM", kWh e R$. */
   enel?: { ref: string; kwh: number; valor: number }[];
+  /**
+   * Ponto de partida tirado do app SmartThings (prints dele): no contador `wh`, o mês
+   * `mes` já tinha `mesKwh` e o dia `dia` já tinha `diaKwh`. Medição daqui em diante soma.
+   */
+  base?: { wh: number; mes: string; mesKwh: number; dia: string; diaKwh: number };
   /** Gasto do ar por mês, do gráfico "Histórico › Mensal" do app SmartThings (print dele). */
   arMeses?: { ref: string; kwh: number }[];
   /** Gasto por semana, do "Histórico › Semanal" do app (prints dele): datas AAAA-MM-DD. */
@@ -86,6 +91,9 @@ export async function airconTick(): Promise<string | null> {
 /** kWh gastos entre o 1º registro do dia `from` (ou o mais antigo depois dele) e a última leitura. */
 export function spentSince(c: Cfg, from: string): number | null {
   if (!c.last || !c.days) return null;
+  // Mês ou dia que começou antes da medição: o que o app já mostrava + o medido depois.
+  const b = c.base;
+  if (b && (from === b.dia || from === b.mes + "-01")) return (from === b.dia ? b.diaKwh : b.mesKwh) * 1000 + Math.max(0, c.last.wh - b.wh);
   const start = Object.keys(c.days).filter((d) => d >= from).sort()[0];
   return start === undefined ? null : Math.max(0, c.last.wh - c.days[start]);
 }
@@ -99,7 +107,7 @@ async function summary(): Promise<string> {
   const firstDay = Object.keys(c.days ?? {}).sort()[0];
   const hoje = spentSince(c, today) ?? 0;
   const mes = spentSince(c, month) ?? 0;
-  const desde = firstDay && firstDay > month ? ` (desde ${firstDay.slice(8, 10)}/${firstDay.slice(5, 7)}, quando comecei a medir)` : "";
+  const desde = firstDay && firstDay > month && c.base?.mes !== month.slice(0, 7) ? ` (desde ${firstDay.slice(8, 10)}/${firstDay.slice(5, 7)}, quando comecei a medir)` : "";
   const quando = new Date(new Date(c.last.at).getTime() - 3 * 3600_000).toISOString().slice(11, 16);
   return [
     "❄️ *Ar-condicionado*",
@@ -140,7 +148,8 @@ export async function airconData() {
     const fim = i + 1 < keys.length ? c.days![keys[i + 1]] : c.last!.wh;
     const ate = i + 1 < keys.length ? keys[i + 1] : null;
     const juntou = ate !== null && new Date(ate).getTime() - new Date(k).getTime() > 86_400_000;
-    return { dia: k, kwh: Math.max(0, fim - c.days![k]) / 1000, ate: juntou ? ate : null };
+    const antes = c.base?.dia === k ? c.base.diaKwh * 1000 + Math.max(0, c.days![k] - c.base.wh) : 0;
+    return { dia: k, kwh: (Math.max(0, fim - c.days![k]) + antes) / 1000, ate: juntou ? ate : null };
   });
   const mes = (spentSince(c, today.slice(0, 8) + "01") ?? 0) / 1000;
   const hoje = (spentSince(c, today) ?? 0) / 1000;
@@ -157,7 +166,8 @@ export async function airconData() {
     price,
     hoje,
     mes,
-    desde: keys[0],
+    // Com o ponto de partida do app, o mês já está completo desde o dia 1.
+    desde: c.base?.mes === today.slice(0, 7) ? today.slice(0, 8) + "01" : keys[0],
     agoraW: c.last.w,
     lidoEm: c.last.at,
     totalKwh: c.last.wh / 1000,
