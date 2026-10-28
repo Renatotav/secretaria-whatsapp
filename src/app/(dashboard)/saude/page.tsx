@@ -8,7 +8,7 @@ const COR = { ok: "var(--success)", atencao: "var(--warning)", problema: "var(--
 const ROTULO = { ok: "ok", atencao: "atenção", problema: "problema" } as const;
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 };
 
-/** 🩺 Saúde: WhatsApp, última mensagem, ponte da tomada, crédito da IA e há quanto tempo está no ar. */
+/** 🚦 Saúde: WhatsApp, última mensagem, ponte da tomada, crédito da IA e há quanto tempo está no ar. */
 export default function SaudePage() {
   const [itens, setItens] = useState<Item[] | null>(null);
   const [at, setAt] = useState("");
@@ -30,7 +30,7 @@ export default function SaudePage() {
       <div style={{ padding: 20, maxWidth: 760, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", justifyContent: "space-between" }}>
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>🩺 Saúde do sistema</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>🚦 Saúde do sistema</h1>
             <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
               O WhatsApp é conferido a cada 5 min. Se cair, a Alexa avisa; quando voltar, chega uma mensagem. No WhatsApp: &quot;como está o sistema?&quot;.
             </p>

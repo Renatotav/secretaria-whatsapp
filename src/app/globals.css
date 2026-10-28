@@ -287,3 +287,22 @@ button {
    (antes saía da tela e os itens ficavam cortados). */
 .menu-ferramentas { right: 0; }
 @media (max-width: 640px) { .menu-ferramentas { right: auto; left: 0; max-width: calc(100vw - 32px); } }
+
+/* Configurações: grade de campos curtos, linha de campos que quebra, o
+   "Avançado" recolhido e a barra de salvar presa no pé da tela. */
+.cfg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); column-gap: 12px; align-items: end; }
+.cfg-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.cfg-inline { font-size: 12px; color: var(--text-muted); display: flex; gap: 6px; align-items: center; }
+.cfg-advanced { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 24px; background: transparent; }
+.cfg-advanced[open] { background: var(--bg-card); }
+.cfg-advanced > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border-radius: 12px; }
+.cfg-advanced > summary::-webkit-details-marker { display: none; }
+.cfg-advanced > summary:hover { background: var(--bg-hover); }
+.cfg-advanced > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cfg-chevron { font-size: 22px; color: var(--text-muted); transition: transform 0.2s ease-out; }
+.cfg-advanced[open] .cfg-chevron { transform: rotate(90deg); }
+.cfg-advanced-body { padding: 0 16px 16px; }
+.cfg-advanced-body > h3:first-child { border-top: 0; padding-top: 0; margin-top: 4px; }
+.cfg-savebar { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.cfg-savebar-inner { max-width: 648px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
+@media (prefers-reduced-motion: reduce) { .cfg-chevron { transition: none; } }

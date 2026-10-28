@@ -6,7 +6,7 @@ import { healthItems } from "@/lib/health";
 
 export const dynamic = "force-dynamic";
 
-/** 🩺 Saúde do sistema para o painel (mesmos itens do "como está o sistema?"). */
+/** 🚦 Saúde do sistema para o painel (mesmos itens do "como está o sistema?"). */
 export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const config = await prisma.agentConfig.findFirst();

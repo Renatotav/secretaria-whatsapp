@@ -73,7 +73,7 @@ const ha = (iso: string | Date) => {
 
 export type HealthItem = { nivel: "ok" | "atencao" | "problema"; titulo: string; detalhe: string };
 
-/** Cada parte do sistema com um sinal: o comando do WhatsApp e a tela 🩺 Saúde usam isto. */
+/** Cada parte do sistema com um sinal: o comando do WhatsApp e a tela 🚦 Saúde usam isto. */
 export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
   const itens: HealthItem[] = [];
   const wa = await whatsappState(config);
@@ -109,7 +109,7 @@ export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
 const ICONE = { ok: "🟢", atencao: "🟡", problema: "🔴" } as const;
 export async function healthReport(config: AgentConfig): Promise<string> {
   const itens = await healthItems(config);
-  return `🩺 *Saúde do sistema*\n${itens.map((i) => `${ICONE[i.nivel]} ${i.titulo}: ${i.detalhe}`).join("\n")}`;
+  return `🚦 *Saúde do sistema*\n${itens.map((i) => `${ICONE[i.nivel]} ${i.titulo}: ${i.detalhe}`).join("\n")}`;
 }
 
 /** "como está o sistema?", "saúde do sistema", "status do sistema". null = não é esse comando. */

@@ -106,19 +106,16 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: "var(--bg-card)",
-        border: "1px solid var(--border)",
-        borderRadius: 12,
-        padding: 20,
-        marginBottom: 20,
-      }}
-    >
-      <h2 style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: "var(--text)" }}>{title}</h2>
+    <section style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 16px 4px", marginBottom: 16 }}>
+      <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, color: "var(--text)" }}>{title}</h2>
       {children}
-    </div>
+    </section>
   );
+}
+
+/** Título de um grupo dentro do "Avançado" (sem cartão dentro de cartão). */
+function SubHead({ children }: { children: React.ReactNode }) {
+  return <h3 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: "24px 0 12px", paddingTop: 16, borderTop: "1px solid var(--border-light)" }}>{children}</h3>;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -239,77 +236,51 @@ export default function ConfigPage() {
   }
 
 
+  const silenciados = config.mutedContacts.split(",").map((p) => p.trim()).filter(Boolean);
+  const numero = (key: "creditCardDueDay" | "creditCardBestDay" | "debounceSeconds" | "typingMsPerChar" | "typingMaxSeconds" | "historyLimit", min: number, max: number) => (
+    <input type="number" inputMode="numeric" min={min} max={max} value={config[key]} onChange={(e) => set(key, Number(e.target.value))} />
+  );
+
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 24px 60px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 16px 0" }}>
+        <header style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>⚙️ Configurações</h1>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {saveError && <span style={{ fontSize: 13, color: "var(--danger)" }}>⚠️ {saveError}</span>}
-            {saved && (
-              <span style={{ fontSize: 13, color: "var(--success)" }}>✅ Salvo!</span>
-            )}
-            <button className="btn-primary" onClick={save} disabled={saving}>
-              {saving ? "Salvando..." : "Salvar todas"}
-            </button>
-          </div>
-        </div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
+            O que você muda no dia a dia fica em cima. A parte técnica fica no fim, fechada.
+          </p>
+        </header>
 
-        {/* Meu Perfil */}
-        <Section title="👤 Meu Perfil">
-          <Field
-            label="Meu número do WhatsApp"
-            hint="Formato: 5585999999999 (com DDI e DDD, sem + ou espaços)"
-          >
-            <input
-              value={config.ownerPhone}
-              onChange={(e) => set("ownerPhone", e.target.value)}
-              placeholder="5585999999999"
-            />
+        <Section title="👤 Você">
+          <Field label="Seu WhatsApp" hint="Com DDI e DDD, só números (ex: 5585999999999)">
+            <input inputMode="numeric" value={config.ownerPhone} onChange={(e) => set("ownerPhone", e.target.value)} placeholder="5585999999999" />
           </Field>
-          <Field label="Meu nome" hint="Usado pela IA e para achar o SEU cartão na fatura (ex: separar do cartão do titular)">
-            <input
-              value={config.ownerName}
-              onChange={(e) => set("ownerName", e.target.value)}
-              placeholder="Renato"
-            />
-          </Field>
-          <Field label="Meu cargo" hint="Ex: Operador de Atendimento PJe">
-            <input
-              value={config.ownerRole}
-              onChange={(e) => set("ownerRole", e.target.value)}
-              placeholder="Supervisor de Atendimento"
-            />
-          </Field>
+          <div className="cfg-grid">
+            <Field label="Seu nome" hint="A IA usa para achar o SEU cartão na fatura">
+              <input value={config.ownerName} onChange={(e) => set("ownerName", e.target.value)} placeholder="Renato" />
+            </Field>
+            <Field label="Seu cargo">
+              <input value={config.ownerRole} onChange={(e) => set("ownerRole", e.target.value)} placeholder="Operador de Atendimento PJe" />
+            </Field>
+          </div>
         </Section>
 
-        {/* Financeiro */}
-        <Section title="💳 Financeiro">
-          <Field label="Dia do vencimento do cartão" hint="O vencimento das parcelas de cartão será alocado automaticamente para este dia">
-            <input
-              type="number"
-              min={1}
-              max={31}
-              value={config.creditCardDueDay}
-              onChange={(e) => set("creditCardDueDay", Number(e.target.value))}
-            />
-          </Field>
-          <Field label="Melhor dia de compra no cartão" hint="Compras a partir deste dia caem na fatura do mês seguinte (ex: 5 → compra em 05/10 vence em 10/11)">
-            <input
-              type="number"
-              min={1}
-              max={31}
-              value={config.creditCardBestDay}
-              onChange={(e) => set("creditCardBestDay", Number(e.target.value))}
-            />
-          </Field>
+        <Section title="💳 Cartões e faturas">
+          <div className="cfg-grid">
+            <Field label="Vencimento do cartão" hint="Dia em que a fatura vence">
+              {numero("creditCardDueDay", 1, 31)}
+            </Field>
+            <Field label="Melhor dia de compra" hint="A partir dele, a compra cai na fatura seguinte">
+              {numero("creditCardBestDay", 1, 31)}
+            </Field>
+          </div>
           <Field
-            label="Outros cartões (vencimento próprio)"
-            hint='Ao citar o cartão na mensagem ("comprei 80 no santander do bruno"), o gasto vai para ele com o vencimento dele — parcelas também. O nome tem que ser igual ao do cartão nos lançamentos.'
+            label="Outros cartões"
+            hint='Cada um com o seu vencimento. Ao citar o cartão na mensagem ("80 no santander do bruno"), o gasto e as parcelas vão para ele. O nome tem que ser igual ao dos lançamentos.'
           >
             <div style={{ display: "grid", gap: 8 }}>
               {(config.cardBillDays || []).map((c, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <div key={i} className="cfg-row">
                   <input
                     aria-label="Nome do cartão"
                     placeholder="Santander do Bruno"
@@ -317,14 +288,14 @@ export default function ConfigPage() {
                     onChange={(e) => set("cardBillDays", config.cardBillDays.map((x, j) => (j === i ? { ...x, card: e.target.value } : x)))}
                     style={{ flex: "1 1 180px", minWidth: 0 }}
                   />
-                  <label style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", gap: 4, alignItems: "center" }}>
+                  <label className="cfg-inline">
                     vence dia
-                    <input type="number" min={1} max={31} value={c.due} style={{ width: 64 }}
+                    <input type="number" inputMode="numeric" min={1} max={31} value={c.due} style={{ width: 64 }}
                       onChange={(e) => set("cardBillDays", config.cardBillDays.map((x, j) => (j === i ? { ...x, due: Number(e.target.value) } : x)))} />
                   </label>
-                  <label style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", gap: 4, alignItems: "center" }}>
+                  <label className="cfg-inline">
                     melhor dia
-                    <input type="number" min={1} max={31} value={c.best} style={{ width: 64 }}
+                    <input type="number" inputMode="numeric" min={1} max={31} value={c.best} style={{ width: 64 }}
                       onChange={(e) => set("cardBillDays", config.cardBillDays.map((x, j) => (j === i ? { ...x, best: Number(e.target.value) } : x)))} />
                   </label>
                   <button type="button" className="btn-ghost" onClick={() => set("cardBillDays", config.cardBillDays.filter((_x, j) => j !== i))}>Tirar</button>
@@ -337,78 +308,72 @@ export default function ConfigPage() {
           </Field>
           <Field
             label="Avisar outra pessoa das faturas"
-            hint="Recebe no WhatsApp, às 9h do dia do vencimento de cada cartão (C6 e Santander), só a SUA parte de cada fatura. Deixe o WhatsApp vazio para desligar."
+            hint="Ela recebe no WhatsApp, às 9h do vencimento de cada cartão, só a SUA parte da fatura. Sem número, fica desligado."
           >
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input
-                aria-label="Nome de quem recebe"
-                placeholder="Nome (ex: Bruno)"
-                value={config.invoiceBuddyName}
-                onChange={(e) => set("invoiceBuddyName", e.target.value)}
-                style={{ flex: "1 1 140px" }}
-              />
-              <input
-                aria-label="WhatsApp de quem recebe"
-                placeholder="WhatsApp com DDI e DDD"
-                value={config.invoiceBuddyPhone}
-                onChange={(e) => set("invoiceBuddyPhone", e.target.value.replace(/\D/g, ""))}
-                style={{ flex: "1 1 180px" }}
-              />
-              <button type="button" className="btn-ghost" disabled={!config.invoiceBuddyPhone} onClick={testarAviso} style={{ flex: "0 0 auto" }}>
-                Mandar teste
-              </button>
+            <div className="cfg-row">
+              <input aria-label="Nome de quem recebe" placeholder="Nome (ex: Bruno)" value={config.invoiceBuddyName} onChange={(e) => set("invoiceBuddyName", e.target.value)} style={{ flex: "1 1 140px" }} />
+              <input aria-label="WhatsApp de quem recebe" inputMode="numeric" placeholder="WhatsApp com DDI e DDD" value={config.invoiceBuddyPhone} onChange={(e) => set("invoiceBuddyPhone", e.target.value.replace(/\D/g, ""))} style={{ flex: "1 1 180px" }} />
+              <button type="button" className="btn-ghost" disabled={!config.invoiceBuddyPhone} onClick={testarAviso} style={{ flex: "0 0 auto" }}>Mandar teste</button>
             </div>
-            {avisoMsg && <div style={{ fontSize: 12, marginTop: 6, color: "var(--text-muted)" }}>{avisoMsg}</div>}
+            {avisoMsg && <div role="status" style={{ fontSize: 12, marginTop: 6, color: "var(--text-muted)" }}>{avisoMsg}</div>}
           </Field>
         </Section>
 
-        {/* Agendamento */}
-        <Section title="⏰ Agendamento Automático">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(160px, 100%), 1fr))", gap: 12 }}>
-            <Field label="Horário do resumo do dia" hint="Gastos, tetos, previsão e o que vence amanhã, com gráfico">
-              <input
-                type="time"
-                value={config.summaryTime}
-                onChange={(e) => set("summaryTime", e.target.value)}
-              />
+        <Section title="⏰ Horários">
+          <div className="cfg-grid">
+            <Field label="Resumo do dia" hint="Gastos, tetos e o que vence amanhã">
+              <input type="time" value={config.summaryTime} onChange={(e) => set("summaryTime", e.target.value)} />
             </Field>
-            <Field label="Horário do relatório semanal" hint="Todo domingo, com gráficos">
-              <input
-                type="time"
-                value={config.weeklyTime}
-                onChange={(e) => set("weeklyTime", e.target.value)}
-              />
+            <Field label="Relatório da semana" hint="Todo domingo">
+              <input type="time" value={config.weeklyTime} onChange={(e) => set("weeklyTime", e.target.value)} />
             </Field>
           </div>
         </Section>
 
-        {/* Conversas e privacidade */}
-        <Section title="💬 Conversas e privacidade">
+        <Section title="🧠 Jeito da secretária">
+          <Field label="Instruções para a IA" hint="Ajudam a IA a entender suas mensagens: como classificar gastos, o que é diário, o tom. Em branco, ela usa só o padrão.">
+            <textarea
+              value={config.systemPrompt}
+              onChange={(e) => set("systemPrompt", e.target.value)}
+              rows={9}
+              style={{ resize: "vertical", lineHeight: 1.5 }}
+              placeholder="Ex: Me chame de Renato. Bar e espetinho = Saídas."
+            />
+          </Field>
+        </Section>
+
+        <Section title="💬 Conversas e áudios">
+          <Toggle
+            on={config.audioEnabled}
+            onChange={(v) => set("audioEnabled", v)}
+            label="Escutar áudios"
+            hint="Transcreve os áudios que você manda e trata como texto."
+          />
           <Toggle
             on={config.detectCommitments}
             onChange={(v) => set("detectCommitments", v)}
-            label="Compromissos das conversas → agenda"
-            hint="A IA lê as conversas privadas só para achar compromissos combinados e pergunta se coloca na agenda."
+            label="Achar compromissos nas conversas"
+            hint="A IA lê as conversas com contatos e pergunta se coloca o combinado na agenda."
           />
           <Toggle
             on={config.privateBriefings}
             onChange={(v) => set("privateBriefings", v)}
             label="Resumo de cada mensagem recebida"
-            hint="Avisa no WhatsApp um resumo de toda mensagem privada (desligado: era muito aviso sem utilidade)."
+            hint="Avisa no WhatsApp um resumo de toda mensagem de contato."
           />
-          <Field label="Contatos silenciados" hint='Nunca passam pela IA. No WhatsApp: "silencia fulano" / "volta a ouvir fulano".'>
-            {config.mutedContacts.split(",").filter((p) => p.trim()).length === 0 ? (
-              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Nenhum.</div>
+          <Field label="Contatos silenciados" hint='A IA nunca lê. No WhatsApp: "silencia fulano" / "volta a ouvir fulano".'>
+            {silenciados.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--text-dim)" }}>Nenhum.</div>
             ) : (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {config.mutedContacts.split(",").map((p) => p.trim()).filter(Boolean).map((p) => (
-                  <span key={p} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 12, background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                {silenciados.map((p) => (
+                  <span key={p} style={{ fontSize: 12, padding: "4px 4px 4px 10px", borderRadius: 12, background: "var(--bg-hover)", border: "1px solid var(--border)", display: "inline-flex", alignItems: "center" }}>
                     {contactNames[p] || p}
                     <button
                       type="button"
-                      onClick={() => set("mutedContacts", config.mutedContacts.split(",").map((x) => x.trim()).filter((x) => x && x !== p).join(","))}
-                      style={{ marginLeft: 6, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
-                      title="Voltar a ouvir"
+                      onClick={() => set("mutedContacts", silenciados.filter((x) => x !== p).join(","))}
+                      style={{ marginLeft: 4, background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "0 6px" }}
+                      aria-label={`Voltar a ouvir ${contactNames[p] || p}`}
                     >
                       ✕
                     </button>
@@ -419,301 +384,149 @@ export default function ConfigPage() {
           </Field>
         </Section>
 
-        {/* Evolution API */}
-        {/* Telas que saíram do menu, mas continuam disponíveis */}
-        <Section title="🔗 Outras telas">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <a className="btn-ghost" href="/instances" style={{ fontSize: 13, padding: "6px 12px" }}>📡 Conexão do WhatsApp (instâncias)</a>
-            <a className="btn-ghost" href="/groups" style={{ fontSize: 13, padding: "6px 12px" }}>👥 Gerenciar grupos</a>
-            <a className="btn-ghost" href="/briefings" style={{ fontSize: 13, padding: "6px 12px" }}>👤 Resumos de contatos (antigos)</a>
-          </div>
-        </Section>
-
-        <Section title="📱 Evolution API (WhatsApp)">
-          <Field label="URL da Evolution API" hint="Ex: https://evolution.seudominio.com">
-            <input
-              value={config.evolutionUrl}
-              onChange={(e) => set("evolutionUrl", e.target.value)}
-              placeholder="https://evolution.seudominio.com"
-            />
-          </Field>
-          <Field label="API Key">
-            <input
-              type="password"
-              {...secretField("evolutionApiKey")}
-            />
-          </Field>
-          <Field label="Instance ID">
-            <input
-              value={config.instanceId}
-              onChange={(e) => set("instanceId", e.target.value)}
-              placeholder="minha-instancia"
-            />
-          </Field>
-          <Field label="URL do Webhook" hint="Configure este endereço na Evolution API com evento messages.upsert">
-            <input
-              value={typeof window !== "undefined" ? `${window.location.origin}/api/webhook` : "/api/webhook"}
-              readOnly
-              style={{ opacity: 0.7, cursor: "text" }}
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-            />
-          </Field>
-        </Section>
-
-        {/* IA Provider */}
-        <Section title="🤖 Provedor de IA">
-          <Field label="Provedor">
-            <select
-              value={config.aiProvider}
-              onChange={(e) => set("aiProvider", e.target.value)}
-            >
-              <option value="openai">OpenAI</option>
-              <option value="groq">Groq</option>
-              <option value="google">Google Gemini</option>
-              <option value="openrouter">OpenRouter</option>
-            </select>
-          </Field>
-
-          {config.aiProvider === "openai" && (
-            <>
-              <Field label="OpenAI API Key">
-                <input
-                  type="password"
-                  {...secretField("openaiApiKey")}
-                />
-              </Field>
-              <Field label="Modelo OpenAI">
-                <select
-                  value={config.openaiModel}
-                  onChange={(e) => set("openaiModel", e.target.value)}
-                >
-                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                  <option value="gpt-4.1">gpt-4.1</option>
-                  <option value="gpt-4o">gpt-4o</option>
-                  <option value="gpt-4o-mini">gpt-4o-mini</option>
-                </select>
-              </Field>
-            </>
-          )}
-
-          {config.aiProvider === "groq" && (
-            <>
-              <Field label="Groq API Key">
-                <input
-                  type="password"
-                  {...secretField("groqApiKey")}
-                />
-              </Field>
-              <Field label="Modelo Groq">
-                <select
-                  value={config.groqModel}
-                  onChange={(e) => set("groqModel", e.target.value)}
-                >
-                  <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
-                  <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-                  <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
-                </select>
-              </Field>
-            </>
-          )}
-
-          {config.aiProvider === "google" && (
-            <>
-              <Field label="Google AI API Key" hint="Obtenha em aistudio.google.com">
-                <input
-                  type="password"
-                  {...secretField("googleApiKey")}
-                />
-              </Field>
-              <Field label="Modelo Gemini">
-                <select
-                  value={config.googleModel}
-                  onChange={(e) => set("googleModel", e.target.value)}
-                >
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
-                  <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (mais rápido)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                </select>
-              </Field>
-            </>
-          )}
-
-          {config.aiProvider === "openrouter" && (
-            <>
-              <Field label="OpenRouter API Key" hint="Obtenha em openrouter.ai/keys">
-                <input
-                  type="password"
-                  {...secretField("openrouterApiKey")}
-                />
-              </Field>
-              <Field label="Modelo" hint="Slug do modelo no OpenRouter, ex: openai/gpt-4o-mini">
-                <input
-                  list="openrouter-models"
-                  value={config.openrouterModel}
-                  onChange={(e) => set("openrouterModel", e.target.value)}
-                  placeholder="openai/gpt-4o-mini"
-                />
-                <datalist id="openrouter-models">
-                  <option value="openai/gpt-4o-mini" />
-                  <option value="openai/gpt-4o" />
-                  <option value="anthropic/claude-sonnet-4.5" />
-                  <option value="google/gemini-2.0-flash-001" />
-                  <option value="meta-llama/llama-3.3-70b-instruct" />
-                </datalist>
-              </Field>
-            </>
-          )}
-        </Section>
-
-        {/* Assistente */}
-        <Section title="🧠 Personalidade e instruções">
-          <Field
-            label="Instruções personalizadas"
-            hint="Some às regras da secretária (agenda, financeiro, diário, análise de grupos e contatos). Ex: tom de voz, categorias de gasto que você usa, o que considerar urgente. Deixe em branco para usar só o comportamento padrão."
-          >
-            <textarea
-              value={config.systemPrompt}
-              onChange={(e) => set("systemPrompt", e.target.value)}
-              rows={4}
-              placeholder="Ex: Seja bem direta e objetiva. Trate qualquer gasto acima de R$500 como prioridade alta no resumo mensal."
-            />
-          </Field>
-          <Field label="Histórico (mensagens)" hint="Quantas mensagens recentes do canal pessoal entram no contexto da IA">
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={config.historyLimit}
-              onChange={(e) => set("historyLimit", Number(e.target.value))}
-              style={{ maxWidth: 160 }}
-            />
-          </Field>
-        </Section>
-
-        {/* Áudio e Digitação */}
-        <Section title="🎙️ Áudio e Digitação">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={config.audioEnabled}
-              aria-label="Áudio ligado"
-              onClick={() => set("audioEnabled", !config.audioEnabled)}
-              style={{
-                width: 44,
-                height: 24,
-                borderRadius: 12,
-                background: config.audioEnabled ? "var(--accent)" : "var(--border)",
-                border: "none",
-                cursor: "pointer",
-                position: "relative",
-                transition: "background 0.2s",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  left: config.audioEnabled ? 22 : 2,
-                  width: 20,
-                  height: 20,
-                  borderRadius: "50%",
-                  background: "white",
-                  transition: "left 0.2s",
-                }}
-              />
-            </button>
-            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              {config.audioEnabled ? "Escutar áudios (transcrever automaticamente)" : "Áudios ignorados"}
+        <details className="cfg-advanced">
+          <summary>
+            <span>
+              <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--text)" }}>⚙️ Avançado</span>
+              <span style={{ display: "block", fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>WhatsApp, IA e tempos. Só mexa se algo parar de funcionar.</span>
             </span>
-          </div>
-          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
-            A transcrição usa, nessa ordem, a primeira chave configurada na seção de Provedor de IA acima: Groq (whisper-large-v3), OpenRouter (openai/whisper-1) ou OpenAI (whisper-1).
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(160px, 100%), 1fr))", gap: 12 }}>
-            <Field label="Debounce (segundos)" hint="Espera antes de processar mensagens quebradas">
-              <input
-                type="number"
-                min={1}
-                max={60}
-                value={config.debounceSeconds}
-                onChange={(e) => set("debounceSeconds", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Digitação (ms/caractere)" hint="Tempo de 'digitando' por caractere da resposta">
-              <input
-                type="number"
-                min={0}
-                max={200}
-                value={config.typingMsPerChar}
-                onChange={(e) => set("typingMsPerChar", Number(e.target.value))}
-              />
-            </Field>
-            <Field label="Teto de digitação (segundos)" hint="Tempo máximo de 'digitando'">
-              <input
-                type="number"
-                min={1}
-                max={60}
-                value={config.typingMaxSeconds}
-                onChange={(e) => set("typingMaxSeconds", Number(e.target.value))}
-              />
-            </Field>
-          </div>
-        </Section>
+            <span className="cfg-chevron" aria-hidden>›</span>
+          </summary>
 
-        {/* Segurança */}
-        <Section title="🔒 Segurança">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={config.enabled}
-              aria-label="Agente ativo"
-              onClick={() => set("enabled", !config.enabled)}
-              style={{
-                width: 44,
-                height: 24,
-                borderRadius: 12,
-                background: config.enabled ? "var(--accent)" : "var(--border)",
-                border: "none",
-                cursor: "pointer",
-                position: "relative",
-                transition: "background 0.2s",
-              }}
-            >
-              <span
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  left: config.enabled ? 22 : 2,
-                  width: 20,
-                  height: 20,
-                  borderRadius: "50%",
-                  background: "white",
-                  transition: "left 0.2s",
-                }}
+          <div className="cfg-advanced-body">
+            <SubHead>📱 WhatsApp (Evolution)</SubHead>
+            <Field label="Endereço da Evolution">
+              <input value={config.evolutionUrl} onChange={(e) => set("evolutionUrl", e.target.value)} placeholder="https://evolution.seudominio.com" />
+            </Field>
+            <Field label="Chave da Evolution" hint="A tela testa a chave nova antes de salvar.">
+              <input type="password" {...secretField("evolutionApiKey")} />
+            </Field>
+            <Field label="Nome da instância">
+              <input value={config.instanceId} onChange={(e) => set("instanceId", e.target.value)} placeholder="minha-instancia" />
+            </Field>
+            <Field label="Endereço que a Evolution chama" hint="Cadastrado na Evolution com o evento messages.upsert. Toque para selecionar.">
+              <input
+                value={typeof window !== "undefined" ? `${window.location.origin}/api/webhook` : "/api/webhook"}
+                readOnly
+                style={{ color: "var(--text-muted)", cursor: "text" }}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
               />
-            </button>
-            <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
-              {config.enabled ? "Agente ativo" : "Agente inativo"}
-            </span>
-          </div>
-          <Field
-            label="Números autorizados"
-            hint="Deixe vazio para aceitar qualquer número. Separe com vírgulas: 5585999999999,5585888888888"
-          >
-            <input
-              value={config.allowedPhones}
-              onChange={(e) => set("allowedPhones", e.target.value)}
-              placeholder="5585999999999,5585888888888"
+            </Field>
+            <a className="btn-ghost" href="/instances" style={{ fontSize: 13, display: "inline-block", padding: "8px 12px" }}>📡 Ver conexão do WhatsApp</a>
+
+            <SubHead>🤖 Inteligência artificial</SubHead>
+            <Field label="Provedor">
+              <select value={config.aiProvider} onChange={(e) => set("aiProvider", e.target.value)}>
+                <option value="openai">OpenAI</option>
+                <option value="groq">Groq</option>
+                <option value="google">Google Gemini</option>
+                <option value="openrouter">OpenRouter</option>
+              </select>
+            </Field>
+
+            {config.aiProvider === "openai" && (
+              <>
+                <Field label="Chave da OpenAI">
+                  <input type="password" {...secretField("openaiApiKey")} />
+                </Field>
+                <Field label="Modelo">
+                  <select value={config.openaiModel} onChange={(e) => set("openaiModel", e.target.value)}>
+                    <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                    <option value="gpt-4.1">gpt-4.1</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  </select>
+                </Field>
+              </>
+            )}
+
+            {config.aiProvider === "groq" && (
+              <>
+                <Field label="Chave da Groq">
+                  <input type="password" {...secretField("groqApiKey")} />
+                </Field>
+                <Field label="Modelo">
+                  <select value={config.groqModel} onChange={(e) => set("groqModel", e.target.value)}>
+                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+                    <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
+                  </select>
+                </Field>
+              </>
+            )}
+
+            {config.aiProvider === "google" && (
+              <>
+                <Field label="Chave do Google AI" hint="Pegue em aistudio.google.com">
+                  <input type="password" {...secretField("googleApiKey")} />
+                </Field>
+                <Field label="Modelo">
+                  <select value={config.googleModel} onChange={(e) => set("googleModel", e.target.value)}>
+                    <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
+                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (mais rápido)</option>
+                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  </select>
+                </Field>
+              </>
+            )}
+
+            {config.aiProvider === "openrouter" && (
+              <>
+                <Field label="Chave da OpenRouter" hint="Pegue em openrouter.ai/keys">
+                  <input type="password" {...secretField("openrouterApiKey")} />
+                </Field>
+                <Field label="Modelo" hint="Nome do modelo na OpenRouter (ex: openai/gpt-4o-mini)">
+                  <input list="openrouter-models" value={config.openrouterModel} onChange={(e) => set("openrouterModel", e.target.value)} placeholder="openai/gpt-4o-mini" />
+                  <datalist id="openrouter-models">
+                    <option value="openai/gpt-4o-mini" />
+                    <option value="openai/gpt-4o" />
+                    <option value="anthropic/claude-sonnet-4.5" />
+                    <option value="google/gemini-2.0-flash-001" />
+                    <option value="meta-llama/llama-3.3-70b-instruct" />
+                  </datalist>
+                </Field>
+              </>
+            )}
+            <Field label="Mensagens lembradas" hint="Quantas mensagens recentes suas a IA lê junto para entender o contexto">
+              <div style={{ maxWidth: 160 }}>{numero("historyLimit", 1, 50)}</div>
+            </Field>
+            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Os áudios são transcritos pela primeira chave que existir: Groq, OpenRouter ou OpenAI.
+            </p>
+
+            <SubHead>⏱️ Tempos de resposta</SubHead>
+            <div className="cfg-grid">
+              <Field label="Esperar antes de responder" hint="Segundos. Junta mensagens mandadas em sequência">
+                {numero("debounceSeconds", 1, 60)}
+              </Field>
+              <Field label="“Digitando” por letra" hint="Milissegundos por letra da resposta">
+                {numero("typingMsPerChar", 0, 200)}
+              </Field>
+              <Field label="“Digitando” no máximo" hint="Segundos">
+                {numero("typingMaxSeconds", 1, 60)}
+              </Field>
+            </div>
+
+            <SubHead>👥 Contatos e grupos</SubHead>
+            <Toggle
+              on={config.enabled}
+              onChange={(v) => set("enabled", v)}
+              label="Ler conversas de contatos e grupos"
+              hint="Desligado, ela ignora contatos e grupos. A sua conversa com ela continua funcionando."
             />
-          </Field>
-        </Section>
+            <a className="btn-ghost" href="/groups" style={{ fontSize: 13, display: "inline-block", padding: "8px 12px" }}>👥 Escolher grupos</a>
+          </div>
+        </details>
+      </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div className="cfg-savebar">
+        <div className="cfg-savebar-inner">
+          <span role="status" style={{ fontSize: 13, flex: 1, minWidth: 0, color: saveError ? "var(--danger)" : "var(--success)" }}>
+            {saveError ? `⚠️ ${saveError}` : saved ? "✅ Salvo!" : ""}
+          </span>
           <button className="btn-primary" onClick={save} disabled={saving} style={{ padding: "10px 24px" }}>
-            {saving ? "Salvando..." : "Salvar todas as configurações"}
+            {saving ? "Salvando..." : "Salvar"}
           </button>
         </div>
       </div>
