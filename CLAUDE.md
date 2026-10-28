@@ -34,6 +34,7 @@ Arquivos-chave:
 | `src/lib/session-token.ts`, `src/lib/auth.ts`, `src/proxy.ts` | Login do painel (token assinado com HMAC) |
 | `src/lib/auto-pay.ts` | Baixa automática só de compras no cartão com fatura vencida |
 | `src/app/api/finance/route.ts` | CRUD do financeiro do painel |
+| `src/app/(dashboard)/finance/`, `work/` | Telas: `page.tsx` tem o estado; tipos/formatos (`finance-utils.ts`, `work-ui.tsx`), gráficos e painéis ficam em arquivos ao lado |
 
 ## 3. Dados (o que cada campo significa)
 
