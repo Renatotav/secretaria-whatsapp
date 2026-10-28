@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PerguntaIA } from "../pergunta-ia";
 
 type Dia = { dia: string; kwh: number; ate: string | null };
 type Dados =
@@ -102,6 +103,7 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
         <Kpi titulo="Contador do aparelho" valor={`${n(d.totalKwh)} kWh`} dica="desde que foi instalado" explica="Total que o próprio ar mediu na vida toda. É dele que sai a conta por dia." />
       </div>
 
+      <PerguntaIA aba="ar" exemplos={["Quanto gastei esta semana?", "Qual mês o ar gastou mais?", "Quanto vou pagar de ar este mês?"]} />
       <Grafico dias={d.dias} price={d.price} />
       {d.semanas.length > 0 && <Semanas s={d.semanas} price={d.price} />}
       {d.historico.length > 0 && <Contas h={d.historico} instalado={d.instalado} />}

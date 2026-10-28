@@ -38,7 +38,7 @@ export function formatTime(ts: number): string {
   return `${String(h).padStart(2, "0")}:${m}`;
 }
 
-function getProviderOpts(config: AgentConfig): ProviderOptions {
+export function getProviderOpts(config: AgentConfig): ProviderOptions {
   return {
     aiProvider: config.aiProvider,
     openaiApiKey: config.openaiApiKey,

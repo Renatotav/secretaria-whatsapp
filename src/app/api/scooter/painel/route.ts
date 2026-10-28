@@ -84,9 +84,20 @@ export const GET = withErrorHandling(async (request: Request) => {
     uberMes: diasMes * 2 * corrida,
   } : null;
 
+  // Quando recarregar: folga (km) ÷ km por dia → data prevista (pela média, inclui dias parados).
+  const folga = n.kmSince != null ? n.safeKm - n.kmSince : null;
+  const recarregarEm = folga != null && kmDia && kmDia > 0 ? new Date(Date.now() + Math.max(0, folga / kmDia) * 86_400_000) : null;
+  // Parte na conta de luz: cargas por mês (média) ÷ última conta da Enel do histórico do ar.
+  const st = (await prisma.flowState.findUnique({ where: { key: "smartthings" } }))?.value as { enel?: { ref: string; kwh: number; valor: number }[] } | null;
+  const ultimaConta = st?.enel?.slice().sort((a, b) => a.ref.localeCompare(b.ref)).at(-1) ?? null;
+  const mesesCarga = charges.length > 1 ? (charges.at(-1)!.at.getTime() - charges[0].at.getTime()) / (30.44 * 86_400_000) : null;
+  const kwhMes = mesesCarga && mesesCarga >= 0.5 ? charges.reduce((a, c) => a + (c.kwh ?? 0), 0) / mesesCarga : null;
+
   return NextResponse.json({
     ...n,
     kmDia,
+    recarregarEm,
+    naConta: ultimaConta && kwhMes ? { kwhMes, pct: (kwhMes / ultimaConta.kwh) * 100, conta: ultimaConta.valor } : null,
     economia,
     tirePsi: TIRE_PSI,
     cargas: cargas.reverse(),

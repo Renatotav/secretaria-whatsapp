@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWidth } from "@/lib/use-width";
+import { PerguntaIA } from "../pergunta-ia";
 
 type Carga = { at: string; kwh: number | null; hours: number | null; odo: number | null; km: number | null; whKm: number | null; custo: number | null; picoW: number | null; auto: boolean };
 type Leitura = { at: string; odo: number; volts: number | null; bars: number | null; carga: boolean };
@@ -18,6 +19,8 @@ type Dados = {
   mesKwh: number;
   custoKm: number | null;
   kmDia: number | null;
+  recarregarEm: string | null;
+  naConta: { kwhMes: number; pct: number; conta: number } | null;
   tireDue: boolean;
   tireNext: string;
   tirePsi: { front: number; rear: number };
@@ -97,6 +100,7 @@ function Painel({ d }: { d: Dados }) {
         <div style={muted}>
           {d.kmSince != null && `${n(d.kmSince)} km desde a carga${ultima ? ` de ${dia(ultima.at)}` : ""} · recarregar até ~${n(d.safeKm)} km`}
           {d.daysSince != null && d.daysSince > 0 && ` · faz ${d.daysSince} dia(s)`}
+          {d.recarregarEm && folga != null && folga > 0 && ` · no seu ritmo, recarregar por volta de ${dia(d.recarregarEm)}`}
         </div>
       </div>
 
@@ -111,6 +115,8 @@ function Painel({ d }: { d: Dados }) {
           explica={`O que a tomada mede (com a perda do carregador) × a tarifa. Para mudar a tarifa, mande no WhatsApp: tarifa da luz 0,92.`} />
         <Kpi titulo="Este mês" valor={brl(d.mesKwh * d.price)} dica={`${n(d.mesKwh, 2)} kWh na conta de luz`}
           explica="Soma das cargas do mês × a tarifa. Já vem dentro da conta da Enel, não é gasto à parte." />
+        <Kpi titulo="Na conta de luz" valor={d.naConta ? `~${n(d.naConta.pct, 1)}%` : "—"} dica={d.naConta ? `${n(d.naConta.kwhMes, 1)} kWh por mês` : "precisa de 2 cargas"}
+          explica={d.naConta ? `Média das cargas por mês dividida pela última conta da Enel (${brl(d.naConta.conta)}). Para comparar: o ar é perto de metade da conta.` : "Média das cargas por mês dividida pela última conta da Enel."} />
         <Kpi titulo="ODO" valor={d.odoNow != null ? `${n(d.odoNow)} km` : "—"} dica={d.leituras.length ? `última: ${dia(d.leituras.at(-1)!.at)}` : ""}
           explica="Último km que você mandou (texto ou vídeo do painel). Mande todo dia ao chegar para o gráfico ficar certo." />
       </div>
@@ -139,6 +145,7 @@ function Painel({ d }: { d: Dados }) {
         </div>
       )}
 
+      <PerguntaIA aba="scooter" exemplos={["Dá pra ir e voltar do trabalho 3 dias sem carregar?", "Quanto a scooter me custou de luz este mês?", "Quando calibrar os pneus?"]} />
       <GraficoKm leituras={d.leituras} cargas={d.cargas} media={d.kmDia} />
 
       <div>
