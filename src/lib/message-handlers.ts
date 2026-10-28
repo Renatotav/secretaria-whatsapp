@@ -20,6 +20,9 @@ import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-sta
 import { withReason } from "./finance-reason";
 import { normalizeItemCategory } from "./finance-taxonomy";
 import type { AgentConfig, Prisma } from "@prisma/client";
+import { applyOutlookCommand } from "./outlook-calendar";
+import { applyAirconCommand } from "./aircon";
+import { applySaidasCommand } from "./saidas";
 
 export function extractText(message: Record<string, unknown>): string {
   return (
@@ -2443,7 +2446,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await (await import("./personal-extras")).applyExtrasCommand(joinedText)) ?? (await (await import("./work-usage")).applyUsageCommand(joinedText)) ?? (await (await import("./outlook-calendar")).applyOutlookCommand(joinedText)) ?? (await (await import("./aircon")).applyAirconCommand(joinedText)) ?? (await (await import("./saidas")).applySaidasCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await (await import("./personal-extras")).applyExtrasCommand(joinedText)) ?? (await (await import("./work-usage")).applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;

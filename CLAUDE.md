@@ -50,8 +50,9 @@ Arquivos-chave:
 4. **Não mexer em código que funciona** sem pedido. Achou problema? Explique com `arquivo:linha` e espere.
 5. **Schema:** só mudanças aditivas (coluna nova com default). Nada de renomear/remover coluna — o `db push --accept-data-loss` apagaria dados.
 6. **Segredos fora do repositório**, sempre (ver aviso no topo).
-7. Datas: o container roda em **UTC**; "hoje" do dono é **horário de Brasília** → use `todayBRT()`.
-8. Respostas ao dono: português simples, curtas, com emoji moderado.
+7. **Import normal (estático) em código novo.** `await import("./x")` só quando há motivo (quebrar dependência circular com `message-handlers`/`scheduler`, ou lib pesada); o mapa do Graphify não enxerga chamadas feitas assim.
+8. Datas: o container roda em **UTC**; "hoje" do dono é **horário de Brasília** → use `todayBRT()`.
+9. Respostas ao dono: português simples, curtas, com emoji moderado.
 
 ## 5. Design
 

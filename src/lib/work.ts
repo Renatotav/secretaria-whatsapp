@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { maskPersonalData, normalizeTicketId } from "./work-privacy";
 import { alertsFor } from "./work-sla";
+import { outlookMeetings, meetingsText } from "./outlook-calendar";
 
 // Central do Atendente PJe: chamados do trabalho do Renato. Tudo que entra
 // passa por maskPersonalData (CPF mascarado, sem telefone/e-mail). Para a IA
@@ -309,7 +310,6 @@ export async function buildWorkBriefing(markAsSent = false): Promise<string> {
   // O briefing das 8h conta como aviso: às 11h10 só vem o que mudou depois dele.
   if (markAsSent) await prisma.agentConfig.updateMany({ data: { workAlerted: JSON.stringify(alertKeys(a)) } });
   // Reuniões do Outlook (se a agenda estiver ligada): vêm mesmo sem chamado pendente.
-  const { outlookMeetings, meetingsText } = await import("./outlook-calendar");
   const reunioes = (await outlookMeetings()) ?? [];
   const semChamado = !a.urgentes.length && !a.atrasados.length && !a.encerrar.length && !a.cobrar.length;
   if (semChamado && !reunioes.length) return "";

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
 import { generateResponse } from "@/lib/openai";
+import { airconData } from "@/lib/aircon";
 
 // Caixa "Pergunte" das abas Scooter e Ar: a IA (OpenRouter, a mesma da
 // secretária) responde só com os números da aba. Nada é gravado.
@@ -15,7 +16,7 @@ export const POST = withErrorHandling(async (request: Request) => {
 
   const dados =
     aba === "ar"
-      ? await (await import("@/lib/aircon")).airconData()
+      ? await airconData()
       : { ...(await (await import("@/lib/scooter")).scooterNumbers()), registros: (await prisma.scooterLog.findMany({ orderBy: { at: "desc" }, take: 40 })).map((l) => ({ dia: l.at, tipo: l.kind, odo: l.odo, kwh: l.kwh, horas: l.hours, psi: l.psiFront != null ? `${l.psiFront}/${l.psiRear}` : null })) };
   const config = await prisma.agentConfig.findFirst();
   if (!config) return NextResponse.json({ error: "Secretária sem configuração." }, { status: 500 });

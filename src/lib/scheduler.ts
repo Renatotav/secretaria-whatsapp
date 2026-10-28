@@ -5,6 +5,8 @@ import { checkPendingReminders, checkDueReminders } from "./reminder";
 import { sendTextWithTyping } from "./evolution";
 import type { ProviderOptions } from "./openai";
 import { SO_SALARIO, buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest, sendBudgetChart } from "./message-handlers";
+import { airconAwayCheck, airconTick } from "./aircon";
+import { outlookMeetings } from "./outlook-calendar";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -232,7 +234,6 @@ export function startScheduler(): void {
       // Saiu de casa com o ar ligado (a cada 10 min, depois de 30 min fora): avisa uma vez.
       if (hhmm.endsWith("5") && config.ownerPhone) {
         try {
-          const { airconAwayCheck } = await import("./aircon");
           const aviso = await airconAwayCheck();
           if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
         } catch (err) {
@@ -253,7 +254,6 @@ export function startScheduler(): void {
       // se a chave de 24 h venceu, avisa uma vez.
       if (hhmm.endsWith(":05") && config.ownerPhone) {
         try {
-          const { airconTick } = await import("./aircon");
           const aviso = await airconTick();
           if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
         } catch (err) {
@@ -264,7 +264,6 @@ export function startScheduler(): void {
       // "ignorar reunião" não avisam). Uma vez por reunião; a agenda vem do cache de 15 min.
       if (config.ownerPhone) {
         try {
-          const { outlookMeetings } = await import("./outlook-calendar");
           const nowMin = Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
           for (const m of (await outlookMeetings()) ?? []) {
             if (m.allDay || !m.start) continue;

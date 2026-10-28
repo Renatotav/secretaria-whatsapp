@@ -1,4 +1,6 @@
 import { prisma } from "./prisma";
+import { outlookMeetings, meetingsSpeech } from "./outlook-calendar";
+import { airconOntem } from "./aircon";
 
 // A Alexa (Echo Dot) fala alguns avisos da secretária quando ele está em casa,
 // pelo Voice Monkey (skill da Alexa). Fora do horário de silêncio; nunca trava
@@ -120,12 +122,10 @@ export async function resumoManha(): Promise<string> {
     partes.push(`Na agenda: ${itens.map((i) => `${i.title.replace(/[*_]/g, "").slice(0, 80)}${i.dueDate ? hora(i.dueDate) : ""}`).join("; ")}.`);
   } else partes.push("Nada marcado na agenda para hoje.");
   try {
-    const { outlookMeetings, meetingsSpeech } = await import("./outlook-calendar");
     const reunioes = await outlookMeetings();
     if (reunioes?.length) partes.push(`Reuniões do trabalho: ${meetingsSpeech(reunioes)}.`);
   } catch {}
   try {
-    const { airconOntem } = await import("./aircon");
     const ar = await airconOntem();
     if (ar && ar.kwh > 0.5) partes.push(`Ontem o ar gastou ${ar.reais.toLocaleString("pt-BR", { maximumFractionDigits: 2 }).replace(".", ",")} reais.`);
   } catch {}
