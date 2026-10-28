@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import type { AgentConfig } from "@prisma/client";
-import { CREDIT_WARN_USD, openrouterCredit } from "./ai-credit";
+import { CREDIT_WARN_USD, DOLAR, openrouterCredit } from "./ai-credit";
+import { brl } from "./format";
 
 // Saúde do sistema: o WhatsApp (Evolution) é conferido a cada 5 min — se cair,
 // a Alexa avisa (o WhatsApp não chega) e, quando volta, vai a mensagem com o
@@ -96,7 +97,7 @@ export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
   const c = await openrouterCredit().catch(() => null);
   itens.push(!c
     ? { nivel: "atencao", titulo: "Crédito da IA", detalhe: "não consegui consultar" }
-    : { nivel: c.restante < CREDIT_WARN_USD ? "problema" : "ok", titulo: "Crédito da IA", detalhe: `US$ ${c.restante.toFixed(2).replace(".", ",")}${c.restante < CREDIT_WARN_USD ? " — coloque mais em openrouter.ai › Credits" : ""}` });
+    : { nivel: c.restante < CREDIT_WARN_USD ? "problema" : "ok", titulo: "Crédito da IA", detalhe: `US$ ${c.restante.toFixed(2).replace(".", ",")} (≈ ${brl(c.restante * DOLAR)})${c.restante < CREDIT_WARN_USD ? " — coloque mais em openrouter.ai › Credits" : ""}` });
 
   const sha = (process.env.GIT_SHA || "").slice(0, 7);
   itens.push({ nivel: "ok", titulo: "Secretária no ar", detalhe: `há ${ha(new Date(Date.now() - process.uptime() * 1000))}${sha ? ` · versão ${sha}` : ""}` });

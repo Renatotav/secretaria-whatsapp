@@ -121,6 +121,7 @@ export default function InstancesPage() {
               key={inst.name}
               style={{
                 display: "flex",
+                flexWrap: "wrap",
                 alignItems: "center",
                 gap: 12,
                 padding: "14px 16px",
@@ -136,7 +137,7 @@ export default function InstancesPage() {
                   flexShrink: 0,
                 }}
               />
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: "1 1 140px", minWidth: 0 }}>
                 <p style={{ fontWeight: 600 }}>
                   {inst.name}
                   {inst.name === activeInstanceId && (

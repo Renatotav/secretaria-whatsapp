@@ -64,7 +64,7 @@ export default function WeeklyReportPage() {
         }}
       >
         <div style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
-          <h1 style={{ fontSize: 15, fontWeight: 600 }}>📊 Relatórios</h1>
+          <h1 style={{ fontSize: 15, fontWeight: 600 }}>📊 Relatório semanal</h1>
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
           {reports.map((r) => (
@@ -109,7 +109,7 @@ export default function WeeklyReportPage() {
             flexShrink: 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, minWidth: 0 }}>
             <button className="btn-ghost" style={{ whiteSpace: "nowrap" }} onClick={() => setWeekOffset((w) => w - 1)}>← Anterior</button>
             <span style={{ fontWeight: 600, fontSize: 14 }}>
               Semana de {new Date(weekStart).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}

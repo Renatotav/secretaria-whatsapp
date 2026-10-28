@@ -1,3 +1,4 @@
+import { DOLAR } from "./ai-credit";
 import { prisma } from "./prisma";
 import { routePersonalMessage } from "./personal-router";
 import { runWorkSkill } from "./work-ai";
@@ -31,7 +32,6 @@ const FIX_CASES: FixCase[] = [
   { text: "o advogado nao consegue peticionar no 0012345-37.2025.8.06.0112 pois o botao [Juntar documentos] nao aparece.", keep: ["0012345-37.2025.8.06.0112", "[Juntar documentos]"], fixed: ["não", "botão"] },
 ];
 
-const DOLAR = 5.5; // conversão aproximada só para mostrar em reais
 
 async function precos(): Promise<Map<string, { in: number; out: number }>> {
   const r = await fetch("https://openrouter.ai/api/v1/models", { signal: AbortSignal.timeout(15000) }).catch(() => null);

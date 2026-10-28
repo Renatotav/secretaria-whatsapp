@@ -3,6 +3,9 @@ import { prisma } from "./prisma";
 // Crédito da OpenRouter (pedido dele, 20/10/2026: o crédito acabou e a
 // secretária parou de ler vídeo/nota/áudio sem aviso). Toda a IA passa por lá.
 
+// shortcut: cotação fixa, só para mostrar em reais; trocar por cotação do dia se a diferença incomodar.
+export const DOLAR = 5.5;
+
 /** Abaixo disso (US$) avisa no WhatsApp. */
 export const CREDIT_WARN_USD = 2;
 

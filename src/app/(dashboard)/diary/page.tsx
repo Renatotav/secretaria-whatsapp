@@ -282,14 +282,16 @@ export default function DiaryPage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 24px 60px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>📓 Diário</h1>
+      <div style={{ maxWidth: 780, margin: "0 auto", padding: "24px 16px 60px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 700, whiteSpace: "nowrap" }}>📓 Diário</h1>
           <input
+            type="search"
+            aria-label="Buscar no diário"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar..."
-            style={{ width: 200 }}
+            style={{ flex: "0 1 200px", minWidth: 0 }}
           />
         </div>
         <p style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 20 }}>

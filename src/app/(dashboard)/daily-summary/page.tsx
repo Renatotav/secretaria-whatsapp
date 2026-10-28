@@ -54,9 +54,9 @@ export default function DailySummaryPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h1 style={{ fontSize: 16, fontWeight: 600 }}>📋 Resumo do dia</h1>
+      <div style={{ padding: "16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h1 style={{ fontSize: 16, fontWeight: 600, whiteSpace: "nowrap" }}>📋 Resumo do dia</h1>
           <button 
             className="btn-primary" 
             style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, padding: "6px 12px" }}

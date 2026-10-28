@@ -147,9 +147,9 @@ function XRayContent() {
                   type="button"
                   onClick={() => setPag((atual) => (atual.includes(p.k) ? atual.filter((x) => x !== p.k) : [...atual, p.k]))}
                   aria-pressed={ativo}
-                  style={{ textAlign: "left", cursor: "pointer", background: ativo ? "var(--accent-dim)" : "var(--bg-card)", border: `1px solid ${ativo ? "var(--accent-border)" : "var(--border)"}`, borderLeft: `4px solid ${p.cor}`, borderRadius: 12, padding: "10px 12px", color: "var(--text)" }}
+                  style={{ textAlign: "left", cursor: "pointer", background: ativo ? "var(--accent-dim)" : "var(--bg-card)", border: `1px solid ${ativo ? "var(--accent-border)" : "var(--border)"}`, borderRadius: 12, padding: "10px 12px", color: "var(--text)" }}
                 >
-                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{ativo ? "☑ " : "☐ "}{p.label}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}><span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: p.cor, flexShrink: 0 }} />{p.label}{ativo && <span style={{ marginLeft: "auto", color: "var(--accent)" }}>✓</span>}</div>
                   <div style={{ fontSize: 18, fontWeight: 700 }}>{somaPag[p.k].toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
                 </button>
               );
