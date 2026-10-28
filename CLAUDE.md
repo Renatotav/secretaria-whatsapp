@@ -23,7 +23,12 @@ Funções principais:
 Arquivos-chave:
 | Arquivo | O quê |
 |---|---|
-| `src/lib/message-handlers.ts` | Tudo que acontece com mensagem do canal pessoal (lançar gasto, nota fiscal, extrato/fatura, consultas, simulador, metas) |
+| `src/lib/message-handlers.ts` | Fluxo da conversa do canal pessoal: roteia a mensagem e guarda o que espera resposta (print esperando "sim", "quanto foi?", fatura, PDF com senha) |
+| `src/lib/finance-reports.ts` | Relatórios e consultas sem IA (resumo do dia/semana, fechamento, contas a pagar, limite do cartão, orçamento, VR) |
+| `src/lib/finance-common.ts` | Peças comuns: meses, totais e previsão do mês, tetos, séries (parcela/recorrente), períodos |
+| `src/lib/statement-import.ts` | Importação de fatura/extrato (parcelas, repetidos, memória de categoria, datas) |
+| `src/lib/finance-*.ts` | text (cartão do lançamento, valores), charts, goals, wishes, simulator, split, history |
+| `src/lib/quoted-reply.ts`, `assistant-chat.ts`, `group-messages.ts`, `incoming-media.ts`, `owner-notify.ts` | Resposta citada, conversa com a IA, grupos, áudio/mídia, avisar o dono |
 | `src/lib/personal-router.ts` | Prompt + parsing que classifica a mensagem (finance, agenda_add, agenda_query, diary, savings_add, finance_simulation…) |
 | `src/lib/dates.ts` | `parseLocalDate`, `todayBRT`, `creditCardBillDate` |
 | `src/lib/session-token.ts`, `src/lib/auth.ts`, `src/proxy.ts` | Login do painel (token assinado com HMAC) |
