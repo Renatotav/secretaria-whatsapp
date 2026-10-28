@@ -185,6 +185,10 @@ export default function ConfigPage() {
     return {
       value: v.startsWith(MASK) ? "" : v,
       placeholder: salva ? `Chave salva (final ${guardada.slice(-4)}) — digite outra para trocar` : "Cole a chave aqui",
+      // Sem isso o navegador cola uma senha guardada aqui ao salvar (28/10 trocou a chave da Evolution e o WhatsApp parou de responder).
+      autoComplete: "new-password",
+      "data-lpignore": "true",
+      "data-1p-ignore": "true",
       // Apagar o que digitou volta para a chave guardada (não apaga a chave).
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(key, e.target.value || (salva ? guardada : "")),
     };
@@ -209,7 +213,8 @@ export default function ConfigPage() {
       body: JSON.stringify(config),
     }).catch(() => null);
     setSaving(false);
-    if (!r || !r.ok) return setSaveError(r?.status === 401 ? "Não salvou: sua sessão expirou. Entre de novo." : "Não salvou. Tente de novo.");
+    const erro = r && !r.ok ? ((await r.json().catch(() => ({}))) as { error?: string }).error : "";
+    if (!r || !r.ok) return setSaveError(r?.status === 401 ? "Não salvou: sua sessão expirou. Entre de novo." : erro || "Não salvou. Tente de novo.");
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   }

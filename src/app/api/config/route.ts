@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { whatsappState } from "@/lib/health";
 
 // Chaves e senhas nunca vão inteiras para o navegador: saem como "••••" + os
 // 4 últimos caracteres. Voltando assim no PUT, ficam como estão; apagar o
@@ -55,6 +56,19 @@ export const PUT = withErrorHandling(async (request: Request) => {
     data[k] = v;
   }
   let config = await prisma.agentConfig.findFirst();
+
+  // Chave nova da Evolution só entra se funcionar: uma errada (ex.: senha
+  // colada pelo navegador) deixa a secretária sem conseguir responder.
+  if (config && typeof data.evolutionApiKey === "string" && data.evolutionApiKey && data.evolutionApiKey !== config.evolutionApiKey) {
+    const state = await whatsappState({
+      evolutionUrl: (data.evolutionUrl as string) || config.evolutionUrl,
+      evolutionApiKey: data.evolutionApiKey,
+      instanceId: (data.instanceId as string) || config.instanceId,
+    });
+    if (state === "erro") {
+      return NextResponse.json({ error: "Não salvou: a chave nova da Evolution API não funcionou. Confira a chave (nada foi mudado)." }, { status: 400 });
+    }
+  }
 
   if (!config) {
     config = await prisma.agentConfig.create({ data: data as Prisma.AgentConfigCreateInput });
