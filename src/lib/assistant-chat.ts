@@ -133,6 +133,7 @@ Regras:
     const { content } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
     return content.trim() || "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
   } catch {
-    return "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
+    // Sem resposta da IA (fora do ar, sem crédito): não culpar a frase dele.
+    return "⚠️ A IA não respondeu agora (pode estar fora do ar). Tenta de novo daqui a pouco.";
   }
 }

@@ -242,7 +242,13 @@ export async function POST(request: Request) {
       // Resposta citando uma mensagem (ex.: o cartão de um lançamento antigo).
       const qm = (rawMessage.extendedTextMessage as { contextInfo?: { quotedMessage?: Record<string, unknown> } } | undefined)?.contextInfo?.quotedMessage;
       const quoted = qm ? extractText(qm) : "";
-      bufferMessage(`self:${phone}`, text, { messageTimestamp, ...(quoted ? { quoted } : {}) }, config.debounceSeconds, handleSelfMessage);
+      // Erro inesperado (banco, rede): avisa em vez de sumir calado — a mensagem já foi marcada como recebida e não volta sozinha.
+      bufferMessage(`self:${phone}`, text, { messageTimestamp, ...(quoted ? { quoted } : {}) }, config.debounceSeconds, (t, m) =>
+        handleSelfMessage(t, m).catch(async (err) => {
+          console.error("[webhook] erro ao tratar mensagem do dono", err);
+          await notifyOwner(config, "⚠️ Deu um erro aqui no meio do caminho. Confira no painel se ficou registrado antes de mandar de novo.");
+        })
+      );
       return NextResponse.json({ ok: true });
     }
 
