@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
+import { queueSplit } from "@/lib/work";
 
 // Painel "Minha produtividade" (portfólio): só números agregados — nenhum
 // nome, CPF, descrição ou número de chamado sai daqui.
@@ -31,7 +32,6 @@ export async function GET(request: Request) {
     where: { status: { in: ["resolvido", "escalado"] }, resolvedAt: { not: null } },
     select: { status: true, redmine: true, openedAt: true, receivedAt: true, resolvedAt: true, errorGroup: true, origin: true, tmrHours: true, team: true },
   });
-  const { queueSplit } = await import("@/lib/work");
   const fila = await queueSplit();
   const openCount = fila.naFila;
 

@@ -2,6 +2,9 @@ import OpenAI from "openai";
 import { prisma } from "./prisma";
 import { normalizeTicketId } from "./work-privacy";
 import { conferirInicial, conferirFinal } from "./cnj-check";
+import { choose } from "./jev";
+import { redminesParecidos } from "./work-similar";
+import { maskPersonalData, missingTerms, protectPersonalData, stripContacts } from "./work-privacy";
 
 // IA da Central do Atendente: os botões das skills na extensão respondem ali
 // mesmo. Usa a chave do OpenRouter que já está na secretária (a chave nunca
@@ -110,21 +113,17 @@ export async function runWorkSkill(
   if (!WORK_SKILLS[key]) throw new Error("Skill desconhecida");
   let input = (text || "").trim();
   if (key === "auto") {
-    const { choose } = await import("./jev");
-    const { maskPersonalData } = await import("./work-privacy");
     // Para decidir o tipo basta o texto mascarado (o CPF não muda a escolha).
     const pick = await choose(maskPersonalData(input).slice(0, 6000), "Que tipo de texto é este, e qual tratamento ele precisa?", SKILL_CRITERIA, 0).catch(() => null);
     key = pick?.choice && WORK_SKILLS[pick.choice] ? pick.choice : "corrigir";
     // Mesma regra dos botões: resumo e registro de WhatsApp vão com CPF mascarado;
     // Redmine leva o CPF completo; os corretores, o texto como está.
     if (key === "resumo" || key === "whatsapp") {
-      const { maskPersonalData } = await import("./work-privacy");
       input = maskPersonalData(input);
     }
   }
   if (key === "planilha") {
     // Para a planilha a IA não precisa de CPF/telefone/e-mail.
-    const { maskPersonalData } = await import("./work-privacy");
     input = maskPersonalData(input);
   }
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
@@ -135,7 +134,6 @@ export async function runWorkSkill(
   let restaurar = (t: string) => t;
   let marcas: string[] = [];
   if (protege) {
-    const { protectPersonalData } = await import("./work-privacy");
     const p = protectPersonalData(input, true);
     if (p.count) {
       input = p.text;
@@ -145,7 +143,6 @@ export async function runWorkSkill(
   }
   // Redmine: telefone e e-mail não entram (nem vão para a IA); o CPF fica.
   if (key === "redmine") {
-    const { stripContacts } = await import("./work-privacy");
     input = stripContacts(input);
   }
   if (input.length > MAX_TEXT) throw new Error(`Texto grande demais (máx. ${MAX_TEXT.toLocaleString("pt-BR")} caracteres).`);
@@ -260,7 +257,6 @@ export async function runWorkSkill(
   // Trava dos corretores, em código: marcador sumido ou número longo mudado →
   // refaz uma vez; se ainda faltar, não devolve (o texto dele fica como estava).
   if (protege) {
-    const { missingTerms } = await import("./work-privacy");
     let faltam = missingTerms(input, out, marcas);
     if (faltam.length) {
       console.warn(`[trabalho] IA ${key}: ${faltam.length} termo(s) protegido(s) sumiram — refazendo`);
@@ -295,7 +291,6 @@ export async function runWorkSkill(
 
   // Redmine repetido: avisa no fim (fora do que o botão "📋 Corpo" copia).
   if (key === "redmine" && conferencia) {
-    const { redminesParecidos } = await import("./work-similar");
     const par = await redminesParecidos(input).catch(() => []);
     if (par.length)
       out += `\n\n🔁 Antes de abrir, confira se não é repetido — parecidos que já têm Redmine:\n${par

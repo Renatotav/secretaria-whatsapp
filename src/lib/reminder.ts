@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { sendWhatsAppMessage } from "./evolution";
+import { alexaFalar } from "./alexa";
 
 export async function checkPendingReminders(
   ownerPhone: string,
@@ -77,7 +78,6 @@ export async function checkDueReminders(
       await prisma.agendaItem.update({ where: { id: item.id }, data: { reminded: true } });
       // Em casa, a Alexa também fala o lembrete (fora do horário de silêncio).
       try {
-        const { alexaFalar } = await import("./alexa");
         await alexaFalar(`Renato, lembrete: ${item.title}.`);
       } catch {
         // o WhatsApp já foi

@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { generateResponse, ProviderOptions } from "./openai";
 import { sendWhatsAppMessage } from "./evolution";
+import { buildWeeklyDigest, sendBudgetChart, sendMonthChart } from "./message-handlers";
 
 function getWeekBounds(): { weekStart: string; weekEnd: string } {
   const now = new Date();
@@ -35,7 +36,6 @@ export async function generateWeeklyReport(
 
   // Relatório com números calculados pelo código (antes a IA escrevia tudo e
   // inventava chamados/equipe/gastos). A IA só faz o comentário do fim.
-  const { buildWeeklyDigest } = await import("./message-handlers");
   const { text: content } = await buildWeeklyDigest(providerOpts);
   // Compras FEITAS na semana (pela data da compra — no cartão, "date" é a fatura).
   const weekRange = { gte: new Date(weekStart), lte: new Date(weekEnd + "T23:59:59Z") };
@@ -63,7 +63,6 @@ export async function generateWeeklyReport(
 
     // Gráficos da semana: tetos do mês e gastos por categoria (x mês passado).
     try {
-      const { sendBudgetChart, sendMonthChart } = await import("./message-handlers");
       const config = await prisma.agentConfig.findFirst();
       if (config) {
         const brtNow = new Date(Date.now() - 3 * 60 * 60 * 1000);

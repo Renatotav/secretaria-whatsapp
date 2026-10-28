@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkWorkToken } from "@/lib/work-auth";
 import { getContact, saveContact } from "@/lib/work-crm";
 import { getSituations } from "@/lib/work-situations";
+import { listContactTags } from "@/lib/work-crm";
 
 // CRM do WhatsApp Web (extensão, chave da extensão).
 export async function GET(request: Request) {
@@ -10,7 +11,6 @@ export async function GET(request: Request) {
   // ?all=1: resumo de todos os contatos (etiquetas, chamados, lembrete) para
   // a extensão marcar a lista de conversas do WhatsApp Web. Sem as notas.
   if (url.searchParams.get("all")) {
-    const { listContactTags } = await import("@/lib/work-crm");
     return NextResponse.json({ contacts: await listContactTags() });
   }
   const key = url.searchParams.get("key") || "";

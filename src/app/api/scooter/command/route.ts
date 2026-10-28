@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { notifyOwner } from "@/lib/message-handlers";
 
 // Comandos para a tomada da scooter ("liga a tomada" no WhatsApp). O vigia
 // do servidor (que alcança a tomada pela ponte do Fire TV) busca o comando
@@ -34,7 +35,6 @@ export async function POST(request: Request) {
       ? `🔌 A tomada está ${estado}.`
       : `🔌 Pronto: tomada ${b.command === "on" ? "ligada" : "desligada"}.${b.command === "on" ? " Quando a carga terminar, o Charge Guard desliga sozinha." : ""}`
     : `⚠️ Não consegui falar com a tomada (${String(b.error || "sem resposta").slice(0, 80)}). O Fire TV está ligado?`;
-  const { notifyOwner } = await import("@/lib/message-handlers");
   await notifyOwner(cfg, msg);
   return NextResponse.json({ ok: true });
 }

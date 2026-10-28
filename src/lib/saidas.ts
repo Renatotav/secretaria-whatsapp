@@ -1,9 +1,9 @@
 import { prisma } from "./prisma";
+import { brl } from "./format";
 
 // "posso sair hoje?" / "saídas?": quanto sobra no teto de Saídas do mês (bar,
 // espetinho, festa) e como está o mês no geral. Sem IA, sem sermão.
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export async function applySaidasCommand(text: string): Promise<string | null> {
   const q = text.trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();

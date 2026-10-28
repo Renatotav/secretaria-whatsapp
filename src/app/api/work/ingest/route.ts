@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { upsertWorkTicket } from "@/lib/work";
 import { checkWorkToken } from "@/lib/work-auth";
+import { setSituation } from "@/lib/work-situations";
 
 // Entrada da extensão "Central do Atendente" (computador do Tribunal). Não
 // usa o login do painel: exige a chave em "Authorization: Bearer <chave>",
@@ -18,7 +19,6 @@ export async function POST(request: Request) {
       const row = await upsertWorkTicket(t, "extensao");
       // Situação escolhida no ⚡ (registro rápido): "" limpa; ausente não mexe.
       if (typeof t?.situation === "string") {
-        const { setSituation } = await import("@/lib/work-situations");
         await setSituation(row.ticketId, t.situation).catch(() => {});
       }
       saved++;

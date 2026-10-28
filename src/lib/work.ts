@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { maskPersonalData, normalizeTicketId } from "./work-privacy";
 import { alertsFor } from "./work-sla";
 import { outlookMeetings, meetingsText } from "./outlook-calendar";
+import { getSituations } from "./work-situations";
 
 // Central do Atendente PJe: chamados do trabalho do Renato. Tudo que entra
 // passa por maskPersonalData (CPF mascarado, sem telefone/e-mail). Para a IA
@@ -163,7 +164,6 @@ export const CAN_CLOSE_WHERE = {
 
 /** Urgentes (última ação "Solicitação de Urgência") e atrasados (passou do prazo da fila). */
 async function openAlerts() {
-  const { getSituations } = await import("./work-situations");
   const situations = await getSituations();
   const open = await prisma.workTicket.findMany({ where: { status: { in: ["aberto", "pendente"] } } });
   const a = open.map((t) => alertsFor(t, situations));
@@ -279,7 +279,6 @@ export async function workWeekSection(monday: Date): Promise<string> {
 
 /** Situação atual dos alertas (mesmas regras do escala). */
 export async function workAlertsNow() {
-  const { getSituations } = await import("./work-situations");
   const situations = await getSituations();
   const open = await prisma.workTicket.findMany({ where: { status: { in: ["aberto", "pendente"] } }, orderBy: { openedAt: "asc" } });
   const rows = open.map((t) => ({ t, a: alertsFor(t, situations) }));

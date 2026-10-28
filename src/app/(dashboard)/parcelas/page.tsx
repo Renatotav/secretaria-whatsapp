@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useWidth } from "@/lib/use-width";
+import { brl } from "@/lib/format";
 
 type Aberta = { n: number; mes: string; valor: number };
 type Serie = { nome: string; categoria: string; cartao: string; total: number; valor: number; proxima: number; proximaMes: string; faltam: number; restante: number; ultima: string; abertas: Aberta[] };
 type Mes = { mes: string; total: number; itens: { nome: string; n: number; de: number; valor: number; ultima: boolean }[] };
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const mesCurto = (m: string) => { const [y, mm] = m.split("-").map(Number); return `${MESES[mm - 1]}/${String(y).slice(2)}`; };
 const limpaNome = (n: string) => n.replace(/\s*\(pedido[^)]*\)/, "").replace(/\s*\((previsto|recorrente)\)/gi, "").trim();

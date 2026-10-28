@@ -1,4 +1,12 @@
 import { prisma } from "./prisma";
+import { brl } from "./format";
+import { insight } from "./work-insight";
+import { buildWeeklyWorkReport } from "./work-weekly";
+import { answerWorkQuestion, describe, planFor, rowsFor } from "./work-ask";
+import { ERROR_GROUPS } from "./work-groups";
+import { alertsFor } from "./work-sla";
+import { scooterStatus } from "./scooter";
+import { workStats } from "./work";
 
 // Ferramentas da secretária para o app do Claude (conector MCP, só leitura;
 // a única exceção é avisar o dono no WhatsApp, em conferir_planilha).
@@ -14,7 +22,6 @@ export interface Ferramenta {
   escreve?: boolean;
 }
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const dia = (d: Date | null | undefined) => (d ? new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10).split("-").reverse().join("/") : "—");
 const str = (v: unknown, max = 300) => String(v ?? "").trim().slice(0, max);
 function mesRange(mes?: string) {
@@ -31,7 +38,6 @@ export const FERRAMENTAS: Ferramenta[] = [
     description: "Pergunta livre sobre os chamados de trabalho do Renato (suporte do PJe): contagens, tempo médio, listas, agrupamentos por grupo de erro, mês, semana. Ex.: 'quantos de MNI eu fechei em setembro?'. A conta é feita no banco.",
     inputSchema: { type: "object", properties: { pergunta: { type: "string", description: "A pergunta em português" } }, required: ["pergunta"] },
     run: async (a) => {
-      const { planFor, rowsFor, describe, answerWorkQuestion } = await import("./work-ask");
       const q = str(a.pergunta, 500);
       const p = await planFor(q);
       if (!p || !p.entendi) return "Não entendi como pergunta sobre os chamados.";
@@ -44,8 +50,6 @@ export const FERRAMENTAS: Ferramenta[] = [
     description: "Resumo atual do trabalho: hoje, semana e mês (registrados, resolvidos, viraram Redmine), em aberto, urgentes, atrasados, grupos de erro do mês e o relatório da semana passada.",
     inputSchema: { type: "object", properties: {} },
     run: async () => {
-      const { workStats } = await import("./work");
-      const { buildWeeklyWorkReport } = await import("./work-weekly");
       const s = await workStats();
       const linha = (n: string, c: { registrados: number; resolvidos: number; escalados: number }) => `${n}: ${c.registrados} registrados, ${c.resolvidos} resolvidos, ${c.escalados} viraram Redmine`;
       return [
@@ -110,7 +114,6 @@ export const FERRAMENTAS: Ferramenta[] = [
       const id = str(a.numero, 20).toUpperCase().replace(/\s+/g, "");
       const t = await prisma.workTicket.findUnique({ where: { ticketId: id } });
       if (!t) return `Chamado ${id} não está na Central.`;
-      const { alertsFor } = await import("./work-sla");
       const al = alertsFor(t);
       return [
         `Chamado ${t.ticketId} — ${t.status}${t.sheetStatus ? ` (planilha: ${t.sheetStatus})` : ""}`,
@@ -131,11 +134,9 @@ export const FERRAMENTAS: Ferramenta[] = [
     description: "Como o Renato resolveu chamados de um grupo de erro (ex.: 'MNI / integração', 'Peticionamento / protocolo', 'Migração SAJ → PJe'): números do mês e as últimas resoluções escritas por ele.",
     inputSchema: { type: "object", properties: { grupo: { type: "string" } }, required: ["grupo"] },
     run: async (a) => {
-      const { ERROR_GROUPS } = await import("./work-groups");
       const g0 = str(a.grupo, 80).toLowerCase();
       const g = Object.keys(ERROR_GROUPS).find((x) => x.toLowerCase() === g0) ?? Object.keys(ERROR_GROUPS).find((x) => x.toLowerCase().includes(g0));
       if (!g) return `Grupo não encontrado. Grupos: ${Object.keys(ERROR_GROUPS).join(", ")}`;
-      const { insight } = await import("./work-insight");
       const d = await insight("grupo", g);
       return [
         `${g} no mês: ${d.total} chamado(s), ${d.fechados} fechados, ${d.abertos} em aberto, ${d.redmine} viraram Redmine.`,
@@ -206,7 +207,6 @@ export const FERRAMENTAS: Ferramenta[] = [
     description: "Situação da scooter elétrica: km desde a carga, folga até recarregar, consumo, pneus.",
     inputSchema: { type: "object", properties: {} },
     run: async () => {
-      const { scooterStatus } = await import("./scooter");
       return (await scooterStatus()).replace(/\*/g, "");
     },
   },

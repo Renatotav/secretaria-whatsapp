@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { alertsFor } from "./work-sla";
+import { getSituations } from "./work-situations";
 
 // Relatório da semana do trabalho (segunda, logo depois do briefing das 8h).
 // Só banco, sem IA: o que fechou, o que chegou, tempo médio, o que mais se
@@ -51,7 +52,6 @@ export async function buildWeeklyWorkReport(): Promise<string> {
   const [s, a] = await Promise.all([numerosDa(passada, estaSegunda), numerosDa(retrasada, passada)]);
   if (!s.fechados && !s.chegaram) return "";
 
-  const { getSituations } = await import("./work-situations");
   const situacoes = await getSituations();
   const abertos = await prisma.workTicket.findMany({ where: { status: { in: ["aberto", "pendente"] } } });
   const parados = abertos

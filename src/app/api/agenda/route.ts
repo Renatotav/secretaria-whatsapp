@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { checkPendingReminders } from "@/lib/reminder";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) {
@@ -76,7 +77,6 @@ export const POST = withErrorHandling(async (request: Request) => {
     const config = await prisma.agentConfig.findFirst();
     if (!config) return NextResponse.json({ error: "Configuração ausente" }, { status: 500 });
     
-    const { checkPendingReminders } = await import("@/lib/reminder");
     const evolutionConfig = {
       evolutionUrl: config.evolutionUrl,
       evolutionApiKey: config.evolutionApiKey,

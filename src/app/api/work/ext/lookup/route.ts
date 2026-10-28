@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkWorkToken } from "@/lib/work-auth";
 import { normalizeTicketId } from "@/lib/work-privacy";
+import { getSituations } from "@/lib/work-situations";
 
 // Balão da extensão: dados dos chamados pedidos (escala + planilha + painel).
 // Não devolve a descrição (o atendente já está vendo o chamado no Assyst).
@@ -14,7 +15,6 @@ export async function GET(request: Request) {
     .filter((id) => /^[A-Z]?\d{6,9}$/.test(id))
     .slice(0, 300);
   if (ids.length === 0) {
-    const { getSituations } = await import("@/lib/work-situations");
     return NextResponse.json({ tickets: {}, situations: await getSituations() });
   }
   // Mesma regra de casamento da extensão: sem letra de um lado, compara só os dígitos.
@@ -49,6 +49,5 @@ export async function GET(request: Request) {
     const p = porGrupo[t.errorGroup]?.filter((x) => x.ticketId !== t.ticketId);
     if (p?.length && (t.status === "aberto" || t.status === "pendente")) (tickets[id] as Record<string, unknown>).parecidos = p;
   }
-  const { getSituations } = await import("@/lib/work-situations");
   return NextResponse.json({ tickets, situations: await getSituations() });
 }

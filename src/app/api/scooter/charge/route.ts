@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { alexaFalar } from "@/lib/alexa";
+import { recordCharge, scooterNumbers } from "@/lib/scooter";
+import { notifyOwner } from "@/lib/message-handlers";
 
 // Fim de carga da scooter, enviado pelo programinha do notebook que lê a
 // tomada Tapo (Authorization: Bearer <deviceToken>). Só número: kWh, horário
@@ -22,7 +25,6 @@ export async function POST(request: Request) {
   const maxW = Number(body.maxW) || null;
   const lastW = Number(body.lastW);
   if (!(kwh > 0 && kwh <= 4) || Number.isNaN(endedAt.getTime())) return NextResponse.json({ error: "kWh fora do esperado (0–4)" }, { status: 400 });
-  const { recordCharge } = await import("@/lib/scooter");
   const msg = await recordCharge({
     kwh,
     at: endedAt,
@@ -31,8 +33,6 @@ export async function POST(request: Request) {
   });
   // Em casa, a Alexa também avisa (fora do horário de silêncio).
   try {
-    const { scooterNumbers } = await import("@/lib/scooter");
-    const { alexaFalar } = await import("@/lib/alexa");
     const n = await scooterNumbers();
     const kwhFalado = kwh.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
     const custo = n ? kwh * n.price : null;
@@ -42,7 +42,6 @@ export async function POST(request: Request) {
     console.error("[scooter] aviso na Alexa falhou", err);
   }
   try {
-    const { notifyOwner } = await import("@/lib/message-handlers");
     const config = await prisma.agentConfig.findFirst();
     if (config) await notifyOwner(config, msg);
   } catch (err) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkWorkToken } from "@/lib/work-auth";
+import { marcarNoTrabalho } from "@/lib/alexa";
 
 // Teste de conexão da extensão ("Conectado à secretária ✅").
 // ?ativo=1: ele clicou/digitou no Assyst ou no WhatsApp Web do trabalho agora
@@ -8,7 +9,6 @@ import { checkWorkToken } from "@/lib/work-auth";
 export async function GET(request: Request) {
   if (!(await checkWorkToken(request))) return NextResponse.json({ ok: false, error: "Chave inválida" }, { status: 401 });
   if (new URL(request.url).searchParams.get("ativo") === "1") {
-    const { marcarNoTrabalho } = await import("@/lib/alexa");
     await marcarNoTrabalho();
     return NextResponse.json({ ok: true });
   }

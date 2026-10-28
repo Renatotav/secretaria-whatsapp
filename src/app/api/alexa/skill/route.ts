@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { alexaRequestOk, falar, frase, vozDaResposta, semInvocacao, FIM_RE, type AlexaBody } from "@/lib/alexa-skill";
+import { replyCapture } from "@/lib/reply-capture";
+import { handleSelfMessage, spokenAnswer } from "@/lib/message-handlers";
 
 /** Responde e continua ouvindo (conversa contínua até "não"/"tchau"). */
 const continua = (texto: string) => {
@@ -42,15 +44,12 @@ export async function POST(request: Request) {
 
   // Pergunta com fala pronta (gasto do dia, resumo do mês): responde curto e natural.
   {
-    const { spokenAnswer } = await import("@/lib/message-handlers");
     const fala = await spokenAnswer(texto).catch(() => null);
     if (fala) {
       console.log(`[alexa-skill] respondeu (fala pronta): "${fala.slice(0, 80)}"`);
       return NextResponse.json(continua(fala));
     }
   }
-  const { replyCapture } = await import("@/lib/reply-capture");
-  const { handleSelfMessage } = await import("@/lib/message-handlers");
   const respostas: string[] = [];
   const trabalho = replyCapture.run(respostas, () => handleSelfMessage(texto, { messageTimestamp: Math.floor(Date.now() / 1000) })).catch((err) => {
     console.error("[alexa-skill] falhou", err instanceof Error ? err.message : err);

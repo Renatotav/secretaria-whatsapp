@@ -1,3 +1,4 @@
+import { brlMsg as brl } from "./format";
 /**
  * Gráfico de barras horizontais como PNG, para mandar no WhatsApp.
  * Desenha um SVG na mão e converte com o sharp (já vem com o Next). O texto
@@ -21,7 +22,6 @@ const COLORS = ["#7c6dff", "#2fb380", "#f2a541", "#e5606a", "#3fa7d6", "#a26bd8"
 const escapeXml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function barChartSvg(title: string, subtitle: string, bars: ChartBar[], compareLabel?: string): string {
   const width = 800;

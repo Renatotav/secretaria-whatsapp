@@ -1,11 +1,11 @@
 import { prisma } from "./prisma";
 import { FINANCE_TAXONOMY_DATA, merchantKey } from "./finance-taxonomy";
+import { brl } from "./format";
 
 // Quatro ajudas do canal pessoal, todas sem IA:
 // 1) regras de categoria aprovadas por ele; 2) lista de reposição pelas notas;
 // 3) preço por quilo/litro; 4) caixa de ideias e links.
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const norm = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const dia = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 const DAY = 86400000;

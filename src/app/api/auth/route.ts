@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createSession, clearSession } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { notifyOwner } from "@/lib/message-handlers";
 
 // Login do painel. O endereço é público e a senha é curta, então há limite de
 // tentativas: 5 erros por IP em 15 min bloqueiam aquele IP por 15 min; 30
@@ -59,8 +61,6 @@ export async function POST(request: Request) {
     if (allFails.length >= 10 && Date.now() - warned > GLOBAL_WINDOW) {
       warned = Date.now();
       try {
-        const { prisma } = await import("@/lib/prisma");
-        const { notifyOwner } = await import("@/lib/message-handlers");
         const config = await prisma.agentConfig.findFirst();
         if (config) await notifyOwner(config, `🔐 Atenção: ${allFails.length} tentativas de senha erradas no painel na última hora. Se não foi você, troque a senha (ADMIN_PASSWORD no EasyPanel).`);
       } catch {

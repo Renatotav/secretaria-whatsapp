@@ -7,6 +7,20 @@ import type { ProviderOptions } from "./openai";
 import { SO_SALARIO, buildMonthClosing, sendMonthChart, buildBillsDue, applyMonthResultToReserve, notifyAffordableWishes, buildDailyDigest, sendBudgetChart } from "./message-handlers";
 import { airconAwayCheck, airconTick } from "./aircon";
 import { outlookMeetings } from "./outlook-calendar";
+import { checkWhatsapp } from "./health";
+import { writePendingKb } from "./work-kb";
+import { checkAlertRules } from "./work-alert-rules";
+import { buildWeeklyWorkReport } from "./work-weekly";
+import { rollForecasts } from "./forecast-roll";
+import { sendInvoiceBuddyReminder } from "./invoice-buddy";
+import { dueContactReminders } from "./work-crm";
+import { classifyPendingGroups } from "./work-groups";
+import { odoReminder } from "./scooter";
+import { creditWarning } from "./ai-credit";
+import { billsDueSpeech, invoiceEveSpeech, notifyOwner } from "./message-handlers";
+import { pruneProcessedMessages } from "./flow-state";
+import { buildWorkBriefing, buildWorkNewAlerts, meetingTicketBrief } from "./work";
+import { alexaFalar, falarPneus, falarResumoManha } from "./alexa";
 
 let lastSummaryDate = "";
 let lastWeeklyDate = "";
@@ -178,7 +192,6 @@ export function startScheduler(): void {
       // Lembretes do CRM do WhatsApp Web ("retornar para fulano às 10h").
       if (config.ownerPhone) {
         try {
-          const { dueContactReminders } = await import("./work-crm");
           for (const msg of await dueContactReminders())
             await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
         } catch (err) {
@@ -188,7 +201,6 @@ export function startScheduler(): void {
 
       // Base de conhecimento: resolvido com resolução vira artigo (2 por minuto).
       try {
-        const { writePendingKb } = await import("./work-kb");
         await writePendingKb(2);
       } catch (err) {
         console.error("Erro na base de conhecimento:", err);
@@ -196,7 +208,6 @@ export function startScheduler(): void {
 
       // Grupo do erro dos chamados com texto (Jev, poucos por minuto).
       try {
-        const { classifyPendingGroups } = await import("./work-groups");
         await classifyPendingGroups(5);
       } catch (err) {
         console.error("Erro ao agrupar chamados:", err);
@@ -210,14 +221,12 @@ export function startScheduler(): void {
         lastWorkBriefDate = todayDate;
         let sent = false;
         try {
-          const { buildWorkBriefing } = await import("./work");
           const msg = await buildWorkBriefing(true);
           if (msg) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, msg, 20, 5);
           sent = true;
           // Segunda: logo depois, o relatório da semana que passou.
           if (brtDate.getUTCDay() === 1) {
             try {
-              const { buildWeeklyWorkReport } = await import("./work-weekly");
               const semana = await buildWeeklyWorkReport();
               if (semana) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, semana, 20, 5);
             } catch (err) {
@@ -243,7 +252,6 @@ export function startScheduler(): void {
       // Rodou (a tomada carregou) e não mandou o ODO: lembra às 20h, uma vez por carga.
       if (hhmm === "20:00" && config.ownerPhone) {
         try {
-          const { odoReminder } = await import("./scooter");
           const aviso = await odoReminder();
           if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
         } catch (err) {
@@ -272,7 +280,6 @@ export function startScheduler(): void {
             if (falta < 1 || falta > 10 || meetingWarned.has(key)) continue;
             meetingWarned.add(key);
             // Reunião sobre um chamado/Redmine: junta o resumo dele e como resolveu parecidos.
-            const { meetingTicketBrief } = await import("./work");
             const brief = await meetingTicketBrief(m.title).catch(() => "");
             await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})`, 10, 2);
             // Resumo do chamado numa mensagem à parte: segurar e copiar para colar no Teams.
@@ -296,10 +303,8 @@ export function startScheduler(): void {
       if (workSlot && lastWorkAlertSlot !== workSlot && config.ownerPhone) {
         lastWorkAlertSlot = workSlot;
         try {
-          const { buildWorkNewAlerts } = await import("./work");
           const fresh = await buildWorkNewAlerts();
           // Alertas que ele definiu ("alerta MNI passar de 5 na semana"…).
-          const { checkAlertRules } = await import("./work-alert-rules");
           const dele = await checkAlertRules().catch(() => "");
           const juntos = [fresh, dele].filter(Boolean).join("\n\n");
           const msg = juntos || (askedByHim ? "🔄 Escala atualizado. Nada novo nos seus chamados. 👍" : "");
@@ -314,7 +319,6 @@ export function startScheduler(): void {
       if (wd >= 1 && wd <= 5 && config.alexaMorning && hhmm === config.alexaMorning && lastMorningDate !== todayDate) {
         lastMorningDate = todayDate;
         try {
-          const { falarResumoManha } = await import("./alexa");
           await falarResumoManha();
         } catch (err) {
           console.error("[alexa] resumo da manhã falhou", err);
@@ -325,7 +329,6 @@ export function startScheduler(): void {
       if ((wd === 6 || wd === 0) && hhmm === "09:00" && lastTireDate !== todayDate) {
         lastTireDate = todayDate;
         try {
-          const { falarPneus } = await import("./alexa");
           await falarPneus();
         } catch (err) {
           console.error("[alexa] aviso dos pneus falhou", err);
@@ -343,7 +346,6 @@ export function startScheduler(): void {
             orderBy: { date: "asc" },
           });
           if (sal) {
-            const { notifyOwner } = await import("./message-handlers");
             await notifyOwner(config, `💰 Era dia do salário. Já caiu? Me manda *recebi X de salário* (o valor que entrou de verdade) que eu faço o check-up do mês: quanto sobra depois das contas e quanto ainda cabe no cartão.`);
           }
         } catch (err) {
@@ -355,30 +357,25 @@ export function startScheduler(): void {
       if (hhmm === "03:40" && lastForecastRollDate !== todayDate) {
         lastForecastRollDate = todayDate;
         try {
-          const { rollForecasts } = await import("./forecast-roll");
           const r = await rollForecasts();
           if (r.criados) console.log(`[previsões] ${r.criados} mês(es) novo(s) em ${r.series} série(s)`);
         } catch (err) {
           console.error("[previsões] renovação falhou", err);
         }
-        const { pruneProcessedMessages } = await import("./flow-state");
         await pruneProcessedMessages().catch((err) => console.error("[webhook] limpeza dos ids falhou", err));
       }
 
       // Saúde: WhatsApp (Evolution) conectado? A cada 5 min.
       if (brtDate.getUTCMinutes() % 5 === 0) {
-        const { checkWhatsapp } = await import("./health");
         await checkWhatsapp(config).catch((err) => console.error("[saúde] checagem falhou", err));
       }
 
       // Crédito da IA (OpenRouter): confere 3x por dia; abaixo de US$ 2 avisa (1x por dia).
       if ((hhmm === "08:30" || hhmm === "13:30" || hhmm === "19:00") && lastCreditWarnDate !== todayDate && config.ownerPhone) {
         try {
-          const { creditWarning } = await import("./ai-credit");
           const aviso = await creditWarning();
           if (aviso) {
             lastCreditWarnDate = todayDate;
-            const { notifyOwner } = await import("./message-handlers");
             await notifyOwner(config, aviso);
           }
         } catch (err) {
@@ -390,10 +387,8 @@ export function startScheduler(): void {
       if (hhmm === "19:30" && lastInvoiceEveDate !== todayDate) {
         lastInvoiceEveDate = todayDate;
         try {
-          const { invoiceEveSpeech } = await import("./message-handlers");
           const fala = await invoiceEveSpeech();
           if (fala) {
-            const { alexaFalar } = await import("./alexa");
             await alexaFalar(fala);
           }
         } catch (err) {
@@ -405,7 +400,6 @@ export function startScheduler(): void {
       if (hhmm === "09:00" && lastBuddyInvoiceDate !== todayDate) {
         lastBuddyInvoiceDate = todayDate;
         try {
-          const { sendInvoiceBuddyReminder } = await import("./invoice-buddy");
           if (await sendInvoiceBuddyReminder()) console.log("[faturas] aviso enviado ao irmão");
         } catch (err) {
           console.error("[faturas] aviso ao irmão falhou", err);
@@ -420,8 +414,6 @@ export function startScheduler(): void {
           const msg = await buildBillsDue("reminder");
           // A Alexa fala só o que vence hoje/amanhã ou já venceu (frase curta).
           try {
-            const { billsDueSpeech } = await import("./message-handlers");
-            const { alexaFalar } = await import("./alexa");
             const fala = await billsDueSpeech();
             if (fala) await alexaFalar(fala);
           } catch (err) {

@@ -4,6 +4,8 @@ import { prisma } from "./prisma";
 import { downloadIncomingMedia, notifyOwner } from "./message-handlers";
 import { upsertWorkTicket } from "./work";
 import { maskPersonalData, normalizeTicketId } from "./work-privacy";
+import { conversationFromPrint, readImageText, summarizeAssystPrint, ticketCandidates } from "./work-ocr";
+import { decide } from "./jev";
 
 // Celular institucional → secretária. O dono encaminha (ou exporta) do
 // WhatsApp do trabalho para o próprio número a conversa com o usuário, com
@@ -142,7 +144,6 @@ async function flush(config: AgentConfig) {
   // Prints: leitura local (sem IA) para o resumo e, se faltar, o nº do chamado.
   if (s.images.length && !s.prints) {
     try {
-      const { readImageText, summarizeAssystPrint, ticketCandidates, conversationFromPrint } = await import("./work-ocr");
       const texts = await readImageText(s.images.slice(0, 6).map((i) => i.data));
       // Print do Assyst → resumo; print de conversa → o texto lido (mascarado).
       s.prints = texts
@@ -221,7 +222,6 @@ async function save(config: AgentConfig, ticketId: string, s: Session, notify = 
   let urgent = false;
   if (s.lines.length) {
     try {
-      const { decide } = await import("./jev");
       const a = (await decide(maskPersonalData(s.lines.join("\n")).slice(-6000), { u: { type: "noul", instructions: "O usuário pede urgência, fala em prazo vencendo, audiência próxima ou sessão de julgamento?" } })).u;
       urgent = !!a && a.type === "noul" && a.noul >= 0.7;
     } catch {

@@ -2,6 +2,10 @@ import { prisma } from "./prisma";
 import { CAN_CLOSE_WHERE, upsertWorkTicket, workStats } from "./work";
 import { normalizeTicketId } from "./work-privacy";
 import { alertsFor } from "./work-sla";
+import { findSituation, getSituations, setSituation } from "./work-situations";
+import { answerWorkQuestion } from "./work-ask";
+import { requestEscalaSync } from "./work-sync";
+import { buildWorkBriefing, missingFromSheet } from "./work";
 
 // Comandos do trabalho pelo WhatsApp, por regra fixa (nada disso vai para a
 // IA nem fica no histórico da conversa — dado do Tribunal não passa por ela).
@@ -63,14 +67,12 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   const msg = text.trim();
   // "atualizar escala": pede a cópia agora (o vigia do servidor roda em até 1 min).
   if (/^\s*(?:atualiz(?:ar|a)\s+(?:o\s+)?escala|sincroniz(?:ar|a)\s+(?:o\s+)?escala)\s*\.?\s*$/i.test(msg)) {
-    const { requestEscalaSync } = await import("./work-sync");
     await requestEscalaSync();
     return "🔄 Pedido feito: em até 1 minuto eu copio do escala e te aviso o que mudou.";
   }
 
   // "atualiza a extensão": a Central confere a versão nova em até 2 min e se atualiza.
   if (/^\s*atualiz(?:ar|a|e)\s+(?:a\s+)?(?:extens[aã]o|central)(?:\s+do\s+atendente)?\s*\.?\s*$/i.test(msg)) {
-    const { prisma } = await import("./prisma");
     const cfg = await prisma.agentConfig.findFirst({ select: { id: true } });
     if (cfg) await prisma.agentConfig.update({ where: { id: cfg.id }, data: { extUpdateAt: new Date() } });
     const r = await prisma.extRelease.findFirst({ orderBy: { createdAt: "desc" }, select: { version: true } });
@@ -79,7 +81,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
 
   // "o que falta na planilha?": fechados na Central que a planilha ainda não tem.
   if (/^\s*(?:o\s+)?que\s+falta\s+(?:na|lan[cç]ar\s+na)\s+planilha\s*\??\s*$|^\s*faltando\s+na\s+planilha\s*\??\s*$/i.test(msg)) {
-    const { missingFromSheet } = await import("./work");
     const f = await missingFromSheet();
     if (!f.length) return "📋 Nada faltando: todo chamado seu fechado desde o começo da planilha já está nela (pela última importação).";
     return `📋 *Faltam na planilha* (${f.length}): ${f.map((t) => t.ticketId).join(", ")}\nNo computador: ⚡ › *📋 Faltando na planilha* copia todas as linhas de uma vez. Depois de colar, importe a planilha de novo para a lista zerar.`;
@@ -87,7 +88,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
 
   // "como está meu trabalho?" / "resumo do trabalho": o briefing das 8h na hora.
   if (/^\s*(?:como\s+(?:est[aá]|t[aá])\s+(?:o\s+)?meu\s+trabalho|resumo\s+do\s+trabalho|briefing(?:\s+do\s+trabalho)?)\s*\??\s*$/i.test(msg)) {
-    const { buildWorkBriefing } = await import("./work");
     const s = await workStats();
     return (await buildWorkBriefing()) || `💼 Nada pedindo ação agora. ${s.emAberto} chamado(s) na sua fila (+${s.no3n} com o 3º nível), nenhum urgente, atrasado ou com Redmine resolvido. 👍`;
   }
@@ -95,7 +95,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   if (!/chamado/i.test(msg)) {
     // Pergunta livre sobre o trabalho sem a palavra "chamado" ("qual meu tempo médio de MNI?").
     if (isQuestion && /\b(?:trabalho|redmine|mni|resolvi|fechei|atendi)/i.test(msg)) {
-      const { answerWorkQuestion } = await import("./work-ask");
       return answerWorkQuestion(msg).catch(() => null);
     }
     return null;
@@ -134,7 +133,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   // "chamado 1234567 aguardando usuário" / "chamado 1234567 sem situação"
   const sm = msg.match(new RegExp(`^\\s*(?:o\\s+)?chamado\\s+${TICKET}\\s*[,:-]?\\s*(?:est[aá]\\s+|fica\\s+|ficou\\s+)?(.{3,60}?)\\s*\\.?$`, "i"));
   if (sm) {
-    const { findSituation, setSituation } = await import("./work-situations");
     const clear = /^(sem situa[cç][aã]o|limpar situa[cç][aã]o|nenhuma)$/i.test(sm[2].trim());
     const sit = clear ? null : await findSituation(sm[2]);
     if (clear || sit) {
@@ -168,7 +166,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   }
 
   if (OPEN_RE.test(msg)) {
-    const { getSituations } = await import("./work-situations");
     const situations = await getSituations();
     const open = await prisma.workTicket.findMany({
       where: { status: { in: ["aberto", "pendente"] } },
@@ -191,7 +188,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
 
   // Pergunta livre (a IA só monta os filtros; a conta é feita no banco).
   if (isQuestion) {
-    const { answerWorkQuestion } = await import("./work-ask");
     const r = await answerWorkQuestion(msg).catch(() => null);
     if (r) return r;
   }

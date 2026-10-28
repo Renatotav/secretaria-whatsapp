@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { outlookMeetings, meetingsSpeech } from "./outlook-calendar";
 import { airconOntem } from "./aircon";
+import { TIRE_PSI, scooterNumbers } from "./scooter";
 
 // A Alexa (Echo Dot) fala alguns avisos da secretária quando ele está em casa,
 // pelo Voice Monkey (skill da Alexa). Fora do horário de silêncio; nunca trava
@@ -135,7 +136,6 @@ export async function resumoManha(): Promise<string> {
     if (contas) partes.push(`Contas: ${contas}`);
   } catch {}
   try {
-    const { scooterNumbers, TIRE_PSI } = await import("./scooter");
     const n = await scooterNumbers();
     if (n && n.kmSince !== null) {
       const folga = Math.round(n.safeKm - n.kmSince);
@@ -154,7 +154,6 @@ export async function resumoManha(): Promise<string> {
 
 /** Sábado/domingo de manhã: dia de calibrar (só se já passou o prazo e ele não calibrou). */
 export async function falarPneus(): Promise<boolean> {
-  const { scooterNumbers, TIRE_PSI } = await import("./scooter");
   const n = await scooterNumbers().catch(() => null);
   if (!n?.lastTire || !n.tireDue) return false;
   return alexaFalar(`Bom dia, Renato. Hoje é dia de calibrar os pneus da scooter: ${TIRE_PSI.front} na frente e ${TIRE_PSI.rear} atrás. Depois me avise: calibrei os pneus.`);

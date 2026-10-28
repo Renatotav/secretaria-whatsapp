@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { CAN_CLOSE_WHERE, upsertWorkTicket, workProductivity, workStats } from "@/lib/work";
 import { alertsFor } from "@/lib/work-sla";
+import { getSituations, setSituation } from "@/lib/work-situations";
+import { normalizeTicketId } from "@/lib/work-privacy";
 
 // Painel "Trabalho" (protegido pelo login do painel).
 export async function GET(request: Request) {
@@ -19,7 +21,6 @@ export async function GET(request: Request) {
     orderBy: { updatedAt: "desc" },
     take: f ? 500 : 100,
   });
-  const { getSituations } = await import("@/lib/work-situations");
   const situations = await getSituations();
   if (f === "atrasados") tickets = tickets.filter((t) => alertsFor(t, situations).overdue);
   // Imagens anexadas (só os dados para listar; o arquivo vem por /api/work/attachment).
@@ -46,12 +47,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     // Situação ("com quem está a bola") e ajustes manuais do prazo.
     if (body?.action === "situation") {
-      const { setSituation } = await import("@/lib/work-situations");
       await setSituation(String(body.ticketId || ""), String(body.situation || ""));
       return NextResponse.json({ ok: true });
     }
     if (body?.action === "adjust") {
-      const { normalizeTicketId } = await import("@/lib/work-privacy");
       const received = body.receivedAt ? new Date(`${String(body.receivedAt).slice(0, 10)}T12:00:00-03:00`) : null;
       const sla = body.slaOverride === "" || body.slaOverride === null || body.slaOverride === undefined ? null : Math.round(Number(body.slaOverride));
       if (received && isNaN(received.getTime())) throw new Error("Data inválida");

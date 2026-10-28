@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
+import { fetchAllGroups } from "@/lib/evolution";
 
 export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) {
@@ -80,7 +81,6 @@ export const POST = withErrorHandling(async (request: Request) => {
       );
     }
 
-    const { fetchAllGroups } = await import("@/lib/evolution");
     const evoGroups = await fetchAllGroups(
       config.evolutionUrl,
       config.evolutionApiKey,

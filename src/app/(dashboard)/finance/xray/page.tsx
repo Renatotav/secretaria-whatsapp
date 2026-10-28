@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { brl } from "@/lib/format";
 
 interface InvoiceItem {
   id: string;
@@ -102,8 +103,7 @@ function XRayContent() {
   }, [items, cat]);
   const totalCategoria = useMemo(() => (cat ? items.filter((x) => x.category === cat) : []).reduce((a, i) => a + i.amount, 0), [items, cat]);
   const qtdItens = useMemo(() => (cat ? items.filter((x) => x.category === cat).length : 0), [items, cat]);
-  const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const loja = (d: string) =>
+    const loja = (d: string) =>
     d.replace(/^Nota Fiscal \(\d+ itens\)\s*-?\s*/i, "").replace(/\s*\(parte n[oa] [^)]*\)\s*$/i, "").replace(/\s*(no\s+)?(cart[aã]o( de cr[eé]dito)?|cr[eé]dito|d[eé]bito|pix|vr)\s*$/i, "").trim() || "Nota fiscal";
   const dia = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
   const qtd = (q: number) => (Number.isInteger(q) ? `${q} un.` : `${q.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} kg`);

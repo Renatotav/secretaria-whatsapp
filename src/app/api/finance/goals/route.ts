@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { reserveNow } from "@/lib/message-handlers";
 
 export async function GET(request: Request) {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -9,7 +10,6 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "asc" },
     });
     // Reserva: mostra o valor de AGORA (guardado + o que o mês já tirou/somou na conta corrente).
-    const { reserveNow } = await import("@/lib/message-handlers");
     const reserva = goals.find((g) => /reserva/i.test(g.name));
     const agora = reserva ? await reserveNow(reserva) : null;
     return NextResponse.json(goals.map((g) => (g === reserva && agora && agora.mes !== 0 ? { ...g, guardado: g.currentAmount, mesAteAgora: agora.mes, currentAmount: agora.agora } : g)));

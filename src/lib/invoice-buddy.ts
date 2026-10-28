@@ -1,16 +1,16 @@
 import { prisma } from "./prisma";
 import { sendTextWithTyping } from "./evolution";
+import { brl } from "./format";
+import { listOpenInvoices } from "./invoices";
 
 // Aviso das faturas para o irmão (pedido dele, 21/10/2026): ele é o titular do
 // C6 (o Renato é o adicional) e o dono do cartão Santander. A secretária só
 // conhece a PARTE DO RENATO em cada fatura — o texto deixa isso claro.
 // Manda no dia do vencimento, às 9h.
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const AVISAR_DIAS = [0]; // só no dia do vencimento (pedido do irmão)
 
 export async function invoiceBuddyMessage(hoje = new Date()): Promise<string> {
-  const { listOpenInvoices } = await import("./invoices");
   const brt = new Date(hoje.getTime() - 3 * 3600_000);
   const base = Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate());
   const faturas = (await listOpenInvoices()).filter((f) => {

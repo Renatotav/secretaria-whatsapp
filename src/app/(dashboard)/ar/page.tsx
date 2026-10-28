@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PerguntaIA } from "../pergunta-ia";
+import { brl } from "@/lib/format";
 
 type Dia = { dia: string; kwh: number; ate: string | null };
 type Dados =
@@ -26,7 +27,6 @@ type Dados =
     };
 
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 };
 const muted: React.CSSProperties = { fontSize: 12, color: "var(--text-muted)" };

@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { brl } from "./format";
 
 // Gasto do ar-condicionado (Samsung, pelo SmartThings). SÓ LEITURA: lê o
 // contador total de energia do aparelho de hora em hora; daí sai kWh e R$ por
@@ -39,7 +40,6 @@ async function save(c: Cfg): Promise<void> {
 }
 
 const brtDay = (d = new Date()) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const kwh = (wh: number) => (wh / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 async function st(path: string, token: string) {

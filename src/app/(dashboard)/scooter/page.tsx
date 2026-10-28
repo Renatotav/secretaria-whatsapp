@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useWidth } from "@/lib/use-width";
 import { PerguntaIA } from "../pergunta-ia";
+import { brl } from "@/lib/format";
 
 type Carga = { at: string; kwh: number | null; hours: number | null; odo: number | null; km: number | null; whKm: number | null; custo: number | null; picoW: number | null; auto: boolean };
 type Leitura = { at: string; odo: number; volts: number | null; bars: number | null; carga: boolean };
@@ -35,7 +36,6 @@ type Dados = {
 };
 
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const TZ = { timeZone: "America/Sao_Paulo" } as const;
 const dia = (s: string) => new Date(s).toLocaleDateString("pt-BR", { ...TZ, day: "2-digit", month: "2-digit" });
 const hora = (s: string) => new Date(s).toLocaleTimeString("pt-BR", { ...TZ, hour: "2-digit", minute: "2-digit" }).replace(":", "h");

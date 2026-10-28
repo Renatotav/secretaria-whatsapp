@@ -21,6 +21,8 @@ import {
 } from "@/lib/message-handlers";
 import { claimMessageId } from "@/lib/flow-state";
 import { extractPdfText, pdfPasswordError } from "@/lib/pdf";
+import { handleWorkPhoneMessage, tryPairWorkPhone } from "@/lib/work-phone";
+import { readScooterVideo } from "@/lib/scooter";
 
 // Ids das últimas mensagens recebidas (atalho na memória; o banco garante
 // mesmo depois de um reinício, em ProcessedMessage).
@@ -98,7 +100,6 @@ export async function POST(request: Request) {
     // IA de conversa, transcrição de áudio ou pelas conversas do CRM (só o
     // texto já mascarado vai ao Jev, ver work-phone.ts).
     if (!isGroup && !isSelfChat) {
-      const { handleWorkPhoneMessage, tryPairWorkPhone } = await import("@/lib/work-phone");
       if (config.workPhone && phone === config.workPhone) {
         if (!fromMe) await handleWorkPhoneMessage(config, evo, key.id ?? "", rawMessage);
         return NextResponse.json({ ok: true });
@@ -159,7 +160,6 @@ export async function POST(request: Request) {
       }
       try {
         const { base64, mimetype } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "videoMessage", "video/mp4");
-        const { readScooterVideo } = await import("@/lib/scooter");
         await notifyOwner(config, base64 ? await readScooterVideo(base64, mimetype, String(vm.caption || "")) : "⚠️ Não consegui baixar o vídeo. Tenta mandar de novo.");
       } catch (err) {
         console.error("[webhook] falha ao ler vídeo", err);

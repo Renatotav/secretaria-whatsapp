@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FINANCE_TAXONOMY_DATA } from "@/lib/finance-taxonomy";
+import { brl } from "@/lib/format";
 
 type Verdict = { level: "green" | "yellow" | "red"; text: string };
 type Wish = {
@@ -15,7 +16,6 @@ type Wish = {
   verdict: Verdict | null;
 };
 
-const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const COLORS = { green: "var(--success)", yellow: "var(--warning)", red: "var(--danger)" };
 const ICONS = { green: "🟢", yellow: "🟡", red: "🔴" };
 const EMPTY = { name: "", amount: "", installments: "1", paymentMethod: "cartão", category: "Compras" };

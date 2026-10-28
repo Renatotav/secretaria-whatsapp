@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import type { AgentConfig } from "@prisma/client";
+import { CREDIT_WARN_USD, openrouterCredit } from "./ai-credit";
 
 // Saúde do sistema: o WhatsApp (Evolution) é conferido a cada 5 min — se cair,
 // a Alexa avisa (o WhatsApp não chega) e, quando volta, vai a mensagem com o
@@ -92,7 +93,6 @@ export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
       ? { nivel: "problema", titulo: "Ponte da tomada (scooter)", detalhe: `fora há ${ha(ponte.at)} — o Fire TV está ligado e no Wi-Fi?` }
       : { nivel: "ok", titulo: "Ponte da tomada (scooter)", detalhe: `ok (voltou há ${ha(ponte.at)})` });
 
-  const { openrouterCredit, CREDIT_WARN_USD } = await import("./ai-credit");
   const c = await openrouterCredit().catch(() => null);
   itens.push(!c
     ? { nivel: "atencao", titulo: "Crédito da IA", detalhe: "não consegui consultar" }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { chegou } from "@/lib/alexa";
 
 // Vigia do celular (servidor, pelo Tailscale): { casa: true | false } a cada
 // minuto. Só chega o "sim/não" — os endereços ficam no servidor. Mesma chave
@@ -25,7 +26,6 @@ export async function POST(request: Request) {
   if (body.casa && cfg.phoneHome === false) await prisma.flowState.deleteMany({ where: { key: "presence:saiu" } });
   let fala = "";
   if (body.casa && cfg.phoneHome === false) {
-    const { chegou } = await import("@/lib/alexa");
     fala = await chegou(true).catch(() => "");
   }
   return NextResponse.json({ ok: true, chegou: !!fala });

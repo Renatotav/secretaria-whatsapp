@@ -1,6 +1,8 @@
 import { prisma } from "./prisma";
 import { ERROR_GROUPS } from "./work-groups";
 import { alertsFor } from "./work-sla";
+import { getSituations } from "./work-situations";
+import { buildWeeklyWorkReport } from "./work-weekly";
 
 // Alertas que ele mesmo define pelo WhatsApp (sem IA, frase fixa):
 //   "alerta MNI passar de 5 na semana"  → grupo de erro na semana (desde segunda)
@@ -44,7 +46,6 @@ export async function applyAlertRuleCommand(text: string): Promise<string | null
   const salvar = (r: Regra[]) => prisma.agentConfig.update({ where: { id: cfg.id }, data: { workAlertRules: JSON.stringify(r) } });
 
   if (/^\s*(relat[oó]rio\s+da\s+semana|semana\s+do\s+trabalho|minha\s+semana\s+no\s+trabalho)\s*\??\s*$/i.test(t)) {
-    const { buildWeeklyWorkReport } = await import("./work-weekly");
     return (await buildWeeklyWorkReport()) || "📊 A semana passada não teve movimento nos seus chamados.";
   }
   if (/^\s*(meus\s+)?alertas\s*\??\s*$/i.test(t)) {
@@ -91,7 +92,6 @@ export async function checkAlertRules(): Promise<string> {
   const hoje = new Date(Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate(), 3));
   const segunda = new Date(hoje.getTime() - ((brt.getUTCDay() + 6) % 7) * DAY);
   const semanaKey = segunda.toISOString().slice(0, 10);
-  const { getSituations } = await import("./work-situations");
   const situacoes = await getSituations();
   const abertos = await prisma.workTicket.findMany({ where: { status: { in: ["aberto", "pendente"] } } });
   const linhas: string[] = [];

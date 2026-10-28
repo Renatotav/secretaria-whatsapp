@@ -23,6 +23,24 @@ import type { AgentConfig, Prisma } from "@prisma/client";
 import { applyOutlookCommand } from "./outlook-calendar";
 import { applyAirconCommand } from "./aircon";
 import { applySaidasCommand } from "./saidas";
+import { brlMsg as brl } from "./format";
+import { isBesteiraItem, merchantKey, spreadDiscount } from "./finance-taxonomy";
+import { applyAlertRuleCommand } from "./work-alert-rules";
+import { applyAiLabCommand } from "./ai-lab";
+import { applyWorkCommand } from "./work-commands";
+import { invoiceLabel, listOpenInvoices, payInvoice } from "./invoices";
+import { applyExtrasCommand, categoryRuleFor } from "./personal-extras";
+import { VISION_FALLBACK } from "./openai";
+import { replyCapture } from "./reply-capture";
+import { TIRE_PSI, applyScooterCommand, scooterDigestLine, scooterNumbers } from "./scooter";
+import { applyYoutube } from "./youtube";
+import { applyCreditCommand, creditWarning } from "./ai-credit";
+import { readImage } from "./personal-router";
+import { applyUsageCommand } from "./work-usage";
+import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
+import { fetchNfce, repairNfeKey } from "./nfce";
+import { workDigestLine, workWeekSection } from "./work";
+import { detectCommitment } from "./analyzer";
 
 export function extractText(message: Record<string, unknown>): string {
   return (
@@ -82,7 +100,6 @@ function getEvoConfig(config: AgentConfig) {
 
 export async function notifyOwner(config: AgentConfig, text: string): Promise<void> {
   // Pedido por voz (skill da Alexa): guarda a resposta para ela falar também.
-  const { replyCapture } = await import("./reply-capture");
   replyCapture.getStore()?.push(text);
   if (!config.ownerPhone || !config.evolutionUrl) return;
   const evo = getEvoConfig(config);
@@ -159,7 +176,6 @@ export async function downloadIncomingMedia(
 }
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${brl(Math.abs(v))}`;
 
 /** Entradas, saídas e saídas por categoria de um mês (pelo `date`, que é o mês em que o dinheiro entra/sai). */
@@ -168,7 +184,6 @@ async function monthTotals(year: number, monthIndex: number) {
     where: { date: { gte: new Date(year, monthIndex, 1), lte: new Date(year, monthIndex + 1, 0, 23, 59, 59) } },
     select: { type: true, amount: true, category: true, invoiceItems: { select: { name: true, category: true, amount: true } } },
   });
-  const { isBesteiraItem, spreadDiscount } = await import("./finance-taxonomy");
   const byCategory: Record<string, number> = {};
   let income = 0;
   let expense = 0;
@@ -897,7 +912,6 @@ async function spentBetween(gte: Date, lte: Date) {
 
 /** O que vence entre duas datas: contas fora do cartão, faturas e agenda. */
 async function dueBetween(gte: Date, lte: Date): Promise<string[]> {
-  const { listOpenInvoices, invoiceLabel } = await import("./invoices");
   const bills = await prisma.financeEntry.findMany({
     where: { type: "expense", status: "pending", paymentMethod: { not: "cartão" }, date: { gte, lte } },
     orderBy: { date: "asc" },
@@ -1396,7 +1410,6 @@ export async function applyAttentionCommand(text: string): Promise<string | null
   const lembretes = await prisma.agendaItem.findMany({ where: { source: { not: "group" }, done: false, dueDate: { gte: ini, lt: new Date(ini.getTime() + 86_400_000) } }, orderBy: { dueDate: "asc" }, take: 8 });
   if (lembretes.length) parts.push(`📅 *Hoje*\n${lembretes.map((l) => `• ${l.dueDate ? formatTime(l.dueDate.getTime() / 1000) + " " : ""}${l.title}`).join("\n")}`);
 
-  const { creditWarning } = await import("./ai-credit");
   const credito = await creditWarning().catch(() => "");
   if (credito) parts.push(credito);
 
@@ -1483,7 +1496,6 @@ export async function spokenAnswer(text: string): Promise<string | null> {
 
   // Fatura: "quanto está a fatura?"
   if (/fatura/.test(t)) {
-    const { listOpenInvoices } = await import("./invoices");
     const faturas = (await listOpenInvoices()).filter((i) => !i.card && i.total >= 1);
     if (!faturas.length) return "Você não tem fatura em aberto.";
     const f = faturas[0];
@@ -1493,7 +1505,6 @@ export async function spokenAnswer(text: string): Promise<string | null> {
 
   // Scooter: "como está a scooter?", "quanto dá pra rodar?"
   if (/scooter|moto\b|bateria|quanto\s+d[aá]\s+pra\s+rodar|autonomia/.test(t)) {
-    const { scooterNumbers, TIRE_PSI } = await import("./scooter");
     const n = await scooterNumbers();
     if (!n) return "Ainda não tenho registros da scooter.";
     const partes: string[] = [];
@@ -1530,7 +1541,6 @@ export async function spokenAnswer(text: string): Promise<string | null> {
 
 /** Véspera da fatura (Alexa, à noite): "Amanhã vence a fatura do seu cartão: 1.234 reais." */
 export async function invoiceEveSpeech(): Promise<string> {
-  const { listOpenInvoices, invoiceLabel } = await import("./invoices");
   const t = todayBRT();
   const amanha = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1);
   const key = `${amanha.getFullYear()}-${String(amanha.getMonth() + 1).padStart(2, "0")}-${String(amanha.getDate()).padStart(2, "0")}`;
@@ -1575,10 +1585,8 @@ export async function buildDailyDigest(): Promise<string> {
   const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 12);
   const due = await dueBetween(dayRange(tomorrow).gte, dayRange(tomorrow).lte);
   lines.push(due.length ? `📅 Amanhã:\n${due.join("\n")}` : "📅 Amanhã: nada vencendo.");
-  const { scooterDigestLine } = await import("./scooter");
   const scooter = await scooterDigestLine();
   if (scooter) lines.push(scooter);
-  const { workDigestLine } = await import("./work");
   const work = await workDigestLine();
   if (work) lines.push(work);
   return lines.join("\n");
@@ -1623,7 +1631,6 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
 
   // Trabalho (Central do Atendente): só números, fora do comentário da IA.
   try {
-    const { workWeekSection } = await import("./work");
     const work = await workWeekSection(monday);
     if (work) {
       lines.push(work);
@@ -2196,7 +2203,6 @@ async function applyInvoicePayment(text: string): Promise<string | null> {
     lastInvoicePayment = { ids: [...new Set(allIds)], at: Date.now() };
     return [...replies, "↩️ Foi engano? Responda *desfazer* (desfaz todas)."].join("\n\n");
   }
-  const { listOpenInvoices, payInvoice, invoiceLabel } = await import("./invoices");
   const open = await listOpenInvoices();
   if (open.length === 0) return "✅ Não tem nenhuma fatura de cartão em aberto.";
 
@@ -2317,7 +2323,6 @@ async function applyPdfPassword(text: string, config: AgentConfig): Promise<bool
   if (!password || /\s/.test(password) || password.length > 40) return false;
 
   const { base64 } = pendingPdf;
-  const { extractPdfText, pdfPasswordError } = await import("./pdf");
   let pdfText: string;
   try {
     pdfText = await extractPdfText(base64, password);
@@ -2432,21 +2437,16 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
 
   // Comandos do trabalho ("chamado 1234567 resolvido"): regra fixa, sem IA e
   // fora do histórico da conversa (dado do Tribunal não passa pela IA).
-  const { applyWorkCommand } = await import("./work-commands");
   const { attachPendingWorkChat } = await import("./work-phone");
-  const { applyScooterCommand } = await import("./scooter");
   const { applyAlexaCommand } = await import("./alexa");
-  const { applyCreditCommand } = await import("./ai-credit");
-  const { applyAlertRuleCommand } = await import("./work-alert-rules");
   const { applyMcpCommand } = await import("./mcp-tools");
   // Link do YouTube: o Gemini assiste e manda o resumo (ou responde a pergunta junto).
-  const { applyYoutube } = await import("./youtube");
   const ytReply = await applyYoutube(joinedText, (t) => notifyOwner(config, t));
   if (ytReply) {
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await (await import("./ai-lab")).applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await (await import("./personal-extras")).applyExtrasCommand(joinedText)) ?? (await (await import("./work-usage")).applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await applyExtrasCommand(joinedText)) ?? (await applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
@@ -2519,7 +2519,6 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     case "finance": {
       // Regra de categoria aprovada por ele vale antes da escolha da IA.
       if (route.financeType === "expense") {
-        const { categoryRuleFor } = await import("./personal-extras");
         const regra = await categoryRuleFor(route.description || "", joinedText).catch(() => null);
         if (regra) Object.assign(route, { category: regra.category, subcategory: regra.subcategory });
       }
@@ -3019,7 +3018,6 @@ const MARKETPLACE_RE = /^(AMAZON|MERCADO ?LIVRE|MERCADO\*|MERCADOPAGO|SHOPEE|ALI
  */
 async function applyMerchantMemory(entries: StatementEntry[]): Promise<StatementEntry[]> {
   if (!entries.some((e) => e.type === "expense")) return entries;
-  const { merchantKey } = await import("./finance-taxonomy");
   const history = await prisma.financeEntry.findMany({
     where: { type: "expense", subcategory: { not: "" } },
     select: { description: true, category: true, subcategory: true },
@@ -3031,7 +3029,6 @@ async function applyMerchantMemory(entries: StatementEntry[]): Promise<Statement
     const key = merchantKey(h.description);
     if (key && !known.has(key)) known.set(key, { category: h.category, subcategory: h.subcategory });
   }
-  const { categoryRuleFor } = await import("./personal-extras");
   const out: StatementEntry[] = [];
   const porRegra = new Set<StatementEntry>();
   for (const e of entries) {
@@ -3374,7 +3371,6 @@ async function handleStatementDocumentInner(statementText: string): Promise<void
 
   // Fatura com titular + adicionais: separa pelos cabeçalhos "Final XXXX - NOME".
   // Um cartão só importa direto; mais de um, pergunta quais importar.
-  const { splitCardSections, holderMatches } = await import("./pdf");
   const sections = splitCardSections(statementText);
   if (sections.length === 1) {
     await importCardSections(config, statementText, sections, null);
@@ -3407,7 +3403,6 @@ async function handleStatementDocumentInner(statementText: string): Promise<void
  * ganham "· cartão final XXXX" na descrição.
  */
 async function importCardSections(config: AgentConfig, statementText: string, chosen: CardSection[], total: number | null): Promise<void> {
-  const { holderMatches } = await import("./pdf");
   const providerOpts = getProviderOpts(config);
   const due = invoiceDueDate(statementText);
   const header = `${due ? `VENCIMENTO DESTA FATURA: ${isoDay(due.getFullYear(), due.getMonth(), due.getDate())}\n` : ""}${statementText.slice(0, 600)}`;
@@ -3641,7 +3636,6 @@ async function handleSmartImageInner(base64: string, mimetype: string, caption: 
 async function readSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
-  const { readImage } = await import("./personal-router");
   const reading = await readImage(base64, mimetype, getProviderOpts(config), caption, todayBRT().toISOString().slice(0, 10));
   console.log(`[image] print classificado como ${reading.kind}`);
   if (reading.kind === "compra" || reading.kind === "estorno") applyNoteToReading(reading);
@@ -3652,7 +3646,6 @@ async function readSmartImage(base64: string, mimetype: string, caption: string)
   // Comprovante de Pix com o valor de uma fatura em aberto (ex: o Pix para o
   // irmão que paga o cartão): oferece dar baixa na fatura, sem lançar gasto.
   if (reading.kind === "compra" && reading.paymentMethod !== "cartão" && reading.amount > 0) {
-    const { listOpenInvoices } = await import("./invoices");
     const match = (await listOpenInvoices()).find((i) => Math.abs(i.total - reading.amount) <= 1);
     if (match) return offerImageDraft({ reading, at: Date.now(), invoice: { card: match.card, dueDate: match.dueDate, total: match.total } }, config);
   }
@@ -3669,7 +3662,6 @@ async function readSmartImage(base64: string, mimetype: string, caption: string)
 async function draftPrompt(d: ImageDraft, config: AgentConfig): Promise<string> {
   const { reading } = d;
   if (d.invoice) {
-    const { invoiceLabel } = await import("./invoices");
     return `📸 ${reading.summary || "Comprovante de Pix."}\n\n💳 Esse valor bate com a fatura *${invoiceLabel(d.invoice.card)}* de ${d.invoice.dueDate.slice(8, 10)}/${d.invoice.dueDate.slice(5, 7)} (${brl(d.invoice.total)}).\nÉ o pagamento dela? Responda *sim* para dar baixa na fatura ou *não* para lançar como gasto normal.`;
   }
   const parcels = reading.installments ? `\n🔢 ${reading.installments}× de ${brl(reading.amount / reading.installments)}` : "";
@@ -3756,7 +3748,6 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
   // "Quanto foi…?" perguntado sobre o mesmo gasto do print: já respondido.
   if (pendingAmount && Date.now() - pendingAmount.at < IMAGE_NOTE_WINDOW_MS) pendingAmount = null;
   if (draft.invoice) {
-    const { payInvoice, invoiceLabel } = await import("./invoices");
     const { ids, total } = await payInvoice(draft.invoice.card, draft.invoice.dueDate);
     lastInvoicePayment = { ids, at: Date.now() };
     lastSaved = null;
@@ -3861,7 +3852,6 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
   // de cada item e a forma de pagamento — o VR aparece como "débito" lá).
   let daSefaz = false;
   if (invoice?.accessKey) {
-    const { fetchNfce, repairNfeKey } = await import("./nfce");
     const chave = repairNfeKey(invoice.accessKey, { cnpj: invoice.issuerCnpj, serie: invoice.nfceSeries, numero: invoice.nfceNumber });
     if (chave && chave !== invoice.accessKey.replace(/\D/g, "")) console.log("[nfce] chave lida com dígito errado: consertada pelo CNPJ/série/número da nota");
     const nf = chave ? await fetchNfce(chave) : null;
@@ -3897,7 +3887,6 @@ async function handleInvoiceImageInner(base64: string, mimetype: string, caption
   // forte e fica com a leitura que fechou melhor.
   if (!daSefaz && gapOf(invoice) > 15 && providerOpts.openrouterApiKey) {
     console.log(`[invoice] conta não fechou (diferença ${gapOf(invoice).toFixed(2)}): relendo com modelo mais forte`);
-    const { VISION_FALLBACK } = await import("./openai");
     const again = await parseInvoiceImage(base64, mimetype, providerOpts, config.ownerName, caption, VISION_FALLBACK);
     if (gapOf(again) < gapOf(invoice)) invoice = again;
   }
@@ -4151,7 +4140,6 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
     }
   }
   // Nota com cerveja/salgadinho: mostra o teto da Besteira (ele pediu para não passar).
-  const { isBesteiraItem, spreadDiscount } = await import("./finance-taxonomy");
   const besteiraNaNota = spreadDiscount(invoice.items).filter(isBesteiraItem).reduce((a, i) => a + i.amount, 0);
   if (besteiraNaNota > 0 && invoice.category !== "Besteira") {
     const bs = items.find((x) => x.category === "Besteira");
@@ -4196,7 +4184,6 @@ async function checkCommitment(phone: string, contactName: string, conversationI
   const recent = await prisma.message.findMany({ where: { conversationId }, orderBy: { createdAt: "desc" }, take: 8 });
   const convo = recent.reverse().map((x) => `${x.role === "user" ? contactName : "Renato"}: ${x.content}`).join("\n");
   const today = todayBRT();
-  const { detectCommitment } = await import("./analyzer");
   const c = await detectCommitment(convo, contactName, today.toISOString().slice(0, 10), WEEKDAYS[today.getDay()], getProviderOpts(config));
   if (!c.found || !c.date) return;
   const event = brtDate(c.date, c.time);
