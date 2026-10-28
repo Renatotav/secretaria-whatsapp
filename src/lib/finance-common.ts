@@ -53,7 +53,11 @@ export const budgetIcon = (pct: number) => (pct >= 100 ? "🔴" : pct >= 70 ? "�
 
 export function addMonths(date: Date, months: number): Date {
   const d = new Date(date);
+  const dia = d.getDate();
+  d.setDate(1);
   d.setMonth(d.getMonth() + months);
+  // 31/01 + 1 mês = 28/02 (último dia), não 03/03: senão o recorrente pula fevereiro.
+  d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
   return d;
 }
 

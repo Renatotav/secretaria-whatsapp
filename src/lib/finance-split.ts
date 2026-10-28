@@ -15,8 +15,9 @@ export function splitMethod(raw: string): { paymentMethod: string; account: stri
   if (/antigo/.test(m)) return { paymentMethod: "ticket", account: "Vale antigo", label: "vale antigo" };
   if (/^(vr|va|vale|ticket)$/.test(m)) return { paymentMethod: "ticket", account: "VR", label: "VR" };
   if (m === "pix") return { paymentMethod: "pix", account: "Principal", label: "Pix" };
-  if (/^d/.test(m)) return { paymentMethod: "débito", account: "Principal", label: "débito" };
+  // "dinheiro" antes do débito: os dois começam com "d".
   if (/^(dinheiro|esp)/.test(m)) return { paymentMethod: "dinheiro", account: "Principal", label: "dinheiro" };
+  if (/^d/.test(m)) return { paymentMethod: "débito", account: "Principal", label: "débito" };
   return { paymentMethod: "cartão", account: "Principal", label: "cartão" };
 }
 
