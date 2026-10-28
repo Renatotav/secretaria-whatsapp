@@ -64,9 +64,11 @@ Regras visuais do painel em [DESIGN.md](DESIGN.md) e contexto do produto em [PRO
 npm ci                 # dependências (não altera o package-lock)
 npx prisma generate    # obrigatório antes do build
 npm run build          # build de produção (inclui checagem de tipos)
+npm test               # regras de dinheiro/datas/Outlook/LGPD (tests/, sem banco)
 ```
 
-Não há testes automatizados nem ambiente local com banco; o build é a verificação mínima.
+Não há ambiente local com banco. Antes de publicar: `npm run build` e `npm test` passando. Regra nova de dinheiro ou data ganha um teste em `tests/`.
+Formato de reais: `brl`/`brlMsg` de `src/lib/format.ts` (não criar cópia).
 
 <!-- graphify-rules-start (managed by `graphify init`) -->
 ## Use Graphify before grep
