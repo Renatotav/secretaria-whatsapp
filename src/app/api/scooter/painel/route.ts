@@ -84,9 +84,23 @@ export const GET = withErrorHandling(async (request: Request) => {
     uberMes: diasMes * 2 * corrida,
   } : null;
 
-  // Quando recarregar: folga (km) ÷ km por dia → data prevista (pela média, inclui dias parados).
+  // Quando recarregar: pelos km de um DIA DE USO (dias úteis em que rodou), não pela média
+  // com dias parados — semana parada não empurra a data. Conta só dias úteis à frente.
   const folga = n.kmSince != null ? n.safeKm - n.kmSince : null;
-  const recarregarEm = folga != null && kmDia && kmDia > 0 ? new Date(Date.now() + Math.max(0, folga / kmDia) * 86_400_000) : null;
+  const kmUso = first && last && diasRod > 0 ? (last.odo - first.odo) / diasRod : null;
+  let recarregarEm: Date | null = null;
+  if (folga != null && kmUso && kmUso > 0) {
+    let faltam = Math.max(0, Math.floor(folga / kmUso));
+    const d = new Date(`${diaBrt(new Date())}T15:00:00Z`);
+    while (faltam > 0) {
+      d.setUTCDate(d.getUTCDate() + 1);
+      if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) faltam--;
+    }
+    recarregarEm = d;
+  }
+  // Parada: dias desde a última vez que o ODO subiu (a carga repete o mesmo ODO, não conta como uso).
+  const subiu = last ? leituras.find((l) => l.odo === last.odo) ?? last : null;
+  const paradaDias = subiu ? Math.floor((Date.now() - subiu.at.getTime()) / 86_400_000) : null;
   // Parte na conta de luz: cargas por mês (média) ÷ última conta da Enel do histórico do ar.
   const st = (await prisma.flowState.findUnique({ where: { key: "smartthings" } }))?.value as { enel?: { ref: string; kwh: number; valor: number }[] } | null;
   const ultimaConta = st?.enel?.slice().sort((a, b) => a.ref.localeCompare(b.ref)).at(-1) ?? null;
@@ -97,6 +111,9 @@ export const GET = withErrorHandling(async (request: Request) => {
     ...n,
     kmDia,
     recarregarEm,
+    kmUso,
+    paradaDias,
+    ultimoOdo: subiu?.at ?? null,
     naConta: ultimaConta && kwhMes ? { kwhMes, pct: (kwhMes / ultimaConta.kwh) * 100, conta: ultimaConta.valor } : null,
     economia,
     tirePsi: TIRE_PSI,

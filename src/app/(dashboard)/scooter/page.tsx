@@ -20,6 +20,9 @@ type Dados = {
   custoKm: number | null;
   kmDia: number | null;
   recarregarEm: string | null;
+  kmUso: number | null;
+  paradaDias: number | null;
+  ultimoOdo: string | null;
   naConta: { kwhMes: number; pct: number; conta: number } | null;
   tireDue: boolean;
   tireNext: string;
@@ -97,10 +100,13 @@ function Painel({ d }: { d: Dados }) {
             <div style={{ width: `${pct * 100}%`, height: "100%", background: cor, borderRadius: 6 }} />
           </div>
         )}
+        {d.paradaDias != null && d.paradaDias >= 2 && d.ultimoOdo && (
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>🅿️ Parada desde {dia(d.ultimoOdo)} ({d.paradaDias} dias sem ODO novo). Se rodou, mande o ODO no WhatsApp.</div>
+        )}
         <div style={muted}>
           {d.kmSince != null && `${n(d.kmSince)} km desde a carga${ultima ? ` de ${dia(ultima.at)}` : ""} · recarregar até ~${n(d.safeKm)} km`}
           {d.daysSince != null && d.daysSince > 0 && ` · faz ${d.daysSince} dia(s)`}
-          {d.recarregarEm && folga != null && folga > 0 && ` · no seu ritmo, recarregar por volta de ${dia(d.recarregarEm)}`}
+          {d.recarregarEm && folga != null && folga > 0 && ` · rodando ${d.kmUso ? `~${n(d.kmUso, 1)} km por dia útil` : "no seu ritmo"}, recarregar por volta de ${dia(d.recarregarEm)}`}
         </div>
       </div>
 
