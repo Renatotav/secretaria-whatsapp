@@ -20,6 +20,7 @@ type Dados =
       dias: Dia[];
       historico: { ref: string; kwh: number; valor: number; ar: number | null }[];
       semanas: { de: string; ate: string; kwh: number }[];
+      previsao: { ref: string; kwh: number; valor: number; arKwh: number } | null;
       instalado: string | null;
       arMediaMesKwh: number | null;
     };
@@ -103,6 +104,12 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
         <Kpi titulo="Contador do aparelho" valor={`${n(d.totalKwh)} kWh`} dica="desde que foi instalado" explica="Total que o próprio ar mediu na vida toda. É dele que sai a conta por dia." />
       </div>
 
+      {d.previsao && (
+        <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          <span>⚡ Próxima conta da Enel ({d.previsao.ref.slice(5, 7)}/{d.previsao.ref.slice(0, 4)}) · ~{n(d.previsao.kwh)} kWh, ar ~{n(d.previsao.arKwh)}</span>
+          <strong style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }} title="Estimativa: ar do mês projetado até o fim + média do resto da casa, na tarifa com impostos das suas contas.">~{brl(d.previsao.valor)}</strong>
+        </div>
+      )}
       <PerguntaIA aba="ar" exemplos={["Quanto gastei esta semana?", "Qual mês o ar gastou mais?", "Quanto vou pagar de ar este mês?"]} />
       <Grafico dias={d.dias} price={d.price} />
       {d.semanas.length > 0 && <Semanas s={d.semanas} price={d.price} />}

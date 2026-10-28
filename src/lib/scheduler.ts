@@ -229,6 +229,26 @@ export function startScheduler(): void {
           console.error("Erro no briefing do trabalho:", err);
         }
       }
+      // Saiu de casa com o ar ligado (a cada 10 min, depois de 30 min fora): avisa uma vez.
+      if (hhmm.endsWith("5") && config.ownerPhone) {
+        try {
+          const { airconAwayCheck } = await import("./aircon");
+          const aviso = await airconAwayCheck();
+          if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
+        } catch (err) {
+          console.error("[ar] aviso de saída falhou:", err);
+        }
+      }
+      // Rodou (a tomada carregou) e não mandou o ODO: lembra às 20h, uma vez por carga.
+      if (hhmm === "20:00" && config.ownerPhone) {
+        try {
+          const { odoReminder } = await import("./scooter");
+          const aviso = await odoReminder();
+          if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
+        } catch (err) {
+          console.error("[scooter] lembrete de ODO falhou:", err);
+        }
+      }
       // Ar-condicionado (SmartThings): lê o contador de energia de hora em hora;
       // se a chave de 24 h venceu, avisa uma vez.
       if (hhmm.endsWith(":05") && config.ownerPhone) {
@@ -255,7 +275,9 @@ export function startScheduler(): void {
             // Reunião sobre um chamado/Redmine: junta o resumo dele e como resolveu parecidos.
             const { meetingTicketBrief } = await import("./work");
             const brief = await meetingTicketBrief(m.title).catch(() => "");
-            await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})${brief ? `\n\n${brief}` : ""}`, 10, 2);
+            await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, `⏰ Em ${falta} min: *${m.title}* (${m.start}${m.end ? `–${m.end}` : ""})`, 10, 2);
+            // Resumo do chamado numa mensagem à parte: segurar e copiar para colar no Teams.
+            if (brief) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, brief.replace(/\*/g, ""), 5, 1);
           }
           // Limpa só os avisos de outros dias (os de hoje seguram a repetição).
           if (meetingWarned.size > 200) for (const k of meetingWarned) if (!k.startsWith(todayDate)) meetingWarned.delete(k);

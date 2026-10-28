@@ -368,3 +368,16 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
   const out = await applyScooterCommand(partes);
   return `🎥 Li no vídeo: ${partes.replace("scooter ", "")}${caption.trim() ? ` (${caption.trim().slice(0, 60)})` : ""}.${virgula}\n\n${out ?? ""}`.trim();
 }
+
+/** Teve carga nas últimas 30 h e nenhuma leitura de ODO desde a carga anterior: pede o ODO (uma vez por carga). */
+export async function odoReminder(): Promise<string | null> {
+  const [carga, anterior] = await prisma.scooterLog.findMany({ where: { kind: "carga" }, orderBy: { at: "desc" }, take: 2 });
+  if (!carga || carga.at.getTime() < Date.now() - 30 * 3_600_000) return null;
+  const leitura = await prisma.scooterLog.findFirst({ where: { kind: "leitura", at: { gt: anterior?.at ?? new Date(0) } } });
+  if (leitura) return null;
+  const key = "scooter:odo-lembrado";
+  const ja = await prisma.flowState.findUnique({ where: { key } });
+  if ((ja?.value as { id?: string } | null)?.id === carga.id) return null;
+  await prisma.flowState.upsert({ where: { key }, create: { key, value: { id: carga.id } }, update: { value: { id: carga.id } } });
+  return "🛵 A scooter carregou, mas não tenho o ODO desde a carga anterior. Manda o km do painel (ex: *scooter 101 km*) para a previsão de recarga ficar certa.";
+}

@@ -20,6 +20,9 @@ export async function POST(request: Request) {
   const cfg = await prisma.agentConfig.findFirst({ select: { id: true, phoneHome: true } });
   if (!cfg) return NextResponse.json({ ok: false });
   await prisma.agentConfig.update({ where: { id: cfg.id }, data: { phoneHome: body.casa, phoneSeenAt: new Date() } });
+  // Saiu de casa: marca a hora (o agendador avisa se o ar ficar ligado). Voltou: limpa.
+  if (!body.casa && cfg.phoneHome !== false) await prisma.flowState.upsert({ where: { key: "presence:saiu" }, create: { key: "presence:saiu", value: { at: new Date().toISOString() } }, update: { value: { at: new Date().toISOString() } } });
+  if (body.casa && cfg.phoneHome === false) await prisma.flowState.deleteMany({ where: { key: "presence:saiu" } });
   let fala = "";
   if (body.casa && cfg.phoneHome === false) {
     const { chegou } = await import("@/lib/alexa");

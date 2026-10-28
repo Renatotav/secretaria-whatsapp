@@ -125,6 +125,11 @@ export async function resumoManha(): Promise<string> {
     if (reunioes?.length) partes.push(`Reuniões do trabalho: ${meetingsSpeech(reunioes)}.`);
   } catch {}
   try {
+    const { airconOntem } = await import("./aircon");
+    const ar = await airconOntem();
+    if (ar && ar.kwh > 0.5) partes.push(`Ontem o ar gastou ${ar.reais.toLocaleString("pt-BR", { maximumFractionDigits: 2 }).replace(".", ",")} reais.`);
+  } catch {}
+  try {
     const { billsDueSpeech } = await import("./message-handlers");
     const contas = (await billsDueSpeech()).replace(/^Renato,\s*lembrete de contas:\s*/i, "");
     if (contas) partes.push(`Contas: ${contas}`);

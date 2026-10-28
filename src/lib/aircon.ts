@@ -84,7 +84,7 @@ export async function airconTick(): Promise<string | null> {
   if (!before.token) return null;
   const r = await readAircon();
   if (!r.ok && r.expired && !before.expiredWarned)
-    return "🔑 A chave do SmartThings venceu (a Samsung só deixa 24 h). Gere outra em account.smartthings.com/tokens e me mande: *chave smartthings* + a chave. O gasto do ar não se perde nesse meio-tempo.";
+    return "🔑 A chave do SmartThings venceu (a Samsung só deixa 24 h).\n1. Toque: https://account.smartthings.com/tokens\n2. Gere uma nova e copie\n3. Cole aqui, só a chave\nO gasto do ar não se perde nesse meio-tempo.";
   return null;
 }
 
@@ -122,12 +122,21 @@ async function summary(): Promise<string> {
 export async function applyAirconCommand(text: string): Promise<string | null> {
   const t = text.trim();
   const tok = t.match(/^(?:chave|token)\s+(?:do\s+)?smart\s?things\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*$/i);
-  if (tok) {
-    await save({ ...(await cfg()), token: tok[1].toLowerCase(), expiredWarned: false });
+  // Depois do aviso de vencida, basta colar a chave sozinha.
+  const solta = !tok && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) && (await cfg()).expiredWarned ? [t, t] : null;
+  if (tok || solta) {
+    const novo = (tok ?? solta)![1];
+    await save({ ...(await cfg()), token: novo.toLowerCase(), expiredWarned: false });
     const r = await readAircon();
     return r.ok ? `🔑 Chave do SmartThings guardada.\n\n${await summary()}` : `⚠️ Guardei a chave, mas não consegui ler o ar: ${r.error}.`;
   }
   const q = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (/^(?:quanto\s+(?:vem|vai\s+vir|vai\s+ser|fica)\s+(?:a\s+)?conta\s+(?:de\s+luz|da\s+enel|de\s+energia)|previsao\s+da\s+(?:enel|conta\s+de\s+luz))\s*\??$/.test(q)) {
+    await readAircon();
+    const p = previsaoEnel(await cfg());
+    if (!p) return "⚡ Ainda não tenho dados para prever a conta (preciso das contas da Enel e do ar).";
+    return `⚡ *Próxima conta da Enel* (ref. ${p.ref.slice(5, 7)}/${p.ref.slice(0, 4)}, estimativa): ~${Math.round(p.kwh)} kWh ≈ ${brl(p.valor)}.\nO ar deve ser ~${Math.round(p.arKwh)} kWh disso; o resto é a média da casa. Tarifa com impostos das suas contas.`;
+  }
   if (/^(?:quanto\s+(?:eu\s+)?(?:gastei|gasto|ta\s+gastando|esta\s+gastando)\s+(?:de|com\s+o|no)\s+ar(?:-?condicionado)?|gasto\s+do\s+ar(?:-?condicionado)?|ar-?condicionado)\s*\??$/.test(q)) {
     await readAircon();
     return summary();
@@ -180,8 +189,58 @@ export async function airconData() {
       const antes = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
       return { ...h, ar: (c.arMeses ?? []).find((x) => x.ref === antes)?.kwh ?? null };
     }),
+    previsao: previsaoEnel(c),
     semanas: (c.arSemanas ?? []).slice().sort((a, b) => a.de.localeCompare(b.de)),
     instalado: c.installed ?? null,
     arMediaMesKwh: meses && meses >= 1 ? c.last.wh / 1000 / meses : null,
   };
+}
+
+/** kWh de ontem (1ª leitura de ontem → 1ª de hoje); null se não mediu os dois. */
+export async function airconOntem(): Promise<{ kwh: number; reais: number } | null> {
+  const c = await cfg();
+  const hoje = brtDay(), ontem = brtDay(new Date(Date.now() - 86_400_000));
+  if (!c.days?.[hoje] || !c.days?.[ontem]) return null;
+  const antes = c.base?.dia === ontem ? c.base.diaKwh * 1000 + Math.max(0, c.days[ontem] - c.base.wh) : 0;
+  const kwh = (Math.max(0, c.days[hoje] - c.days[ontem]) + antes) / 1000;
+  const price = (await prisma.agentConfig.findFirst({ select: { kwhPrice: true } }))?.kwhPrice ?? 0.95;
+  return { kwh, reais: kwh * price };
+}
+
+/**
+ * Próxima conta da Enel: ela mede o mês ANTERIOR ao da referência. kWh = ar do mês
+ * (projetado até o fim) + "resto da casa" (média das contas menos o ar, nos meses medidos);
+ * R$ pela tarifa real média das contas (com impostos).
+ */
+export function previsaoEnel(c: Cfg): { ref: string; kwh: number; valor: number; arKwh: number } | null {
+  const contas = (c.enel ?? []).slice().sort((a, b) => a.ref.localeCompare(b.ref));
+  const anterior = (ref: string) => { const [y, m] = ref.split("-").map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; };
+  const medidos = contas.map((x) => ({ ...x, ar: (c.arMeses ?? []).find((a) => a.ref === anterior(x.ref))?.kwh })).filter((x) => x.ar != null && x.ar > 50);
+  if (!medidos.length || !c.last) return null;
+  const resto = medidos.reduce((a, x) => a + (x.kwh - x.ar!), 0) / medidos.length;
+  const tarifa = medidos.reduce((a, x) => a + x.valor / x.kwh, 0) / medidos.length;
+  const hoje = brtDay();
+  const mes = hoje.slice(0, 7);
+  const y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7));
+  const diasNoMes = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const arAteHoje = (spentSince(c, mes + "-01") ?? 0) / 1000;
+  const arKwh = (arAteHoje / Number(hoje.slice(8, 10))) * diasNoMes;
+  const ref = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+  const kwh = arKwh + resto;
+  return { ref, kwh, valor: kwh * tarifa, arKwh };
+}
+
+/** Saiu de casa e o ar continua ligado (≥30 min): avisa UMA vez por saída. */
+export async function airconAwayCheck(): Promise<string | null> {
+  const p = await prisma.flowState.findUnique({ where: { key: "presence:saiu" } });
+  const saiu = p?.value as { at: string; avisado?: boolean } | null;
+  if (!saiu || saiu.avisado) return null;
+  const min = (Date.now() - new Date(saiu.at).getTime()) / 60_000;
+  if (min < 30) return null;
+  const r = await readAircon();
+  const c = await cfg();
+  if (!r.ok || !c.last?.w || c.last.w < 50) return null;
+  await prisma.flowState.update({ where: { key: "presence:saiu" }, data: { value: { ...saiu, avisado: true } } });
+  const price = (await prisma.agentConfig.findFirst({ select: { kwhPrice: true } }))?.kwhPrice ?? 0.95;
+  return `❄️ Você saiu há ${Math.round(min)} min e o ar continua ligado (~${Math.round(c.last.w)} W ≈ ${brl((c.last.w / 1000) * price)} por hora). Se esqueceu, desligue pela Alexa.`;
 }
