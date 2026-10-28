@@ -19,7 +19,7 @@ const NAV = [
   { href: "/diary", icon: "📓", label: "Diário" },
   { href: "/daily-summary", icon: "📋", label: "Resumo do dia" },
   { href: "/weekly-report", icon: "📊", label: "Rel. Semanal" },
-  { href: "/conversations", icon: "💬", label: "Conversas" },
+  // CRM (/conversations) saiu do menu em 27/10/2026 (pedido dele: "não tem mais propósito"); a página e os dados continuam.
   { href: "/saude", icon: "🩺", label: "Saúde" },
   { href: "/config", icon: "⚙️", label: "Configurações" },
 ];
