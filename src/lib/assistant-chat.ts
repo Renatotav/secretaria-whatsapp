@@ -5,13 +5,25 @@
 import { prisma } from "./prisma";
 import { generateResponse, type ProviderOptions } from "./openai";
 import { todayBRT } from "./dates";
-import type { AgentConfig } from "@prisma/client";
+import { Prisma, type AgentConfig } from "@prisma/client";
 
 /**
  * Pergunta livre sobre o financeiro: a IA escreve um SELECT, que roda numa
  * transação SOMENTE LEITURA com tempo limite, e depois resume o resultado.
  * Só tabelas do financeiro; qualquer coisa que não seja um SELECT único é recusada.
  */
+// Tabelas que a pergunta livre do financeiro pode ler. Lista do que PODE (antes era
+// do que não pode, e escapava: chaves em AgentConfig/FlowState, chamados do trabalho).
+const TABELAS_FINANCEIRO = new Set(["FinanceEntry", "InvoiceItem", "SavingsGoal", "Budget"]);
+
+/** SELECT único, sem comando que escreve, sem tabela fora do financeiro e sem truque de nome (U&"…"). */
+export function sqlSeguro(sql: string): boolean {
+  if (!/^\s*(select|with)\b/i.test(sql)) return false;
+  if (/\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|vacuum|call|do|execute|set|reset|lock|listen|notify|pg_sleep|lo_import|lo_export|dblink)\b|;|\bpg_|information_schema|_prisma|\bu&/i.test(sql)) return false;
+  // Nome de tabela com letra maiúscula só existe entre aspas: qualquer outra tabela do banco citada = recusa.
+  return !Object.values(Prisma.ModelName).some((t) => !TABELAS_FINANCEIRO.has(t) && sql.includes(`"${t}"`));
+}
+
 export type ContaSql = { sql: string; linhas: unknown[] };
 
 /** `onConta` recebe a consulta e as linhas usadas (o painel mostra em "🔍 Ver a conta"). */
@@ -38,8 +50,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
     return "⚠️ Não consegui pensar na consulta agora. Tenta perguntar de outro jeito?";
   }
 
-  const forbidden = /\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|vacuum|call|do|execute|set|reset|lock|listen|notify|pg_sleep)\b|;|\bpg_|"(AgentConfig|Conversation|Message|GroupMessage|GroupConfig)"/i;
-  if (!/^\s*(select|with)\b/i.test(sql) || forbidden.test(sql)) {
+  if (!sqlSeguro(sql)) {
     console.error("[finance_question] SQL recusado", sql);
     return "⚠️ Não consegui montar uma consulta segura para essa pergunta. Tenta de outro jeito?";
   }

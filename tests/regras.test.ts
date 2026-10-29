@@ -9,6 +9,7 @@ import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { parseSplit, splitRequests } from "../src/lib/message-handlers";
 import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
+import { sqlSeguro } from "../src/lib/assistant-chat";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -94,4 +95,16 @@ test("padrões: dias ruins, gatilhos e gasto depois de dia ruim (sem IA)", () =>
   assert.equal(p.gastoDepoisRuim, 30);
   assert.equal(p.gastoMedio, 35); // a compra rara (scooter) fica de fora
   assert.ok(p.frases.some((f) => f.includes("não está puxando")));
+});
+
+test("pergunta livre do financeiro: só SELECT nas 4 tabelas do financeiro", () => {
+  assert.ok(sqlSeguro(`SELECT SUM(amount) FROM "FinanceEntry" WHERE category ILIKE '%uber%'`));
+  assert.ok(sqlSeguro(`WITH m AS (SELECT * FROM "InvoiceItem") SELECT name FROM m`));
+  assert.ok(!sqlSeguro(`SELECT "evolutionApiKey" FROM "AgentConfig"`));
+  assert.ok(!sqlSeguro(`SELECT value FROM "FlowState"`));
+  assert.ok(!sqlSeguro(`SELECT * FROM "WorkTicket"`));
+  assert.ok(!sqlSeguro(`SELECT * FROM U&"\\0041gentConfig"`));
+  assert.ok(!sqlSeguro(`SELECT table_name FROM information_schema.tables`));
+  assert.ok(!sqlSeguro(`DELETE FROM "FinanceEntry"`));
+  assert.ok(!sqlSeguro(`SELECT 1; SELECT 2`));
 });
