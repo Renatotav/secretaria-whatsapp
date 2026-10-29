@@ -35,6 +35,8 @@ Arquivos-chave:
 | `src/lib/auto-pay.ts` | Baixa automática só de compras no cartão com fatura vencida |
 | `src/app/api/finance/route.ts` | CRUD do financeiro do painel |
 | `src/app/(dashboard)/finance/`, `work/` | Telas: `page.tsx` tem o estado; tipos/formatos (`finance-utils.ts`, `work-ui.tsx`), gráficos e painéis ficam em arquivos ao lado |
+| `src/app/(dashboard)/layout.tsx`, `mais/` | Casca do painel: barra lateral no computador, abas embaixo no celular (Hoje, Dinheiro, Trabalho, Scooter, ☰ Mais) |
+| `src/app/api/config/route.ts` | Configurações: chaves mascaradas; chave nova da Evolution só grava se funcionar (o navegador já colou senha ali) |
 
 ## 3. Dados (o que cada campo significa)
 
