@@ -48,9 +48,9 @@ caixa("workapi", "## /api/work/ext/*\nChave da extensão. lookup · ai · contac
 caixa("workai", "## work-ai (skills)\nRedmine, resumo, registro de conversa, corretores, melhorar escrita.\nTrava de processos em código (cnj-check).", 820, 540, w=340, h=150, cor="6")
 caixa("privacy", "## work-privacy (LGPD)\nCPF mascarado, telefone/e-mail fora; corretores usam ⟦1⟧ e restauram.", 820, 740, w=340, h=120, cor="1")
 caixa("scheduler", "## ⏰ scheduler (a cada minuto)\nBriefing 8h · relatório de segunda · contas 9h · lembretes · alertas do trabalho · resumo da manhã na Alexa.", 480, 560, h=150, cor="3")
-caixa("painel", "## 🖥️ Painel web\nAgenda, Financeiro, Diário, Trabalho (Produtividade clicável, Pergunte aos seus chamados).", 480, 760, h=130)
+caixa("painel", "## 🖥️ Painel web\nCelular: abas Hoje · Dinheiro · Trabalho · Scooter · ☰ Mais. Ar, Parcelas, Diário, 🚦 Saúde, Configurações.", 480, 760, h=130)
 caixa("mcp", "## 🔌 /api/mcp/<chave>\nConector só leitura para o app do Claude: chamados, financeiro, agenda, scooter.", 480, 940, h=120, cor="6")
-caixa("db", "## 🐘 PostgreSQL\nFinanceEntry · AgendaItem · WorkTicket · WorkContact · ScooterLog · AgentConfig…\nBackup diário 03:30 (14 dias).", 820, 920, w=340, h=150, cor="4")
+caixa("db", "## 🐘 PostgreSQL\nFinanceEntry · AgendaItem · WorkTicket · WorkContact · ScooterLog · AgentConfig…\nBackup diário 03:30 (16 dias) + semanal fora do servidor.", 820, 920, w=340, h=150, cor="4")
 
 # ── Coluna 3: inteligência e casa ──────────────────────────────────────────
 grupo("g-ia", "🧠 IA (OpenRouter)", 1260, -40, 380, 520, "2")

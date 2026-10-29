@@ -150,7 +150,7 @@
    "y": 760,
    "width": 300,
    "height": 130,
-   "text": "## 🖥️ Painel web\nAgenda, Financeiro, Diário, Trabalho (Produtividade clicável, Pergunte aos seus chamados)."
+   "text": "## 🖥️ Painel web\nCelular: abas Hoje · Dinheiro · Trabalho · Scooter · ☰ Mais. Ar, Parcelas, Diário, 🚦 Saúde, Configurações."
   },
   {
    "id": "mcp",
@@ -169,7 +169,7 @@
    "y": 920,
    "width": 340,
    "height": 150,
-   "text": "## 🐘 PostgreSQL\nFinanceEntry · AgendaItem · WorkTicket · WorkContact · ScooterLog · AgentConfig…\nBackup diário 03:30 (14 dias).",
+   "text": "## 🐘 PostgreSQL\nFinanceEntry · AgendaItem · WorkTicket · WorkContact · ScooterLog · AgentConfig…\nBackup diário 03:30 (16 dias) + semanal fora do servidor.",
    "color": "4"
   },
   {
