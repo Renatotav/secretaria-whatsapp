@@ -121,7 +121,8 @@ async function summary(): Promise<string> {
 /** "chave smartthings <chave>" e "quanto gastei de ar?". */
 export async function applyAirconCommand(text: string): Promise<string | null> {
   const t = text.trim();
-  const tok = t.match(/^(?:chave|token)\s+(?:do\s+)?smart\s?things\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*$/i);
+  // "smart" + qualquer coisa: aceita erro de digitação ("smarthings", 28/10 foi parar na conversa).
+  const tok = t.match(/^(?:chave|token)\s+(?:do\s+)?smart\s?\w*\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*$/i);
   // Depois do aviso de vencida, basta colar a chave sozinha.
   const solta = !tok && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) && (await cfg()).expiredWarned ? [t, t] : null;
   if (tok || solta) {
