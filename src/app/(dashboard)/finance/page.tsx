@@ -13,6 +13,7 @@ import { useWidth } from "@/lib/use-width";
 import { CATEGORIES_STORAGE_KEY, CATEGORY_COLORS, EMPTY_FORM, MONTH_LABELS, MOODS, MOOD_MAP, OTHER_COLOR, SUBCATEGORIES_STORAGE_KEY, categoriesForType, currentDay, currentMonth, entryTitle, formatCompact, formatMoney, isVoucherAccount, loadFromStorage, loadSubcategoriesFromStorage, niceMax, subcategoriesFor } from "./finance-utils";
 import type { EditForm, FinanceEntry } from "./finance-utils";
 import { CashFlowLine, CategoryDonut, MonthlyBarChart } from "./FinanceCharts";
+import { PerguntaIA, PergunteGrafico } from "../pergunta-ia";
 import { CategoryManager } from "./CategoryManager";
 
 export default function FinancePage() {
@@ -250,6 +251,20 @@ export default function FinancePage() {
     return buckets;
   }, [yearEntries]);
 
+  // Números que cada 💬 "Perguntar" manda para a IA (só os do gráfico).
+  const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const dadosMeses = monthly.map((b, i) => ({ mes: `${MESES_CURTOS[i]}/${year}`, receitas: Math.round(b.income * 100) / 100, despesas: Math.round(b.expense * 100) / 100 }));
+  const dadosCategorias = (() => {
+    const soma: Record<string, number> = {};
+    for (const e of entries) if (e.type === "expense") soma[e.category || "Outros"] = (soma[e.category || "Outros"] ?? 0) + e.amount;
+    const teto = (c: string) => budgets.find((b) => b.category === c && b.month === month)?.amount ?? budgets.find((b) => b.category === c && b.month === "default")?.amount ?? null;
+    return Object.entries(soma).sort((a, b) => b[1] - a[1]).map(([categoria, gasto]) => ({ categoria, gasto: Math.round(gasto * 100) / 100, teto: teto(categoria) }));
+  })();
+  function verLancamentos(tipo: "income" | "expense") {
+    setSelectedType(tipo);
+    document.getElementById("lancamentos")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function addEntry(e: React.FormEvent) {
     e.preventDefault();
     if (!form.amount) return;
@@ -438,14 +453,15 @@ export default function FinancePage() {
           </p>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{monthBalance >= 0 ? "Entrou mais do que saiu." : "Saiu mais do que entrou."}</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))", gap: 10, marginTop: 8 }}>
-            <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Entrou</p>
+            {/* "De onde veio?": tocar mostra os lançamentos que somam o valor */}
+            <button type="button" onClick={() => verLancamentos("income")} title="Ver os lançamentos que somam isso" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", background: "var(--bg-hover)", border: "1px solid transparent", borderRadius: 12, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Entrou · ver de onde ›</p>
               <p style={{ fontSize: 18, fontWeight: 600, color: "var(--success)" }}>{formatMoney(income)}</p>
-            </div>
-            <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saiu</p>
+            </button>
+            <button type="button" onClick={() => verLancamentos("expense")} title="Ver os lançamentos que somam isso" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", background: "var(--bg-hover)", border: "1px solid transparent", borderRadius: 12, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saiu · ver de onde ›</p>
               <p style={{ fontSize: 18, fontWeight: 600, color: "var(--danger)" }}>{formatMoney(expense)}</p>
-            </div>
+            </button>
             <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo acumulado</p>
               <p style={{ fontSize: 18, fontWeight: 600, color: accumulatedBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>{formatMoney(accumulatedBalance)}</p>
@@ -464,7 +480,9 @@ export default function FinancePage() {
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <h2 style={{ fontSize: 13, fontWeight: 600 }}>Gastos por categoria — {MONTH_LABELS[Number(month.split("-")[1]) - 1]}</h2>
-              <div style={{ position: "relative" }}>
+              <div style={{ position: "relative", display: "flex", gap: 6, alignItems: "center" }}>
+                <PergunteGrafico aba="finance" grafico={{ titulo: `Gastos por categoria — ${MONTH_LABELS[Number(month.split("-")[1]) - 1]}`, dados: dadosCategorias }}
+                  exemplos={["Qual categoria passou mais do teto?", "Onde dá para cortar?", "O que pesa mais no mês?"]} />
                 <button className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setShowBudgetsManager(!showBudgetsManager)}>
                   🎯 Orçamentos
                 </button>
@@ -483,7 +501,11 @@ export default function FinancePage() {
             <CategoryDonut entries={entries} budgets={budgets} selectedCategory={selectedCategory} onSelectCategory={selectCategory} />
           </div>
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
-            <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Receitas x despesas — {year}</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <h2 style={{ fontSize: 13, fontWeight: 600 }}>Receitas x despesas — {year}</h2>
+              <PergunteGrafico aba="finance" grafico={{ titulo: `Receitas x despesas — ${year}`, dados: dadosMeses }}
+                exemplos={["Qual mês saiu mais do que entrou?", "Os gastos estão subindo?", "Qual foi o melhor mês?"]} />
+            </div>
             <MonthlyBarChart
               monthly={monthly}
               selectedMonth={Number(month.split("-")[1]) - 1}
@@ -497,15 +519,25 @@ export default function FinancePage() {
         </div>
 
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>
-          <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
-            {selectedType === "income" ? "Receitas acumuladas" : selectedType === "expense" ? "Despesas acumuladas" : "Fluxo de caixa acumulado"} — {year}
-          </h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <h2 style={{ fontSize: 13, fontWeight: 600 }}>
+              {selectedType === "income" ? "Receitas acumuladas" : selectedType === "expense" ? "Despesas acumuladas" : "Fluxo de caixa acumulado"} — {year}
+            </h2>
+            <PergunteGrafico aba="finance" grafico={{ titulo: `Fluxo de caixa acumulado — ${year}`, dados: dadosMeses.map((m, i) => ({ ...m, saldoAcumulado: Math.round(dadosMeses.slice(0, i + 1).reduce((a, x) => a + x.receitas - x.despesas, 0) * 100) / 100 })) }}
+              exemplos={["Quando o saldo começou a cair?", "Em que mês fico no vermelho?", "Como está o ano até agora?"]} />
+          </div>
           <CashFlowLine 
             monthly={monthly} 
             selectedType={selectedType} 
             selectedMonth={Number(month.split("-")[1]) - 1}
             onSelectMonth={(i) => setMonth(`${year}-${String(i + 1).padStart(2, "0")}`)}
           />
+        </div>
+
+        {/* Pergunta livre: a IA monta a consulta, roda só leitura e mostra a conta */}
+        <div style={{ marginBottom: 20 }}>
+          <PerguntaIA aba="finance" titulo="💬 Pergunte ao seu financeiro"
+            exemplos={["Quanto gastei com Uber este mês?", "Qual minha maior compra no cartão?", "Quanto falta pagar das parcelas?"]} />
         </div>
 
         {/* Add form */}
@@ -885,7 +917,7 @@ export default function FinancePage() {
         )}
 
         {/* Table */}
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+        <div id="lancamentos" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", scrollMarginTop: 12 }}>
           {loading && <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>Carregando...</div>}
           {!loading && visibleEntries.length === 0 && (
             <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)" }}>

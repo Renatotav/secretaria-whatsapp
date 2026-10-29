@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useWidth } from "@/lib/use-width";
+import { PergunteGrafico } from "../pergunta-ia";
 import { brl } from "@/lib/format";
 
 type Aberta = { n: number; mes: string; valor: number };
@@ -131,7 +132,11 @@ export default function ParcelasPage() {
 
             {/* Compras */}
             <div>
-              <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Compras parceladas ({filtradas.length})</h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 600 }}>Compras parceladas ({filtradas.length})</h2>
+                <PergunteGrafico aba="parcelas" grafico={{ titulo: "Compras parceladas", dados: filtradas }}
+                  exemplos={["Qual parcela acaba primeiro?", "Qual compra ainda falta mais pagar?", "Quais acabam este ano?"]} />
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
                 {filtradas.map((s) => {
                   const pagas = s.total - s.faltam;
@@ -187,7 +192,10 @@ function Grafico({ meses }: { meses: Mes[] }) {
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
         <h2 style={{ fontSize: 15, fontWeight: 600 }}>📉 Quanto as parcelas pesam por mês</h2>
-        <span style={muted}>toque num mês</span>
+        <span style={{ ...muted, display: "flex", gap: 8, alignItems: "center" }}>toque num mês
+          <PergunteGrafico aba="parcelas" grafico={{ titulo: "Quanto as parcelas pesam por mês", dados: meses }}
+            exemplos={["Quando as parcelas começam a aliviar?", "Qual mês pesa mais?", "Quanto sobra a mais em março?"]} />
+        </span>
       </div>
       <div ref={ref}>
         <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Total de parcelas por mês">

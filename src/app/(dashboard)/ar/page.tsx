@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PerguntaIA } from "../pergunta-ia";
+import { PerguntaIA, PergunteGrafico } from "../pergunta-ia";
 import { brl } from "@/lib/format";
 
 type Dia = { dia: string; kwh: number; ate: string | null };
@@ -137,7 +137,11 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
   const max = Math.max(0.01, ...dias.map((x) => x.kwh));
   return (
     <div style={{ ...card, display: "grid", gap: 10 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600 }}>📈 Gasto por dia</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600 }}>📈 Gasto por dia</h2>
+        <PergunteGrafico aba="ar" grafico={{ titulo: "Gasto do ar por dia", dados: dias.map((x) => ({ dia: x.dia, ate: x.ate, kwh: Math.round(x.kwh * 100) / 100, reais: Math.round(x.kwh * price * 100) / 100 })) }}
+          exemplos={["Qual dia gastou mais?", "Estou gastando mais que a média?", "Quanto deu nos últimos 7 dias?"]} />
+      </div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 150, overflowX: "auto" }} role="img" aria-label="Gasto do ar por dia">
         {dias.map((x) => (
           <div key={x.dia} title={`${ddmm(x.dia)}${x.ate ? `–${ddmm(x.ate)}` : ""}: ${n(x.kwh, 1)} kWh · ${brl(x.kwh * price)}`}
@@ -169,7 +173,10 @@ function Contas({ h, instalado }: { h: { ref: string; kwh: number; valor: number
     <div style={{ ...card, display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <h2 style={{ fontSize: 15, fontWeight: 600 }}>🧾 Conta da Enel por mês</h2>
-        <span style={muted}>casa toda · tarifa real {brl(tarifa)}/kWh</span>
+        <span style={{ ...muted, display: "flex", gap: 8, alignItems: "center" }}>casa toda · tarifa real {brl(tarifa)}/kWh
+          <PergunteGrafico aba="ar" grafico={{ titulo: "Conta da Enel por mês (casa toda) e parte do ar", dados: h }}
+            exemplos={["Quanto o ar pesa na conta?", "Qual foi a conta mais cara?", "A conta está subindo?"]} />
+        </span>
       </div>
       <div style={{ display: "grid", gap: 6 }}>
         {h.map((x) => {
@@ -210,7 +217,11 @@ function Semanas({ s, price }: { s: { de: string; ate: string; kwh: number }[]; 
   const max = Math.max(...s.map((x) => x.kwh / dias(x)));
   return (
     <div style={{ ...card, display: "grid", gap: 8 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600 }}>🗓️ Por semana</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600 }}>🗓️ Por semana</h2>
+        <PergunteGrafico aba="ar" grafico={{ titulo: "Gasto do ar por semana", dados: s.map((x) => ({ ...x, reais: Math.round(x.kwh * price * 100) / 100 })) }}
+          exemplos={["Qual semana gastou mais?", "A última semana foi melhor?", "Quanto dá por dia em média?"]} />
+      </div>
       {s.map((x) => {
         const porDia = x.kwh / dias(x);
         return (

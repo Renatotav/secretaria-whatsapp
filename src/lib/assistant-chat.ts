@@ -12,7 +12,10 @@ import type { AgentConfig } from "@prisma/client";
  * transação SOMENTE LEITURA com tempo limite, e depois resume o resultado.
  * Só tabelas do financeiro; qualquer coisa que não seja um SELECT único é recusada.
  */
-export async function answerFinanceQuestion(question: string, providerOpts: ProviderOptions): Promise<string> {
+export type ContaSql = { sql: string; linhas: unknown[] };
+
+/** `onConta` recebe a consulta e as linhas usadas (o painel mostra em "🔍 Ver a conta"). */
+export async function answerFinanceQuestion(question: string, providerOpts: ProviderOptions, onConta?: (c: ContaSql) => void): Promise<string> {
   const today = todayBRT();
   const schema = `Tabelas PostgreSQL (nomes entre aspas duplas):
 "FinanceEntry"(id, type 'income'|'expense', amount float, category, subcategory, description, date timestamp, "purchaseDate" timestamp|null, "paymentMethod" 'cartão'|'pix'|'débito'|'boleto'|'dinheiro'|'ticket', account, status 'paid'|'pending', mood, source)
@@ -54,6 +57,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
   }
 
   const data = JSON.stringify(rows.slice(0, 50), (_k, v) => (typeof v === "bigint" ? Number(v) : v));
+  onConta?.({ sql, linhas: JSON.parse(data) });
   try {
     const { content } = await generateResponse(
       [{ role: "user", content: `Pergunta: "${question}"\nResultado da consulta (JSON): ${data}\n\nResponda em português, curto (até 6 linhas), com a conclusão primeiro e os números em R$. Se o resultado estiver vazio, diga que não encontrou lançamentos.` }],

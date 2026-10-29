@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWidth } from "@/lib/use-width";
-import { PerguntaIA } from "../pergunta-ia";
+import { PerguntaIA, PergunteGrafico } from "../pergunta-ia";
 import { brl } from "@/lib/format";
 
 type Carga = { at: string; kwh: number | null; hours: number | null; odo: number | null; km: number | null; whKm: number | null; custo: number | null; picoW: number | null; auto: boolean };
@@ -131,7 +131,10 @@ function Painel({ d }: { d: Dados }) {
         <div style={{ ...card, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
             <h2 style={{ fontSize: 15, fontWeight: 600 }}>💸 Quanto a scooter me economizou</h2>
-            <span style={muted}>em vez de Uber</span>
+            <span style={{ ...muted, display: "flex", gap: 8, alignItems: "center" }}>em vez de Uber
+              <PergunteGrafico aba="scooter" grafico={{ titulo: "Quanto a scooter economizou em vez de Uber", dados: d.economia }}
+                exemplos={["Em quanto tempo a scooter se paga?", "Quanto economizei por mês?", "Como essa conta é feita?"]} />
+            </span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
             <div style={{ display: "grid", gap: 2 }}>
@@ -155,7 +158,11 @@ function Painel({ d }: { d: Dados }) {
       <GraficoKm leituras={d.leituras} cargas={d.cargas} media={d.kmDia} />
 
       <div>
-        <h2 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>🔌 Carregamentos</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600 }}>🔌 Carregamentos</h2>
+          <PergunteGrafico aba="scooter" grafico={{ titulo: "Carregamentos da scooter", dados: d.cargas }}
+            exemplos={["Quanto custou cada carga?", "De quantos em quantos dias eu carrego?", "Qual carga foi a maior?"]} />
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
           {d.cargas.map((c) => (
             <CargaCard key={c.at} c={c} price={d.price} />
@@ -263,7 +270,10 @@ function GraficoKm({ leituras, cargas, media }: { leituras: Leitura[]; cargas: C
   return (
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 600 }}>📈 Km por dia</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}>📈 Km por dia
+          <PergunteGrafico aba="scooter" grafico={{ titulo: "Km por dia da scooter (com as cargas)", dados: { leituras, cargas, mediaKmDia: media } }}
+            exemplos={["Em que dia rodei mais?", "Estou rodando mais ou menos que antes?", "Quando vou precisar carregar?"]} />
+        </h2>
         <span style={muted}>
           {media != null && <><span style={{ color: "var(--accent)" }}>- - -</span> média {n(media, 1)} km/dia (dias parados contam) · </>}⚡ carregou
         </span>

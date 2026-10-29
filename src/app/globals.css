@@ -330,3 +330,8 @@ h2 { letter-spacing: -0.005em; }
 .fin-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .fin-tools { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end; align-items: center; }
 @media (max-width: 760px) { .fin-tools { flex-basis: 100%; justify-content: flex-start; } }
+
+/* Folha "💬 Pergunte a este gráfico": sobe de baixo no celular, centralizada no computador. */
+.pg-fundo { position: fixed; inset: 0; z-index: 60; background: rgba(5, 5, 12, 0.6); display: flex; align-items: flex-end; justify-content: center; }
+.pg-folha { width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-bottom: 0; border-radius: 16px 16px 0 0; padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 761px) { .pg-fundo { align-items: center; } .pg-folha { border-bottom: 1px solid var(--border); border-radius: 16px; } }
