@@ -32,7 +32,7 @@ Tema escuro (`color-scheme: dark`).
 | Cartão | `--bg-card` | `#13131f` |
 | Hover | `--bg-hover` | `#1a1a2e` |
 | Borda | `--border` / `--border-light` | `#2a2a3d` / `#1e1e30` |
-| Texto | `--text` / `--text-muted` / `--text-dim` | `#e8e8f0` / `#7a7a9c` / `#5a5a7a` |
+| Texto | `--text` / `--text-muted` / `--text-dim` | `#e8e8f0` / `#a3a3c2` / `#8b8bab` (clareados em 28/10 para ler no sol) |
 | Destaque (marca) | `--accent` (+ `-dim`, `-border`, `-hover`) | `#7c6dff` |
 | Sucesso / aviso / perigo | `--success` / `--warning` / `--danger` | `#4ade80` / `#fb923c` / `#f87171` |
 | Urgência | `--urgency-critical/high/normal/low` | vermelho / laranja / verde-água / cinza |
@@ -45,10 +45,15 @@ Use sempre os tokens; cor nova só se virar token.
 - Grades: `repeat(auto-fill, minmax(min(Xpx, 100%), 1fr))` — nunca estoura no celular.
 - Página com grid: `gridTemplateColumns: minmax(0, 1fr)` (tabela não alarga a página).
 - `.split` / `.split-list` / `.split-empty`: lista + detalhe que empilha no celular.
-- Menu lateral começa recolhido em tela ≤ 760 px (mesmo design, só recolhido).
+- Celular (≤ 760 px): abas embaixo — Hoje, Dinheiro, Trabalho, Scooter e ☰ Mais (o resto + sinal da Saúde). A barra lateral é só do computador.
+- Topo de cada tela: um número que importa em destaque (resultado do mês, fila, folga), o resto abaixo.
 - Gráficos SVG medem a largura com `useWidth` (`src/lib/use-width.ts`).
 - Espaçamento interno com `.page-pad` ou estilo inline: o reset `* { padding: 0 }`
   do globals.css vence classes utilitárias do Tailwind (`p-4` não funciona).
+
+## Letra
+
+- IBM Plex Sans (carregada em `src/app/layout.tsx`), números tabulares. Título da tela: 22 px negrito, igual em todas (regra no `globals.css`).
 
 ## Formatos
 
