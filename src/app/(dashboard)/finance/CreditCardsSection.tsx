@@ -21,6 +21,7 @@ export function CreditCardsSection({ onPaid }: { onPaid?: () => void }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<string | null>(null);
+  const [todas, setTodas] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/finance/credit-cards");
@@ -57,7 +58,7 @@ export function CreditCardsSection({ onPaid }: { onPaid?: () => void }) {
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>
       <h2 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>💳 Faturas em aberto</h2>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 10 }}>
-        {invoices.map((inv) => {
+        {(todas ? invoices : invoices.slice(0, 2)).map((inv) => {
           const key = `${inv.card}|${inv.dueDate}`;
           return (
             <div key={key} style={{ background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -73,6 +74,11 @@ export function CreditCardsSection({ onPaid }: { onPaid?: () => void }) {
           );
         })}
       </div>
+      {invoices.length > 2 && (
+        <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: "6px 12px", marginTop: 10 }} onClick={() => setTodas(!todas)}>
+          {todas ? "Mostrar só as próximas" : `Ver todas (${invoices.length})`}
+        </button>
+      )}
     </div>
   );
 }

@@ -59,7 +59,9 @@ body {
   height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui), system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -306,3 +308,8 @@ button {
 .cfg-savebar { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--border); padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
 .cfg-savebar-inner { max-width: 648px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
 @media (prefers-reduced-motion: reduce) { .cfg-chevron { transition: none; } }
+
+/* Títulos das telas iguais em todas as abas (antes cada uma tinha 15, 16 ou 20 px). */
+h1 { font-size: 22px !important; font-weight: 700 !important; letter-spacing: -0.015em; line-height: 1.2; }
+h2 { letter-spacing: -0.005em; }
+::selection { background: var(--accent-dim); color: var(--text); }

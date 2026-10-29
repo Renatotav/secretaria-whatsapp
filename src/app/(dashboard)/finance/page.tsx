@@ -383,12 +383,6 @@ export default function FinancePage() {
             <button className="btn-primary" style={{ fontSize: 12, padding: "6px 12px", background: "var(--accent)" }} onClick={() => setShowInsights(true)}>
               ✨ Insights IA
             </button>
-            <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteMonth}>
-              Apagar mês
-            </button>
-            <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteAll}>
-              Apagar tudo
-            </button>
             <select
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
@@ -1187,6 +1181,15 @@ export default function FinancePage() {
             </div>
           )}
         </div>
+
+        {/* Apagar em massa fica no fim (antes era o 1º botão vermelho do topo); continua pedindo para digitar APAGAR. */}
+        <details style={{ marginTop: 32, border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px" }}>
+          <summary style={{ cursor: "pointer", fontSize: 13, color: "var(--text-muted)" }}>🗑️ Apagar lançamentos em massa</summary>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+            <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteMonth}>Apagar este mês</button>
+            <button className="btn-danger" style={{ fontSize: 12, padding: "6px 12px" }} onClick={deleteAll}>Apagar tudo</button>
+          </div>
+        </details>
       </div>
     </div>
   );

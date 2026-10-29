@@ -20,6 +20,7 @@ export function GoalsSection() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", targetAmount: "", deadline: "", color: "#7c6dff" });
   const [addAmounts, setAddAmounts] = useState<Record<string, string>>({});
+  const [verConquistadas, setVerConquistadas] = useState(false);
 
   useEffect(() => {
     loadGoals();
@@ -114,7 +115,7 @@ export function GoalsSection() {
       )}
 
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(min(240px, 100%), 1fr))" }}>
-        {goals.map((g) => {
+        {goals.filter((g) => verConquistadas || g.currentAmount < g.targetAmount).map((g) => {
           const percent = Math.min((g.currentAmount / g.targetAmount) * 100, 100);
           const conquered = g.currentAmount >= g.targetAmount;
           return (
@@ -164,6 +165,11 @@ export function GoalsSection() {
           );
         })}
       </div>
+      {goals.some((g) => g.currentAmount >= g.targetAmount) && (
+        <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: "6px 12px", marginTop: 10 }} onClick={() => setVerConquistadas(!verConquistadas)}>
+          {verConquistadas ? "Esconder as conquistadas" : `🏆 Ver conquistadas (${goals.filter((g) => g.currentAmount >= g.targetAmount).length})`}
+        </button>
+      )}
     </div>
   );
 }
