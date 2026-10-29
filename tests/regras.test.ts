@@ -8,6 +8,7 @@ import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { parseSplit, splitRequests } from "../src/lib/message-handlers";
 import { brl } from "../src/lib/format";
+import { analisarPadroes } from "../src/lib/padroes";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -70,4 +71,27 @@ test("Raio-X: o mesmo produto escrito de dois jeitos vira uma linha só", () => 
   assert.equal(productKey("CERV HEINEKEN LN 330ML"), productKey("Cerveja Heineken Ln"));
   assert.equal(productKey("COSTELA SUI SEARA RESERVA CONG kg"), "costela sui seara reserva cong");
   assert.notEqual(productKey("MINI COXINHA SUCRE 220G FRA"), productKey("MINI COXINHA SUCRE 220G QUE"));
+});
+
+test("padrões: dias ruins, gatilhos e gasto depois de dia ruim (sem IA)", () => {
+  const diario = [
+    { dia: "2026-10-01", humor: "ruim", texto: "Cansado do plantão, trabalho puxado" },
+    { dia: "2026-10-08", humor: "pessimo", texto: "Exausto, plantão de novo" },
+    { dia: "2026-10-15", humor: "ruim", texto: "Saudade e cansado" },
+    { dia: "2026-10-20", humor: "neutro", texto: "ok" },
+    { dia: "2026-10-21", humor: "neutro", texto: "ok" },
+  ];
+  const gastos = [
+    { dia: "2026-10-02", valor: 20, categoria: "Alimentação" },
+    { dia: "2026-10-09", valor: 30, categoria: "Alimentação" },
+    { dia: "2026-10-16", valor: 40, categoria: "Alimentação" },
+    { dia: "2026-10-22", valor: 50, categoria: "Alimentação" },
+    { dia: "2026-10-23", valor: 11000, categoria: "Scooter" },
+  ];
+  const p = analisarPadroes(diario, gastos);
+  assert.deepEqual(p.diasPesados, ["quinta"]);
+  assert.ok(p.gatilhos.includes("plantão") && p.gatilhos.includes("cansado"));
+  assert.equal(p.gastoDepoisRuim, 30);
+  assert.equal(p.gastoMedio, 35); // a compra rara (scooter) fica de fora
+  assert.ok(p.frases.some((f) => f.includes("não está puxando")));
 });

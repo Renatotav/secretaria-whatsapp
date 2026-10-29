@@ -1,4 +1,5 @@
 "use client";
+import { PadroesCard } from "./PadroesCard";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 interface DiaryEntry {
@@ -415,6 +416,8 @@ export default function DiaryPage() {
             </div>
           </form>
         </div>
+
+        <PadroesCard versao={entries.length} />
 
         {/* Mapa de calor de humor */}
         <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 20 }}>

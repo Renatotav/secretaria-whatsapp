@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { generateResponse, ProviderOptions } from "./openai";
 import { sendWhatsAppMessage } from "./evolution";
+import { seusPadroes } from "./padroes";
 import { buildWeeklyDigest, sendBudgetChart, sendMonthChart } from "./message-handlers";
 
 function getWeekBounds(): { weekStart: string; weekEnd: string } {
@@ -71,6 +72,15 @@ export async function generateWeeklyReport(
       }
     } catch (err) {
       console.error("[weekly] falha ao enviar gráficos", err);
+    }
+
+    // Seus padrões (diário × gastos), sem IA: só quando há o que dizer.
+    try {
+      const { frases } = await seusPadroes();
+      if (frases.length)
+        await sendWhatsAppMessage(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, ownerPhone, `🔍 *Seus padrões*\n${frases.map((f) => `• ${f}`).join("\n")}`);
+    } catch (err) {
+      console.error("[weekly] falha nos padrões", err);
     }
 
     // Passo 2: O Diário de Arrependimentos
