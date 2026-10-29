@@ -256,6 +256,32 @@ export default function WorkPage() {
         </div>
       )}
 
+      {stats && (
+        <>
+          {/* A fila é o número do dia: em destaque no topo; hoje/semana/mês logo abaixo. */}
+          <div style={{ ...box, marginBottom: 10, borderRadius: 16, padding: "16px 18px" }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Na sua fila agora</div>
+            <div style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{stats.emAberto}</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+              e {stats.no3n ?? 0} com o 3º nível{stats.encerrarAqui ? ` · ${stats.encerrarAqui} já encerrado(s) na planilha` : ""}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+            <Card title="Hoje" c={stats.hoje} />
+            <Card title="Semana" c={stats.semana} />
+            <Card title="Mês" c={stats.mes} />
+          </div>
+        </>
+      )}
+
+      {stats && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+          <FilterCard title="🚨 Solicitação de Urgência" n={stats.urgentes} color="var(--danger)" active={f === "urgentes"} onClick={() => setF(f === "urgentes" ? "" : "urgentes")} />
+          <FilterCard title="⚠ Passou do prazo" n={stats.atrasados} color="var(--danger)" active={f === "atrasados"} onClick={() => setF(f === "atrasados" ? "" : "atrasados")} />
+          <FilterCard title="⚡ Redmine resolvido" n={stats.paraEncerrar.length} color="var(--warning)" active={f === "encerrar"} onClick={() => setF(f === "encerrar" ? "" : "encerrar")} />
+        </div>
+      )}
+
       <div style={{ ...box, marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
         <div style={{ flex: "1 1 260px" }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>📥 Importar planilha de chamados (.xlsx)</div>
@@ -269,29 +295,6 @@ export default function WorkPage() {
         </label>
         {importMsg && <div style={{ flex: "1 1 100%", fontSize: 13 }}>{importMsg}</div>}
       </div>
-
-      {stats && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-          <Card title="Hoje" c={stats.hoje} />
-          <Card title="Semana" c={stats.semana} />
-          <Card title="Mês" c={stats.mes} />
-          <div style={{ ...box, flex: "1 1 160px" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>Na sua fila agora</div>
-            <div style={{ fontSize: 26, fontWeight: 700 }}>{stats.emAberto}</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-              e {stats.no3n ?? 0} com o 3º nível{stats.encerrarAqui ? ` · ${stats.encerrarAqui} já encerrado(s) na planilha` : ""}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {stats && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-          <FilterCard title="🚨 Solicitação de Urgência" n={stats.urgentes} color="var(--danger)" active={f === "urgentes"} onClick={() => setF(f === "urgentes" ? "" : "urgentes")} />
-          <FilterCard title="⚠ Passou do prazo" n={stats.atrasados} color="var(--danger)" active={f === "atrasados"} onClick={() => setF(f === "atrasados" ? "" : "atrasados")} />
-          <FilterCard title="⚡ Redmine resolvido" n={stats.paraEncerrar.length} color="var(--warning)" active={f === "encerrar"} onClick={() => setF(f === "encerrar" ? "" : "encerrar")} />
-        </div>
-      )}
 
       <AskBox links={links} />
 

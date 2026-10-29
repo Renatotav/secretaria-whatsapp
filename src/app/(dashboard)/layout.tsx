@@ -9,7 +9,7 @@ const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
 // continuam acessíveis por links em Configurações; Contatos (resumos de
 // mensagens, desligados) segue no endereço /briefings.
 const NAV = [
-  { href: "/agenda", icon: "📅", label: "Agenda" },
+  { href: "/agenda", icon: "📅", label: "Hoje" },
   { href: "/finance", icon: "💰", label: "Financeiro" },
   { href: "/parcelas", icon: "📆", label: "Parcelas" },
   { href: "/work", icon: "💼", label: "Trabalho" },
@@ -22,6 +22,14 @@ const NAV = [
   // CRM (/conversations) saiu do menu em 27/10/2026 (pedido dele: "não tem mais propósito"); a página e os dados continuam.
   { href: "/saude", icon: "🚦", label: "Saúde" },
   { href: "/config", icon: "⚙️", label: "Configurações" },
+];
+
+// Celular: abas embaixo (as 4 do dia a dia + "Mais"); a barra lateral fica só no computador.
+const TABS = [
+  { href: "/agenda", icon: "📅", label: "Hoje" },
+  { href: "/finance", icon: "💰", label: "Dinheiro" },
+  { href: "/work", icon: "💼", label: "Trabalho" },
+  { href: "/scooter", icon: "🛵", label: "Scooter" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -59,9 +67,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div className="app-shell">
       {/* Sidebar */}
       <aside
+        className="side-nav"
         style={{
           position: "relative",
           width: collapsed ? 64 : 216,
@@ -175,9 +184,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main */}
-      <main style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <main style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {children}
       </main>
+
+      <nav className="tab-bar" aria-label="Abas">
+        {[...TABS, { href: "/mais", icon: "☰", label: "Mais" }].map((t) => {
+          const naAba = TABS.some((x) => pathname === x.href || pathname.startsWith(x.href + "/"));
+          const ativo = t.href === "/mais" ? !naAba : pathname === t.href || pathname.startsWith(t.href + "/");
+          return (
+            <Link key={t.href} href={t.href} aria-current={ativo ? "page" : undefined} className={ativo ? "tab ativo" : "tab"}>
+              <span aria-hidden style={{ fontSize: 20, lineHeight: 1 }}>{t.icon}</span>
+              {t.label}
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

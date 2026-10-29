@@ -1,4 +1,5 @@
 "use client";
+import { HojeStrip } from "./HojeStrip";
 import { useState, useEffect, useCallback } from "react";
 
 interface AgendaItem {
@@ -99,30 +100,9 @@ export default function AgendaPage() {
       >
         <div style={{ padding: 16, borderBottom: "1px solid var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>📅 Agenda</h1>
-            {items.length > 0 && (
-              <button
-                onClick={deleteAll}
-                style={{
-                  background: "rgba(230, 103, 103, 0.15)",
-                  color: "var(--danger, #e66767)",
-                  border: "1px solid rgba(230, 103, 103, 0.3)",
-                  borderRadius: 6,
-                  padding: "4px 8px",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  transition: "all 0.2s",
-                }}
-                title="Apagar todos os itens da Agenda"
-              >
-                🗑️ Limpar tudo
-              </button>
-            )}
+            <h1 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>📅 Hoje</h1>
           </div>
+          <HojeStrip />
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <select value={filterDone} onChange={(e) => setFilterDone(e.target.value)}>
               <option value="false">Pendentes</option>
@@ -145,6 +125,11 @@ export default function AgendaPage() {
                 <option value="self">Pessoal</option>
               </select>
             </div>
+            {items.length > 0 && (
+              <button type="button" onClick={deleteAll} className="btn-ghost" style={{ alignSelf: "flex-end", fontSize: 12, padding: "4px 10px", color: "var(--text-muted)" }} title="Apagar todos os itens da Agenda">
+                🗑️ Apagar todos
+              </button>
+            )}
           </div>
         </div>
 

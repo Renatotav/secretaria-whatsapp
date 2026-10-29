@@ -10,8 +10,8 @@
 
   /* Text */
   --text: #e8e8f0;
-  --text-muted: #7a7a9c;
-  --text-dim: #5a5a7a;
+  --text-muted: #a3a3c2;
+  --text-dim: #8b8bab;
 
   /* Accent */
   --accent: #7c6dff;
@@ -313,3 +313,20 @@ button {
 h1 { font-size: 22px !important; font-weight: 700 !important; letter-spacing: -0.015em; line-height: 1.2; }
 h2 { letter-spacing: -0.005em; }
 ::selection { background: var(--accent-dim); color: var(--text); }
+
+/* Casca do painel: no computador, barra lateral; no celular, abas embaixo (a lateral some). */
+.app-shell { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
+.tab-bar { display: none; }
+@media (max-width: 760px) {
+  .app-shell { flex-direction: column; }
+  .side-nav { display: none !important; }
+  .tab-bar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); flex-shrink: 0; background: var(--bg-card); border-top: 1px solid var(--border); padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); }
+  .tab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px; font-size: 11px; color: var(--text-muted); text-decoration: none; border-radius: 10px; }
+  .tab.ativo { color: var(--accent); font-weight: 600; background: var(--accent-dim); }
+  .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+}
+
+/* Topo do Financeiro: título e ferramentas lado a lado; no celular as ferramentas descem para baixo do título. */
+.fin-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.fin-tools { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end; align-items: center; }
+@media (max-width: 760px) { .fin-tools { flex-basis: 100%; justify-content: flex-start; } }

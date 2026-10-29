@@ -372,11 +372,11 @@ export default function FinancePage() {
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto", paddingBottom: 160 }} className="page-pad">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div className="fin-head" style={{ marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700 }}>💰 Financeiro</h1>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
+          <div className="fin-tools">
             <Link href={`/finance/xray?month=${month}`} className="btn-secondary" style={{ fontSize: 12, padding: "6px 12px" }}>
               🔍 Raio-X
             </Link>
@@ -430,28 +430,26 @@ export default function FinancePage() {
         {showInsights && <InsightsModal month={month} onClose={() => setShowInsights(false)} />}
         {selectedInvoiceId && <InvoiceDrawer entryId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
 
-        {/* Summary cards */}
-        <div style={{ display: "grid", gap: 12, marginBottom: 20 }} className="grid-cols-1 sm:grid-cols-3">
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Receitas</p>
-            <p style={{ fontSize: 20, fontWeight: 700, color: "var(--success)" }}>{formatMoney(income)}</p>
-          </div>
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-            <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Despesas</p>
-            <p style={{ fontSize: 20, fontWeight: 700, color: "var(--danger)" }}>{formatMoney(expense)}</p>
-          </div>
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo Acumulado</p>
-              {previousBalance !== 0 && (
-                <p style={{ fontSize: 10, color: "var(--text-dim)", textAlign: "right" }}>
-                  Mês: {monthBalance >= 0 ? "+" : ""}{formatMoney(monthBalance)}
-                </p>
-              )}
+        {/* Resultado do mês em destaque; entrou/saiu e o saldo acumulado logo abaixo */}
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: "18px 18px 16px", marginBottom: 20, display: "grid", gap: 6 }}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Resultado do mês</p>
+          <p style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.1, color: monthBalance >= 0 ? "var(--success)" : "var(--danger)" }}>
+            {monthBalance >= 0 ? "+" : ""}{formatMoney(monthBalance)}
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{monthBalance >= 0 ? "Entrou mais do que saiu." : "Saiu mais do que entrou."}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))", gap: 10, marginTop: 8 }}>
+            <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Entrou</p>
+              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--success)" }}>{formatMoney(income)}</p>
             </div>
-            <p style={{ fontSize: 20, fontWeight: 700, color: accumulatedBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>
-              {formatMoney(accumulatedBalance)}
-            </p>
+            <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saiu</p>
+              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--danger)" }}>{formatMoney(expense)}</p>
+            </div>
+            <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo acumulado</p>
+              <p style={{ fontSize: 18, fontWeight: 600, color: accumulatedBalance >= 0 ? "var(--accent)" : "var(--danger)" }}>{formatMoney(accumulatedBalance)}</p>
+            </div>
           </div>
         </div>
 
