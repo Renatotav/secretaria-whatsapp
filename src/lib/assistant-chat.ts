@@ -33,6 +33,8 @@ export function sqlSeguro(sql: string): boolean {
   if (Object.values(Prisma.ModelName).some((t) => !TABELAS_FINANCEIRO.has(t) && sql.includes(`"${t}"`))) return false;
   // Só funções conhecidas: as que executam texto como consulta (query_to_xml, xpath…)
   // montariam o nome de outra tabela sem escrevê-lo. Função entre aspas também não.
+  // Comentário escondia o nome da função do filtro ("query_to_xml/**/("): consulta de financeiro não precisa.
+  if (/--|\/\*|\*\//.test(sql)) return false;
   if (/"\s*\(/.test(sql)) return false;
   for (const m of sql.matchAll(/([a-z_][a-z0-9_]*)\s*\(/gi)) if (!FUNCOES_OK.has(m[1].toLowerCase())) return false;
   return true;

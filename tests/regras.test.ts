@@ -116,3 +116,9 @@ test("pergunta livre do financeiro: recusa função que executa texto como consu
   assert.ok(sqlSeguro(`SELECT date_trunc('month', date) AS mes, SUM(amount) FROM "FinanceEntry" WHERE EXTRACT(YEAR FROM date) = 2026 GROUP BY 1`));
   assert.ok(sqlSeguro(`SELECT category, COUNT(*) FILTER (WHERE status = 'paid') FROM "FinanceEntry" GROUP BY category`));
 });
+
+test("pergunta livre do financeiro: comentário não esconde função proibida", () => {
+  assert.ok(!sqlSeguro(`SELECT query_to_xml/**/('select 1', true, true, '')`));
+  assert.ok(!sqlSeguro(`SELECT query_to_xml--x\n('select 1', true, true, '')`));
+  assert.ok(sqlSeguro(`SELECT SUM(amount) FROM "FinanceEntry" WHERE description ILIKE '%uber%'`));
+});
