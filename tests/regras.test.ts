@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseLocalDate, creditCardBillDate } from "../src/lib/dates";
-import { merchantKey, isBesteiraItem } from "../src/lib/finance-taxonomy";
+import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxonomy";
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { parseSplit, splitRequests } from "../src/lib/message-handlers";
@@ -64,4 +64,10 @@ test("Outlook: 2ª terça, última sexta e fuso UTC", () => {
 
 test("dinheiro no formato brasileiro", () => {
   assert.equal(brl(1234.5).replace(/ /g, " "), "R$ 1.234,50");
+});
+
+test("Raio-X: o mesmo produto escrito de dois jeitos vira uma linha só", () => {
+  assert.equal(productKey("CERV HEINEKEN LN 330ML"), productKey("Cerveja Heineken Ln"));
+  assert.equal(productKey("COSTELA SUI SEARA RESERVA CONG kg"), "costela sui seara reserva cong");
+  assert.notEqual(productKey("MINI COXINHA SUCRE 220G FRA"), productKey("MINI COXINHA SUCRE 220G QUE"));
 });

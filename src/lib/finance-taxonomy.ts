@@ -146,3 +146,23 @@ export function spreadDiscount<T extends { amount: number; unitPrice?: number; n
   const f = Math.max(0, (somaPos + delta) / somaPos);
   return pos.map((i) => ({ ...i, amount: Math.round(i.amount * f * 100) / 100, ...(i.unitPrice ? { unitPrice: Math.round(i.unitPrice * f * 100) / 100 } : {}) }));
 }
+
+// Abreviações das notas fiscais → palavra inteira (cada mercado escreve de um jeito).
+const ABREV: Record<string, string> = { cerv: "cerveja", cerveja: "cerveja", salg: "salgadinho", refri: "refrigerante", refrig: "refrigerante", energ: "energetico", choc: "chocolate", biscoito: "biscoito", bisc: "biscoito" };
+
+/**
+ * Chave do produto para o ranking do Raio-X: "CERV HEINEKEN LN 330ML" e
+ * "Cerveja Heineken Ln" viram o mesmo produto. Ignora maiúsculas, acento,
+ * tamanho/peso (330ML, 2L, 400G, kg) e troca as abreviações comuns.
+ */
+export function productKey(name: string): string {
+  return name
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\b\d+([.,]\d+)?\s*(ml|l|lt|g|gr|kg|un|unid|x)\b/g, " ")
+    .replace(/\b(kg|un|unid)\b/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map((w) => ABREV[w] ?? w)
+    .join(" ");
+}

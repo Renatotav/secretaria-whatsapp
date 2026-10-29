@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { brl } from "@/lib/format";
+import { productKey } from "@/lib/finance-taxonomy";
 
 interface InvoiceItem {
   id: string;
@@ -66,6 +67,15 @@ function XRayContent() {
       });
   }, [month]);
 
+  // Humor de cada dia do diário ("AAAA-MM-DD" → humor): o gargalo mostra quanto dele saiu em dia ruim.
+  const [humorDia, setHumorDia] = useState<Record<string, string>>({});
+  useEffect(() => {
+    fetch("/api/diary")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: { date: string; mood: string }[]) => setHumorDia(Object.fromEntries((Array.isArray(list) ? list : []).map((d) => [d.date.slice(0, 10), d.mood]))))
+      .catch(() => {});
+  }, []);
+
   const total = useMemo(() => items.reduce((acc, i) => acc + i.amount, 0), [items]);
 
   const byCategory = useMemo(() => {
@@ -76,13 +86,28 @@ function XRayContent() {
     return Object.entries(groups).sort((a, b) => b[1] - a[1]);
   }, [items]);
 
+  const gargaloDiario = useMemo(() => {
+    const g = byCategory[0]?.[0];
+    if (!g) return null;
+    const dias = new Map<string, number>();
+    for (const i of items.filter((x) => x.category === g)) {
+      const dia = (i.financeEntry.purchaseDate || i.financeEntry.date).slice(0, 10);
+      if (humorDia[dia] === "ruim" || humorDia[dia] === "pessimo") dias.set(dia, (dias.get(dia) ?? 0) + i.amount);
+    }
+    const total = [...dias.values()].reduce((a, v) => a + v, 0);
+    return { dias: [...dias.keys()].sort(), total };
+  }, [byCategory, items, humorDia]);
+
   const byProduct = useMemo(() => {
-    const groups: Record<string, { amount: number, quantity: number, name: string }> = {};
+    // Mesmo produto com nomes diferentes nas notas ("CERV HEINEKEN LN 330ML" e "Cerveja Heineken Ln") soma numa linha.
+    const groups: Record<string, { amount: number, quantity: number, name: string, nameQty: number }> = {};
     items.forEach(item => {
-      const key = item.name.toUpperCase();
-      if (!groups[key]) groups[key] = { amount: 0, quantity: 0, name: item.name };
+      const key = productKey(item.name) || item.name.toUpperCase();
+      if (!groups[key]) groups[key] = { amount: 0, quantity: 0, name: item.name, nameQty: 0 };
       groups[key].amount += item.amount;
       groups[key].quantity += item.quantity;
+      // Mostra o nome da nota que mais aparece.
+      if (item.quantity > groups[key].nameQty) { groups[key].name = item.name; groups[key].nameQty = item.quantity; }
     });
     return Object.values(groups).sort((a, b) => b.amount - a.amount).slice(0, 50); // Top 50
   }, [items]);
@@ -171,11 +196,23 @@ function XRayContent() {
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Itens</p>
               <p style={{ fontSize: 22, fontWeight: 700 }}>{items.length}</p>
             </div>
-            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16 }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, gridColumn: "1 / -1" }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Gargalo</p>
               <p style={{ fontSize: 18, fontWeight: 700, color: "var(--danger)" }}>
-                {byCategory.length > 0 ? byCategory[0][0] : "—"}
+                {byCategory.length > 0 ? `${byCategory[0][0]} · ${brl(byCategory[0][1])}` : "—"}
               </p>
+              {gargaloDiario && (
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>
+                  {gargaloDiario.dias.length > 0 ? (
+                    <>
+                      📓 {brl(gargaloDiario.total)} disso em {gargaloDiario.dias.length} dia(s) de humor ruim no diário ({gargaloDiario.dias.map((d) => `${d.slice(8, 10)}/${d.slice(5, 7)}`).join(", ")}).{" "}
+                      <Link href="/diary" style={{ color: "var(--accent)" }}>Ver no diário</Link>
+                    </>
+                  ) : (
+                    <>📓 Nenhum gasto disso em dia de humor ruim no diário.</>
+                  )}
+                </p>
+              )}
             </div>
           </div>
 
