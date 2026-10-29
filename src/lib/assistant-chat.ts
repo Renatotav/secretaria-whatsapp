@@ -16,12 +16,26 @@ import { Prisma, type AgentConfig } from "@prisma/client";
 // do que não pode, e escapava: chaves em AgentConfig/FlowState, chamados do trabalho).
 const TABELAS_FINANCEIRO = new Set(["FinanceEntry", "InvoiceItem", "SavingsGoal", "Budget"]);
 
+// Funções e palavras do SQL que podem vir antes de "(" numa consulta de financeiro.
+const FUNCOES_OK = new Set([
+  "select", "from", "join", "where", "and", "or", "not", "in", "exists", "any", "all", "as", "on", "over", "filter", "values", "then", "else", "when", "case", "with", "partition", "by", "using", "union", "lateral",
+  "sum", "count", "avg", "min", "max", "coalesce", "nullif", "greatest", "least", "round", "abs", "ceil", "floor", "trunc",
+  "date_trunc", "date_part", "extract", "to_char", "to_date", "make_date", "age", "date", "now", "interval",
+  "lower", "upper", "trim", "length", "left", "right", "split_part", "concat", "replace", "position", "substring",
+  "string_agg", "array_agg", "row_number", "rank", "dense_rank", "lag", "lead", "generate_series", "cast", "numeric", "float8", "int", "bool_or", "bool_and",
+]);
+
 /** SELECT único, sem comando que escreve, sem tabela fora do financeiro e sem truque de nome (U&"…"). */
 export function sqlSeguro(sql: string): boolean {
   if (!/^\s*(select|with)\b/i.test(sql)) return false;
   if (/\b(insert|update|delete|drop|alter|create|grant|revoke|truncate|copy|vacuum|call|do|execute|set|reset|lock|listen|notify|pg_sleep|lo_import|lo_export|dblink)\b|;|\bpg_|information_schema|_prisma|\bu&/i.test(sql)) return false;
   // Nome de tabela com letra maiúscula só existe entre aspas: qualquer outra tabela do banco citada = recusa.
-  return !Object.values(Prisma.ModelName).some((t) => !TABELAS_FINANCEIRO.has(t) && sql.includes(`"${t}"`));
+  if (Object.values(Prisma.ModelName).some((t) => !TABELAS_FINANCEIRO.has(t) && sql.includes(`"${t}"`))) return false;
+  // Só funções conhecidas: as que executam texto como consulta (query_to_xml, xpath…)
+  // montariam o nome de outra tabela sem escrevê-lo. Função entre aspas também não.
+  if (/"\s*\(/.test(sql)) return false;
+  for (const m of sql.matchAll(/([a-z_][a-z0-9_]*)\s*\(/gi)) if (!FUNCOES_OK.has(m[1].toLowerCase())) return false;
+  return true;
 }
 
 export type ContaSql = { sql: string; linhas: unknown[] };
@@ -38,7 +52,9 @@ export async function answerFinanceQuestion(question: string, providerOpts: Prov
 "Budget"(id, month 'AAAA-MM'|'default', category, subcategory, amount)`;
   const sqlPrompt = `${schema}
 Hoje é ${today.toISOString().slice(0, 10)}. Escreva UMA consulta SQL PostgreSQL (somente SELECT, pode usar WITH) que responda: "${question}".
-Use ILIKE para buscar texto em description/category. Limite a 50 linhas.
+Use ILIKE para buscar texto em description/category/subcategory. Limite a 50 linhas.
+Regras do Renato: "gastei"/"comprei" = type 'expense' com QUALQUER status (compra no cartão fica 'pending' até a fatura: NÃO filtre status, a menos que a pergunta fale de pago/a pagar).
+Para gastos por período use a data da compra: COALESCE("purchaseDate", date). Mercado = subcategory 'Supermercado' (category 'Alimentação'). Parcelas têm "Parcela X/Y" na description; "quanto falta pagar das parcelas" = SUM(amount) com type 'expense', status 'pending' e description ILIKE '%Parcela %' (todos os meses à frente, sem limitar ao mês atual).
 Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do mês de hoje). Nunca some meses futuros
 (lançamentos projetados) a menos que a pergunta peça explicitamente o futuro ("quanto falta pagar", "até o fim do ano"...). Responda APENAS com o SQL, sem markdown e sem explicação.`;
 
@@ -46,7 +62,8 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
   try {
     const { content } = await generateResponse([{ role: "user", content: sqlPrompt }], "Você escreve SQL PostgreSQL correto e seguro.", 0, 400, providerOpts);
     sql = content.replace(/```sql|```/gi, "").trim().replace(/;\s*$/, "");
-  } catch {
+  } catch (err) {
+    console.error("[finance_question] a IA não respondeu:", err instanceof Error ? err.message.slice(0, 160) : err);
     return "⚠️ Não consegui pensar na consulta agora. Tenta perguntar de outro jeito?";
   }
 

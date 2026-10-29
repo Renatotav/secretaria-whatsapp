@@ -108,3 +108,11 @@ test("pergunta livre do financeiro: só SELECT nas 4 tabelas do financeiro", () 
   assert.ok(!sqlSeguro(`DELETE FROM "FinanceEntry"`));
   assert.ok(!sqlSeguro(`SELECT 1; SELECT 2`));
 });
+
+test("pergunta livre do financeiro: recusa função que executa texto como consulta", () => {
+  assert.ok(!sqlSeguro(`SELECT query_to_xml('select * from ' || quote_ident('Agent' || 'Config'), true, true, '')`));
+  assert.ok(!sqlSeguro(`SELECT current_setting('server_version')`));
+  assert.ok(!sqlSeguro(`SELECT "query_to_xml"('x', true, true, '')`));
+  assert.ok(sqlSeguro(`SELECT date_trunc('month', date) AS mes, SUM(amount) FROM "FinanceEntry" WHERE EXTRACT(YEAR FROM date) = 2026 GROUP BY 1`));
+  assert.ok(sqlSeguro(`SELECT category, COUNT(*) FILTER (WHERE status = 'paid') FROM "FinanceEntry" GROUP BY category`));
+});

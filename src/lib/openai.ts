@@ -102,6 +102,11 @@ export async function generateResponse(
           model = MODELO_RESERVA;
           return pedir(!SEM_ZDR.has(model)).catch(() => pedir(false));
         }
+        // 429 = o provedor limitou pedidos seguidos: espera um pouco e tenta mais uma vez (antes a resposta falhava).
+        if (/\b429\b|rate.?limit/i.test(String(err?.message))) {
+          await new Promise((r) => setTimeout(r, 2500));
+          return pedir(!SEM_ZDR.has(model)).catch(() => pedir(false));
+        }
         throw err;
       });
     return {
