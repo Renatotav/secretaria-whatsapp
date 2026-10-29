@@ -83,9 +83,25 @@ export async function airconTick(): Promise<string | null> {
   const before = await cfg();
   if (!before.token) return null;
   const r = await readAircon();
-  if (!r.ok && r.expired && !before.expiredWarned)
+  if (!r.ok && r.expired && !before.expiredWarned) {
+    // A Alexa também avisa (se ele estiver fora, guarda para o "cheguei"). Import aqui: alexa.ts importa este arquivo.
+    const { alexaFalar } = await import("./alexa");
+    await alexaFalar("A chave do ar-condicionado venceu. Gere uma nova no SmartThings e cole no WhatsApp da secretária.").catch(() => false);
     return "🔑 A chave do SmartThings venceu (a Samsung só deixa 24 h).\n1. Toque: https://account.smartthings.com/tokens\n2. Gere uma nova e copie\n3. Cole aqui, só a chave\nO gasto do ar não se perde nesse meio-tempo.";
+  }
   return null;
+}
+
+/** Sinal da chave do SmartThings para a tela 🚦 Saúde e o "como está o sistema?". */
+export async function airconKeyHealth(): Promise<{ nivel: "ok" | "atencao" | "problema"; titulo: string; detalhe: string }> {
+  const c = await cfg();
+  const titulo = "Chave do ar (SmartThings)";
+  if (!c.token) return { nivel: "atencao", titulo, detalhe: "sem chave — cole uma no WhatsApp" };
+  if (c.expiredWarned) return { nivel: "problema", titulo, detalhe: "venceu — gere em account.smartthings.com/tokens e cole só a chave no WhatsApp" };
+  const h = c.last ? Math.round((Date.now() - new Date(c.last.at).getTime()) / 3600_000) : null;
+  return h != null && h > 3
+    ? { nivel: "atencao", titulo, detalhe: `sem leitura há ${h} h` }
+    : { nivel: "ok", titulo, detalhe: "funcionando" };
 }
 
 /** kWh gastos entre o 1º registro do dia `from` (ou o mais antigo depois dele) e a última leitura. */
@@ -124,8 +140,8 @@ export async function applyAirconCommand(text: string): Promise<string | null> {
   // Chave com "chave"/"token"/"smart…" na frente, escrito de qualquer jeito ("smarthings",
   // "SMARTTHINGS <chave>" — em 28/10 os dois foram parar na conversa).
   const tok = t.match(/^(?=[^\n]*\b(?:chave|token|smart))(?:[a-zà-ú]+\s+){1,4}([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*$/i);
-  // Depois do aviso de vencida, basta colar a chave sozinha.
-  const solta = !tok && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) && (await cfg()).expiredWarned ? [t, t] : null;
+  // Basta colar a chave sozinha.
+  const solta = !tok && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) ? [t, t] : null;
   if (tok || solta) {
     const novo = (tok ?? solta)![1];
     await save({ ...(await cfg()), token: novo.toLowerCase(), expiredWarned: false });

@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import type { AgentConfig } from "@prisma/client";
 import { CREDIT_WARN_USD, DOLAR, openrouterCredit } from "./ai-credit";
 import { brl } from "./format";
+import { airconKeyHealth } from "./aircon";
 
 // Saúde do sistema: o WhatsApp (Evolution) é conferido a cada 5 min — se cair,
 // a Alexa avisa (o WhatsApp não chega) e, quando volta, vai a mensagem com o
@@ -93,6 +94,8 @@ export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
     : ponte.state === "down"
       ? { nivel: "problema", titulo: "Ponte da tomada (scooter)", detalhe: `fora há ${ha(ponte.at)} — o Fire TV está ligado e no Wi-Fi?` }
       : { nivel: "ok", titulo: "Ponte da tomada (scooter)", detalhe: `ok (voltou há ${ha(ponte.at)})` });
+
+  itens.push(await airconKeyHealth().catch(() => ({ nivel: "atencao" as const, titulo: "Chave do ar (SmartThings)", detalhe: "não consegui consultar" })));
 
   const c = await openrouterCredit().catch(() => null);
   itens.push(!c
