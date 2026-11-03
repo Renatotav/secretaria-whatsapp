@@ -17,6 +17,7 @@ type Dados =
       lidoEm: string;
       totalKwh: number;
       chaveVencida: boolean;
+      permanente: boolean;
       enel: { valor: number; data: string } | null;
       dias: Dia[];
       historico: { ref: string; kwh: number; valor: number; ar: number | null }[];
@@ -78,6 +79,7 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
           🔑 A chave do SmartThings venceu. Mande uma nova no WhatsApp (<em>chave smartthings</em> + a chave); o gasto até lá não se perde.
         </div>
       )}
+      {!d.permanente && <ChavePermanente />}
 
       <div style={{ ...card, display: "grid", gap: 6 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -153,6 +155,38 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
         ))}
       </div>
       <div style={muted}>Valores em reais. Barra amarela = estimado: com a chave vencida, o gasto do período foi dividido igual entre os dias.</div>
+    </div>
+  );
+}
+
+/** Botão "deixar a chave permanente": cria o app na conta Samsung e abre a autorização. */
+function ChavePermanente() {
+  const [msg, setMsg] = useState<string | null>(null);
+  const [indo, setIndo] = useState(false);
+  const volta = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("chave") : null;
+  const iniciar = async () => {
+    setIndo(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/aircon/oauth", { method: "POST" });
+      const j = await r.json();
+      if (j.url) window.location.href = j.url;
+      else setMsg(j.error ?? "Não consegui agora.");
+    } catch {
+      setMsg("Sem conexão. Tente de novo.");
+    } finally {
+      setIndo(false);
+    }
+  };
+  return (
+    <div style={{ ...card, display: "grid", gap: 8 }}>
+      <strong style={{ fontSize: 14 }}>🔑 Deixar a chave permanente</strong>
+      <div style={muted}>
+        Hoje a chave vence em 24 h. Gere uma última em account.smartthings.com/tokens marcando também <b>Aplicações</b>, cole no WhatsApp e toque abaixo: a Samsung pede para autorizar uma vez e depois ela se renova sozinha.
+      </div>
+      {volta === "erro" && <div style={{ color: "var(--danger)", fontSize: 13 }}>A autorização não completou. Toque de novo.</div>}
+      {msg && <div style={{ color: "var(--danger)", fontSize: 13 }}>{msg}</div>}
+      <button type="button" onClick={iniciar} disabled={indo} className="btn-ghost" style={{ justifySelf: "start" }}>{indo ? "Abrindo…" : "Autorizar na Samsung"}</button>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { brl } from "./format";
 
 // Gasto do ar-condicionado (Samsung, pelo SmartThings). SÓ LEITURA: lê o
@@ -28,6 +29,11 @@ type Cfg = {
   arSemanas?: { de: string; ate: string; kwh: number }[];
   /** kWh de um dia, do "Histórico › Diário" do app (prints dele): preenche dias em que a chave estava vencida. */
   arDias?: Record<string, number>;
+  /**
+   * Chave permanente: app "só API" na conta Samsung dele (OAuth). A chave de acesso dura 24 h e é
+   * renovada sozinha pelo `refresh` (que vence se ficar 29 dias sem uso; renovamos todo dia).
+   */
+  oauth?: { appId: string; clientId: string; clientSecret: string; redirect: string; state?: string; access?: string; refresh?: string; expira?: string };
   /** Quando o ar entrou no SmartThings (o contador total começa aí). */
   installed?: string;
 };
@@ -51,19 +57,96 @@ async function st(path: string, token: string) {
   return res.json();
 }
 
+const OAUTH_TOKEN = "https://api.smartthings.com/oauth/token";
+const ESCOPO = ["r:devices:*", "r:locations:*"];
+
+async function pedirToken(o: NonNullable<Cfg["oauth"]>, corpo: Record<string, string>) {
+  const res = await fetch(OAUTH_TOKEN, {
+    method: "POST",
+    headers: { Authorization: "Basic " + Buffer.from(`${o.clientId}:${o.clientSecret}`).toString("base64"), "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ ...corpo, client_id: o.clientId }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw Object.assign(new Error(`SmartThings OAuth HTTP ${res.status}`), { expired: res.status === 400 || res.status === 401 });
+  const j = await res.json();
+  return { access: j.access_token as string, refresh: (j.refresh_token as string) ?? o.refresh, expira: new Date(Date.now() + (Number(j.expires_in) || 86_400) * 1000).toISOString() };
+}
+
+/** Chave a usar: a permanente (renovada quando faltar menos de 3 h) ou a colada no WhatsApp. */
+async function chaveAtual(c: Cfg): Promise<string | undefined> {
+  const o = c.oauth;
+  if (!o?.refresh) return c.token;
+  if (!o.access || !o.expira || Date.parse(o.expira) - Date.now() < 3 * 3600_000) {
+    const usado = o.refresh;
+    try {
+      Object.assign(o, await pedirToken(o, { grant_type: "refresh_token", refresh_token: usado }));
+    } catch (e) {
+      // Painel e agendador renovando juntos: o outro já trocou a chave — usa a dele.
+      const salvo = (await cfg()).oauth;
+      if (salvo?.access && salvo.refresh && salvo.refresh !== usado) return Object.assign(o, salvo).access;
+      // Renovação recusada: a permanente morreu; volta para a chave colada (e o aviso de chave vencida).
+      if ((e as { expired?: boolean }).expired) delete o.refresh;
+      throw e;
+    }
+  }
+  return o.access;
+}
+
+/**
+ * Passo 1 da chave permanente (botão do painel): cria o app "só API" com a chave colada
+ * (precisa da permissão de Aplicações) e devolve o link da Samsung para ele autorizar.
+ */
+export async function airconOauthStart(origin: string): Promise<{ url: string } | { error: string }> {
+  const c = await cfg();
+  const redirect = `${origin}/api/aircon/oauth`;
+  if (!c.oauth || c.oauth.redirect !== redirect) {
+    if (!c.token) return { error: "Cole antes uma chave no WhatsApp (com a permissão de Aplicações marcada)." };
+    const h = { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" };
+    const criar = await fetch("https://api.smartthings.com/v1/apps", {
+      method: "POST", headers: h, signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({ appName: `secretaria-ar-${Date.now().toString(36)}`, displayName: "Secretária (ar)", description: "Lê o gasto do ar-condicionado", appType: "API_ONLY", classifications: ["CONNECTED_SERVICE"], singleInstance: true, apiOnly: {} }),
+    });
+    if (criar.status === 401 || criar.status === 403) return { error: "A chave colada não pode criar aplicações. Gere outra marcando também Aplicações (ver e gerenciar) e cole no WhatsApp." };
+    if (!criar.ok) return { error: `A Samsung recusou criar o app (HTTP ${criar.status}).` };
+    const app = await criar.json();
+    const oauth = await fetch(`https://api.smartthings.com/v1/apps/${app.app.appId}/oauth`, {
+      method: "PUT", headers: h, signal: AbortSignal.timeout(15_000),
+      body: JSON.stringify({ clientName: "Secretária (ar)", scope: ESCOPO, redirectUris: [redirect] }),
+    });
+    if (!oauth.ok) return { error: `A Samsung recusou o endereço de volta (HTTP ${oauth.status}).` };
+    c.oauth = { appId: app.app.appId, clientId: app.oauthClientId, clientSecret: app.oauthClientSecret, redirect };
+  }
+  c.oauth.state = randomBytes(24).toString("hex");
+  await save(c);
+  const q = new URLSearchParams({ client_id: c.oauth.clientId, response_type: "code", redirect_uri: redirect, scope: ESCOPO.join(" "), state: c.oauth.state });
+  return { url: `https://api.smartthings.com/oauth/authorize?${q}` };
+}
+
+/** Passo 2 (a Samsung volta para o painel com o código): troca pela chave que se renova. */
+export async function airconOauthFinish(code: string, state: string): Promise<boolean> {
+  const c = await cfg();
+  const o = c.oauth;
+  if (!o?.state || !state || state.length !== o.state.length || !timingSafeEqual(Buffer.from(state), Buffer.from(o.state))) return false;
+  delete o.state; // uso único
+  Object.assign(o, await pedirToken(o, { grant_type: "authorization_code", code, redirect_uri: o.redirect }));
+  await save(c);
+  return (await readAircon()).ok;
+}
+
 /** Lê o contador do ar e guarda. "expired" = a chave venceu (precisa de outra). */
 export async function readAircon(): Promise<{ ok: true } | { ok: false; expired: boolean; error?: string }> {
   const c = await cfg();
-  if (!c.token) return { ok: false, expired: false, error: "sem chave" };
+  if (!c.token && !c.oauth?.refresh) return { ok: false, expired: false, error: "sem chave" };
   try {
+    const token = (await chaveAtual(c))!;
     if (!c.deviceId) {
-      const list = await st("/devices", c.token);
+      const list = await st("/devices", token);
       const ac = (list.items ?? []).find((d: { deviceTypeName?: string; components?: { capabilities?: { id: string }[] }[] }) =>
         d.components?.some((k) => k.capabilities?.some((x) => x.id === "powerConsumptionReport")) && /air ?conditioner|ar-?condicionado/i.test(JSON.stringify(d)));
       if (!ac) return { ok: false, expired: false, error: "ar-condicionado não encontrado" };
       c.deviceId = ac.deviceId;
     }
-    const s = await st(`/devices/${c.deviceId}/components/main/capabilities/powerConsumptionReport/status`, c.token);
+    const s = await st(`/devices/${c.deviceId}/components/main/capabilities/powerConsumptionReport/status`, token);
     const v = s?.powerConsumption?.value;
     if (typeof v?.energy !== "number") return { ok: false, expired: false, error: "o ar não mandou o consumo" };
     const day = brtDay();
@@ -83,7 +166,7 @@ export async function readAircon(): Promise<{ ok: true } | { ok: false; expired:
 /** Agendador (de hora em hora): lê; se a chave venceu, devolve o aviso UMA vez. */
 export async function airconTick(): Promise<string | null> {
   const before = await cfg();
-  if (!before.token) return null;
+  if (!before.token && !before.oauth?.refresh) return null;
   const r = await readAircon();
   if (!r.ok && r.expired && !before.expiredWarned) {
     // A Alexa também avisa (se ele estiver fora, guarda para o "cheguei"). Import aqui: alexa.ts importa este arquivo.
@@ -98,12 +181,12 @@ export async function airconTick(): Promise<string | null> {
 export async function airconKeyHealth(): Promise<{ nivel: "ok" | "atencao" | "problema"; titulo: string; detalhe: string }> {
   const c = await cfg();
   const titulo = "Chave do ar (SmartThings)";
-  if (!c.token) return { nivel: "atencao", titulo, detalhe: "sem chave — cole uma no WhatsApp" };
+  if (!c.token && !c.oauth?.refresh) return { nivel: "atencao", titulo, detalhe: "sem chave — cole uma no WhatsApp" };
   if (c.expiredWarned) return { nivel: "problema", titulo, detalhe: "venceu — gere em account.smartthings.com/tokens e cole só a chave no WhatsApp" };
   const h = c.last ? Math.round((Date.now() - new Date(c.last.at).getTime()) / 3600_000) : null;
   return h != null && h > 3
     ? { nivel: "atencao", titulo, detalhe: `sem leitura há ${h} h` }
-    : { nivel: "ok", titulo, detalhe: "funcionando" };
+    : { nivel: "ok", titulo, detalhe: c.oauth?.refresh ? "funcionando · permanente (renova sozinha)" : "funcionando · vence em 24 h (deixe permanente na aba Ar)" };
 }
 
 /**
@@ -235,6 +318,7 @@ export async function airconData() {
     lidoEm: c.last.at,
     totalKwh: c.last.wh / 1000,
     chaveVencida: !!c.expiredWarned,
+    permanente: !!c.oauth?.refresh,
     enel: enel ? { valor: enel.amount, data: enel.date } : null,
     dias: dias.slice(-31),
     // A conta de um mês mede o consumo do mês ANTERIOR (a de 01/2026, vence 15/01, é dezembro).
