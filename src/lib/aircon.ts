@@ -26,6 +26,8 @@ type Cfg = {
   arMeses?: { ref: string; kwh: number }[];
   /** Gasto por semana, do "Histórico › Semanal" do app (prints dele): datas AAAA-MM-DD. */
   arSemanas?: { de: string; ate: string; kwh: number }[];
+  /** kWh de um dia, do "Histórico › Diário" do app (prints dele): preenche dias em que a chave estava vencida. */
+  arDias?: Record<string, number>;
   /** Quando o ar entrou no SmartThings (o contador total começa aí). */
   installed?: string;
 };
@@ -117,12 +119,15 @@ export function kwhPorDia(c: Cfg): { dia: string; kwh: number; ate: string | nul
     const fim = ate ? c.days![ate] : c.last!.wh;
     const antes = c.base?.dia === k ? c.base.diaKwh * 1000 + Math.max(0, c.days![k] - c.base.wh) : 0;
     const n = ate ? Math.max(1, Math.round((Date.parse(ate) - Date.parse(k)) / 86_400_000)) : 1;
-    const parte = Math.max(0, fim - c.days![k]) / n;
-    return Array.from({ length: n }, (_, j) => ({
-      dia: new Date(Date.parse(k) + j * 86_400_000).toISOString().slice(0, 10),
-      kwh: (parte + (j === 0 ? antes : 0)) / 1000,
-      ate: n > 1 ? ate : null,
-    }));
+    const dias = Array.from({ length: n }, (_, j) => new Date(Date.parse(k) + j * 86_400_000).toISOString().slice(0, 10));
+    // Dia do intervalo que veio do app fica com o valor dele; o resto do intervalo é dividido entre os outros.
+    const app = n > 1 ? dias.filter((d) => c.arDias?.[d] != null) : [];
+    const sobra = Math.max(0, fim - c.days![k] - app.reduce((s, d) => s + c.arDias![d] * 1000, 0));
+    const parte = app.length < n ? sobra / (n - app.length) : 0;
+    return dias.map((dia, j) => {
+      const doApp = app.includes(dia);
+      return { dia, kwh: ((doApp ? c.arDias![dia] * 1000 : parte) + (j === 0 ? antes : 0)) / 1000, ate: n > 1 && !doApp ? ate : null };
+    });
   });
 }
 
@@ -171,6 +176,20 @@ export async function applyAirconCommand(text: string): Promise<string | null> {
     return r.ok ? `🔑 Chave do SmartThings guardada.\n\n${await summary()}` : `⚠️ Guardei a chave, mas não consegui ler o ar: ${r.error}.`;
   }
   const q = t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  // "ar 30/10 8,30" (kWh do dia no app SmartThings): corrige um dia em que a chave estava vencida.
+  const dia = q.match(/^ar(?:-?condicionado)?\s+(?:dia\s+)?(\d{1,2})\/(\d{1,2})\s*(?:=|:)?\s*(\d{1,3}(?:[.,]\d{1,3})?)\s*(?:kwh)?$/);
+  if (dia) {
+    const hoje = brtDay();
+    let ano = Number(hoje.slice(0, 4));
+    const ref = (a: number) => `${a}-${dia[2].padStart(2, "0")}-${dia[1].padStart(2, "0")}`;
+    if (ref(ano) > hoje) ano--;
+    const d = ref(ano);
+    const v = Number(dia[3].replace(",", "."));
+    if (Number.isNaN(Date.parse(d)) || v > 60) return "⚠️ Não entendi o dia ou o valor. Exemplo: *ar 30/10 8,30* (kWh do dia no app SmartThings).";
+    const c = await cfg();
+    await save({ ...c, arDias: { ...c.arDias, [d]: v } });
+    return `✅ Ar em ${d.slice(8, 10)}/${d.slice(5, 7)}: ${kwh(v * 1000)} kWh (do app). Os outros dias do período sem leitura dividem o resto.`;
+  }
   if (/^(?:quanto\s+(?:vem|vai\s+vir|vai\s+ser|fica)\s+(?:a\s+)?conta\s+(?:de\s+luz|da\s+enel|de\s+energia)|previsao\s+da\s+(?:enel|conta\s+de\s+luz))\s*\??$/.test(q)) {
     await readAircon();
     const p = previsaoEnel(await cfg());

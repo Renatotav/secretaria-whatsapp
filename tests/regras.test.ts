@@ -133,4 +133,9 @@ test("ar: período com a chave vencida é dividido entre os dias (mês e hoje n�
   ]);
   assert.equal(spentSince(c, "2026-11-01"), 17000); // 2 dias estimados + o medido hoje
   assert.equal(spentSince(c, "2026-11-03"), 1000);
+  // Dias vindos do app ficam com o valor dele; o resto do intervalo vai para os outros.
+  const comApp = kwhPorDia({ ...c, arDias: { "2026-10-30": 8.3, "2026-10-31": 6.5 } }).filter((x) => x.dia >= "2026-10-30" && x.dia < "2026-11-03");
+  assert.deepEqual(comApp.map((x) => [x.dia, Math.round(x.kwh * 100) / 100, x.ate]), [
+    ["2026-10-30", 8.3, null], ["2026-10-31", 6.5, null], ["2026-11-01", 8.6, "2026-11-03"], ["2026-11-02", 8.6, "2026-11-03"],
+  ]);
 });
