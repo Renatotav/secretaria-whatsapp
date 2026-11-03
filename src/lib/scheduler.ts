@@ -18,7 +18,7 @@ import { classifyPendingGroups } from "./work-groups";
 import { odoReminder } from "./scooter";
 import { creditWarning } from "./ai-credit";
 import { billsDueSpeech, invoiceEveSpeech, notifyOwner } from "./message-handlers";
-import { pruneProcessedMessages } from "./flow-state";
+import { pruneProcessedMessages, pruneContactMessages } from "./flow-state";
 import { buildWorkBriefing, buildWorkNewAlerts, meetingTicketBrief } from "./work";
 import { alexaFalar, falarPneus, falarResumoManha } from "./alexa";
 
@@ -363,6 +363,7 @@ export function startScheduler(): void {
           console.error("[previsões] renovação falhou", err);
         }
         await pruneProcessedMessages().catch((err) => console.error("[webhook] limpeza dos ids falhou", err));
+        await pruneContactMessages().catch((err) => console.error("[lgpd] limpeza das mensagens dos contatos falhou", err));
       }
 
       // Saúde: WhatsApp (Evolution) conectado? A cada 5 min.

@@ -55,3 +55,12 @@ export async function claimMessageId(id: string): Promise<boolean> {
 export async function pruneProcessedMessages(): Promise<void> {
   await prisma.processedMessage.deleteMany({ where: { at: { lt: new Date(Date.now() - 7 * 24 * 3600 * 1000) } } });
 }
+
+// LGPD (pedido do dono em 03/11/2026): o que contatos e grupos mandam fica só 30 dias.
+// As conversas com ele mesmo ("self"/"chat") não são tocadas.
+export async function pruneContactMessages(): Promise<number> {
+  const { count } = await prisma.message.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - 30 * 24 * 3600 * 1000) }, conversation: { source: { in: ["whatsapp", "group"] } } },
+  });
+  return count;
+}
