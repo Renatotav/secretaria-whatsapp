@@ -24,6 +24,7 @@ Arquivos-chave:
 | Arquivo | O quê |
 |---|---|
 | `src/lib/message-handlers.ts` | Fluxo da conversa do canal pessoal: roteia a mensagem e guarda o que espera resposta (print esperando "sim", "quanto foi?", fatura, PDF com senha) |
+| `src/lib/finance-commands.ts` | Comandos e respostas do canal pessoal que não guardam estado (meio de pagamento logo depois do gasto, "por que meu limite", vários pedidos numa mensagem, véspera da fatura, sobra do mês na reserva) |
 | `src/lib/finance-reports.ts` | Relatórios e consultas sem IA (resumo do dia/semana, fechamento, contas a pagar, limite do cartão, orçamento, VR) |
 | `src/lib/finance-common.ts` | Peças comuns: meses, totais e previsão do mês, tetos, séries (parcela/recorrente), períodos |
 | `src/lib/statement-import.ts` | Importação de fatura/extrato (parcelas, repetidos, memória de categoria, datas) |

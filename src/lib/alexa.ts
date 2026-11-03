@@ -205,7 +205,8 @@ export async function chegou(automatico: boolean): Promise<string> {
     if (contas && !partes.some((p) => p.includes("lembrete de contas"))) partes.push(contas.replace(/^Renato,\s*/i, ""));
     // Como foi o dia no dinheiro: gasto de hoje e quanto ainda cabe no cartão.
     try {
-      const { spentTodaySpeech, cardLimitSpeech } = await import("./message-handlers");
+      const { cardLimitSpeech } = await import("./message-handlers");
+      const { spentTodaySpeech } = await import("./finance-commands");
       partes.push(await spentTodaySpeech(), await cardLimitSpeech());
     } catch {}
     if (!partes.length) return "🏠 Bem-vindo! Nada guardado para a Alexa falar.";
