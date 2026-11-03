@@ -1180,7 +1180,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
         response = `❌ Nenhuma meta de economia cadastrada para adicionar ${brl(route.amount)}. Cadastre primeiro pelo painel!`;
       } else {
         const term = route.goalName.toLowerCase();
-        let targetGoal = goals.find((g) => g.name.toLowerCase() === term) 
+        const targetGoal = goals.find((g) => g.name.toLowerCase() === term) 
                       || goals.find((g) => g.name.toLowerCase().includes(term));
         
         if (!targetGoal) {

@@ -37,7 +37,7 @@ export default function InstancesPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function useInstance(name: string) {
+  async function usarInstancia(name: string) {
     setBusy(name);
     setMessage("");
     try {
@@ -151,7 +151,7 @@ export default function InstancesPage() {
               <button
                 className="btn-ghost"
                 style={{ fontSize: 12 }}
-                onClick={() => useInstance(inst.name)}
+                onClick={() => usarInstancia(inst.name)}
                 disabled={busy === inst.name || inst.name === activeInstanceId}
               >
                 Usar esta instância

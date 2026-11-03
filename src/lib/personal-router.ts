@@ -271,7 +271,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
     if (parsed.type === "finance") {
       const installmentsNum = Number(parsed.installments);
       const status = parsed.status === "pending" ? "pending" : "paid";
-      let paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
+      const paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
 
       return {
         type: "finance",
