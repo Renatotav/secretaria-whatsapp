@@ -10,6 +10,7 @@ import { parseSplit, splitRequests } from "../src/lib/message-handlers";
 import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
 import { sqlSeguro } from "../src/lib/assistant-chat";
+import { kwhPorDia, spentSince } from "../src/lib/aircon";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -121,4 +122,15 @@ test("pergunta livre do financeiro: comentário não esconde função proibida",
   assert.ok(!sqlSeguro(`SELECT query_to_xml/**/('select 1', true, true, '')`));
   assert.ok(!sqlSeguro(`SELECT query_to_xml--x\n('select 1', true, true, '')`));
   assert.ok(sqlSeguro(`SELECT SUM(amount) FROM "FinanceEntry" WHERE description ILIKE '%uber%'`));
+});
+
+test("ar: período com a chave vencida é dividido entre os dias (mês e hoje não zeram)", () => {
+  const c = { days: { "2026-10-29": 1000, "2026-10-30": 9000, "2026-11-03": 41000 }, last: { at: "2026-11-03T15:00:00Z", wh: 42000, w: 0 } };
+  const d = kwhPorDia(c);
+  assert.deepEqual(d.map((x) => [x.dia, x.kwh, x.ate]), [
+    ["2026-10-29", 8, null], ["2026-10-30", 8, "2026-11-03"], ["2026-10-31", 8, "2026-11-03"],
+    ["2026-11-01", 8, "2026-11-03"], ["2026-11-02", 8, "2026-11-03"], ["2026-11-03", 1, null],
+  ]);
+  assert.equal(spentSince(c, "2026-11-01"), 17000); // 2 dias estimados + o medido hoje
+  assert.equal(spentSince(c, "2026-11-03"), 1000);
 });

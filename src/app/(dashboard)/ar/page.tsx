@@ -144,7 +144,7 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
       </div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 150, overflowX: "auto" }} role="img" aria-label="Gasto do ar por dia">
         {dias.map((x) => (
-          <div key={x.dia} title={`${ddmm(x.dia)}${x.ate ? `–${ddmm(x.ate)}` : ""}: ${n(x.kwh, 1)} kWh · ${brl(x.kwh * price)}`}
+          <div key={x.dia} title={`${ddmm(x.dia)}: ${n(x.kwh, 1)} kWh · ${brl(x.kwh * price)}${x.ate ? " (estimado)" : ""}`}
             style={{ flex: "1 1 0", minWidth: 28, maxWidth: 56, display: "grid", gap: 4, justifyItems: "center", alignContent: "end", height: "100%" }}>
             <span style={{ fontSize: 10, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{brl(x.kwh * price).replace("R$", "").trim()}</span>
             <div style={{ width: "70%", height: `${Math.max(2, (x.kwh / max) * 100)}px`, background: x.ate ? "var(--warning)" : "var(--accent)", borderRadius: 4 }} />
@@ -152,7 +152,7 @@ function Grafico({ dias, price }: { dias: Dia[]; price: number }) {
           </div>
         ))}
       </div>
-      <div style={muted}>Valores em reais. Barra amarela = junta mais de um dia (a chave estava vencida).</div>
+      <div style={muted}>Valores em reais. Barra amarela = estimado: com a chave vencida, o gasto do período foi dividido igual entre os dias.</div>
     </div>
   );
 }

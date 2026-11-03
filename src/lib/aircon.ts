@@ -104,14 +104,36 @@ export async function airconKeyHealth(): Promise<{ nivel: "ok" | "atencao" | "pr
     : { nivel: "ok", titulo, detalhe: "funcionando" };
 }
 
-/** kWh gastos entre o 1º registro do dia `from` (ou o mais antigo depois dele) e a última leitura. */
+/**
+ * kWh de cada dia = 1ª leitura do dia seguinte − 1ª deste (o último dia vai até a última leitura).
+ * Com a chave vencida, dois registros ficam vários dias longe: o gasto do intervalo é dividido
+ * igual entre os dias dele, e `ate` marca esses dias como estimados (até quando foi o intervalo).
+ */
+export function kwhPorDia(c: Cfg): { dia: string; kwh: number; ate: string | null }[] {
+  if (!c.last || !c.days) return [];
+  const keys = Object.keys(c.days).sort();
+  return keys.flatMap((k, i) => {
+    const ate = i + 1 < keys.length ? keys[i + 1] : null;
+    const fim = ate ? c.days![ate] : c.last!.wh;
+    const antes = c.base?.dia === k ? c.base.diaKwh * 1000 + Math.max(0, c.days![k] - c.base.wh) : 0;
+    const n = ate ? Math.max(1, Math.round((Date.parse(ate) - Date.parse(k)) / 86_400_000)) : 1;
+    const parte = Math.max(0, fim - c.days![k]) / n;
+    return Array.from({ length: n }, (_, j) => ({
+      dia: new Date(Date.parse(k) + j * 86_400_000).toISOString().slice(0, 10),
+      kwh: (parte + (j === 0 ? antes : 0)) / 1000,
+      ate: n > 1 ? ate : null,
+    }));
+  });
+}
+
+/** Wh gastos do dia `from` em diante (até a última leitura); null se ainda não há leitura nesse período. */
 export function spentSince(c: Cfg, from: string): number | null {
   if (!c.last || !c.days) return null;
   // Mês ou dia que começou antes da medição: o que o app já mostrava + o medido depois.
   const b = c.base;
   if (b && (from === b.dia || from === b.mes + "-01")) return (from === b.dia ? b.diaKwh : b.mesKwh) * 1000 + Math.max(0, c.last.wh - b.wh);
-  const start = Object.keys(c.days).filter((d) => d >= from).sort()[0];
-  return start === undefined ? null : Math.max(0, c.last.wh - c.days[start]);
+  const dias = kwhPorDia(c).filter((d) => d.dia >= from);
+  return dias.length ? dias.reduce((s, d) => s + d.kwh * 1000, 0) : null;
 }
 
 async function summary(): Promise<string> {
@@ -169,15 +191,7 @@ export async function airconData() {
   if (!c.last) return { empty: true as const, price, temToken: !!c.token };
   const today = brtDay();
   const keys = Object.keys(c.days ?? {}).sort();
-  // kWh de cada dia = 1ª leitura do dia seguinte − 1ª deste (o último dia vai até a última leitura).
-  // Com a chave vencida, um intervalo pode juntar vários dias: "ate" mostra até quando.
-  const dias = keys.map((k, i) => {
-    const fim = i + 1 < keys.length ? c.days![keys[i + 1]] : c.last!.wh;
-    const ate = i + 1 < keys.length ? keys[i + 1] : null;
-    const juntou = ate !== null && new Date(ate).getTime() - new Date(k).getTime() > 86_400_000;
-    const antes = c.base?.dia === k ? c.base.diaKwh * 1000 + Math.max(0, c.days![k] - c.base.wh) : 0;
-    return { dia: k, kwh: (Math.max(0, fim - c.days![k]) + antes) / 1000, ate: juntou ? ate : null };
-  });
+  const dias = kwhPorDia(c);
   const mes = (spentSince(c, today.slice(0, 8) + "01") ?? 0) / 1000;
   const hoje = (spentSince(c, today) ?? 0) / 1000;
   // Média do ar por mês desde a instalação (contador total ÷ meses), para comparar com as contas.
