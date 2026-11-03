@@ -138,4 +138,8 @@ test("ar: período com a chave vencida é dividido entre os dias (mês e hoje n�
   assert.deepEqual(comApp.map((x) => [x.dia, Math.round(x.kwh * 100) / 100, x.ate]), [
     ["2026-10-30", 8.3, null], ["2026-10-31", 6.5, null], ["2026-11-01", 8.6, "2026-11-03"], ["2026-11-02", 8.6, "2026-11-03"],
   ]);
+  // Todos os dias do intervalo vindos do app: a sobra (manhã antes da 1ª leitura) vai para o dia seguinte.
+  const todos = { ...c, arDias: { "2026-10-30": 8.3, "2026-10-31": 6.5, "2026-11-01": 8, "2026-11-02": 7 } };
+  assert.equal(spentSince(todos, "2026-11-03"), 3200); // manhã: 32000 − 29800 = 2200, + 1000 medido
+
 });

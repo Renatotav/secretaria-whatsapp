@@ -114,6 +114,7 @@ export async function airconKeyHealth(): Promise<{ nivel: "ok" | "atencao" | "pr
 export function kwhPorDia(c: Cfg): { dia: string; kwh: number; ate: string | null }[] {
   if (!c.last || !c.days) return [];
   const keys = Object.keys(c.days).sort();
+  let vem = 0; // intervalo com todos os dias vindos do app: a sobra é a manhã do dia da leitura seguinte
   return keys.flatMap((k, i) => {
     const ate = i + 1 < keys.length ? keys[i + 1] : null;
     const fim = ate ? c.days![ate] : c.last!.wh;
@@ -124,9 +125,11 @@ export function kwhPorDia(c: Cfg): { dia: string; kwh: number; ate: string | nul
     const app = n > 1 ? dias.filter((d) => c.arDias?.[d] != null) : [];
     const sobra = Math.max(0, fim - c.days![k] - app.reduce((s, d) => s + c.arDias![d] * 1000, 0));
     const parte = app.length < n ? sobra / (n - app.length) : 0;
+    const veio = vem;
+    vem = n > 1 && app.length === n ? sobra : 0;
     return dias.map((dia, j) => {
       const doApp = app.includes(dia);
-      return { dia, kwh: ((doApp ? c.arDias![dia] * 1000 : parte) + (j === 0 ? antes : 0)) / 1000, ate: n > 1 && !doApp ? ate : null };
+      return { dia, kwh: ((doApp ? c.arDias![dia] * 1000 : parte) + (j === 0 ? antes + veio : 0)) / 1000, ate: n > 1 && !doApp ? ate : null };
     });
   });
 }
