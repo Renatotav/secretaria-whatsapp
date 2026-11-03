@@ -95,6 +95,15 @@ export async function healthItems(config: AgentConfig): Promise<HealthItem[]> {
       ? { nivel: "problema", titulo: "Ponte da tomada (scooter)", detalhe: `fora há ${ha(ponte.at)} — o Fire TV está ligado e no Wi-Fi?` }
       : { nivel: "ok", titulo: "Ponte da tomada (scooter)", detalhe: `ok (voltou há ${ha(ponte.at)})` });
 
+  // Gravado por /root/backups/backup-drive.sh (cron 03:45, fora do container).
+  const bk = await getKv<{ drive: "ok" | "erro"; at: string }>("health:backup");
+  const bkVelho = !bk || Date.now() - new Date(bk.at).getTime() > 30 * 3600_000;
+  itens.push(!bk
+    ? { nivel: "atencao", titulo: "Backup no Google Drive", detalhe: "ainda sem notícia (roda às 3:45)" }
+    : bk.drive === "erro"
+      ? { nivel: "problema", titulo: "Backup no Google Drive", detalhe: `falhou há ${ha(bk.at)} — peça ao Claude para refazer a ligação com o Google` }
+      : { nivel: bkVelho ? "atencao" : "ok", titulo: "Backup no Google Drive", detalhe: bkVelho ? `último há ${ha(bk.at)} — não rodou esta noite` : `ok há ${ha(bk.at)}` });
+
   itens.push(await airconKeyHealth().catch(() => ({ nivel: "atencao" as const, titulo: "Chave do ar (SmartThings)", detalhe: "não consegui consultar" })));
 
   const c = await openrouterCredit().catch(() => null);
