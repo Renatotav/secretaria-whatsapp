@@ -678,7 +678,11 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     .map((m) => `${m.role === "user" ? "Dono" : "Secretária"}: ${m.content}`)
     .join("\n");
 
-  const route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
+  let route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
+  // Citou uma mensagem e só comentou, sem valor: é relato, não gasto novo (03/11 "esse gasto foi me alimentar…" repetiu o almoço).
+  if (route.type === "finance" && _meta.quoted && !/\d/.test(joinedText)) {
+    route = { type: "diary", content: joinedText, mood: route.mood ?? "neutro", confirmation: "📔 Anotei no seu diário." };
+  }
 
   if (!conv) {
     conv = await prisma.conversation.create({
