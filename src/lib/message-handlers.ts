@@ -151,7 +151,24 @@ async function applyQuotedReply(text: string, quoted: string | undefined): Promi
   return `✏️ Em "${label}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.${parcela}\nConfirma? Responda *sim* ou *não*.`;
 }
 
-const ATTENTION_RE = /^\s*(?:(?:o\s*)?q(?:ue)?\s+(?:é\s+que\s+)?(?:precisa|tem|falta)\s+(?:de\s+)?(?:da\s+)?(?:minha\s+aten[cç][aã]o|(?:pra|para)\s+eu\s+(?:fazer|resolver|ver)|eu\s+(?:fazer|resolver|ver))|(?:minhas\s+)?pend[eê]ncias|tem\s+alguma\s+pend[eê]ncia)\s*\??\s*$/i;
+/** "apaga almoço 32" / "almoço 32 apaga" sem citar: o lançamento mais novo com esse valor (e nome), com "sim" antes. */
+async function applyDeleteByText(text: string): Promise<string | null> {
+  const t = text.trim();
+  const verb = /\b(apag[ae]r?|exclu[ia]r?|remov[ae]r?)\b/i;
+  const num = t.match(new RegExp(NUMBER_PART));
+  if (t.length > 60 || !verb.test(t) || !num) return null;
+  const amount = parseBrNumber(num[1]);
+  const name = t.replace(verb, " ").replace(num[0], " ").replace(/\b(r\$|reais|o|a|de|do|da|esse|este)\b/gi, " ").replace(/\s+/g, " ").trim();
+  const e = await prisma.financeEntry.findFirst({
+    where: { amount: { gte: amount - 0.01, lte: amount + 0.01 }, ...(name ? { description: { contains: name, mode: "insensitive" } } : {}) },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!e) return `🤔 Não achei lançamento de ${brl(amount)}${name ? ` com "${name}"` : ""}.`;
+  pendingQuotedEdit = { entryId: e.id, change: { remove: true }, at: Date.now() };
+  return `🗑️ Apagar "${e.description || e.category}" (${brl(e.amount)}, compra ${formatFullDate(e.purchaseDate ?? e.date)}, lançado ${fmtBRT(e.createdAt, true)})?\nResponda *sim* ou *não*.`;
+}
+
+const ATTENTION_RE =/^\s*(?:(?:o\s*)?q(?:ue)?\s+(?:é\s+que\s+)?(?:precisa|tem|falta)\s+(?:de\s+)?(?:da\s+)?(?:minha\s+aten[cç][aã]o|(?:pra|para)\s+eu\s+(?:fazer|resolver|ver)|eu\s+(?:fazer|resolver|ver))|(?:minhas\s+)?pend[eê]ncias|tem\s+alguma\s+pend[eê]ncia)\s*\??\s*$/i;
 
 /**
  * "o que precisa da minha atenção?": só o que pede uma ação dele — contas
@@ -568,7 +585,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     }
   }
   // Respondeu (citou) uma mensagem antiga: corrige aquele lançamento.
-  const quotedReply = await applyQuotedReply(joinedText, _meta.quoted);
+  const quotedReply = (await applyQuotedReply(joinedText, _meta.quoted)) ?? (await applyDeleteByText(joinedText));
   if (quotedReply) {
     await notifyOwner(config, quotedReply);
     return;
