@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { alertsFor, DEFAULT_SITUATIONS, type Situation } from "@/lib/work-sla";
-import { useWidth } from "@/lib/use-width";
 import { InsightPanel, AskBox, type Selecao } from "./insight-panel";
 import { ClosePill, EMPTY, RedmineLinks, STATUS, TicketBadges, TicketLink, priority } from "./work-ui";
 import type { Count, Links, Stats, Ticket } from "./work-ui";

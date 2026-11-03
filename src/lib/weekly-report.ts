@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { generateResponse, ProviderOptions } from "./openai";
+import type { ProviderOptions } from "./openai";
 import { sendWhatsAppMessage } from "./evolution";
 import { seusPadroes } from "./padroes";
 import { buildWeeklyDigest, sendBudgetChart, sendMonthChart } from "./message-handlers";

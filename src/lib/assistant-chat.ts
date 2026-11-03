@@ -5,7 +5,7 @@
 import { prisma } from "./prisma";
 import { generateResponse, type ProviderOptions } from "./openai";
 import { todayBRT } from "./dates";
-import { Prisma, type AgentConfig } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 /**
  * Pergunta livre sobre o financeiro: a IA escreve um SELECT, que roda numa
