@@ -79,9 +79,9 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
     rows = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
       await tx.$executeRawUnsafe("SET LOCAL statement_timeout = 5000");
-      // Papel que só lê as 4 tabelas do financeiro: o próprio banco barra o resto, mesmo se um truque passar pelo sqlSeguro.
-      const papel = await tx.$queryRawUnsafe<unknown[]>("SELECT 1 FROM pg_roles WHERE rolname = 'finance_reader'");
-      if (papel.length) await tx.$executeRawUnsafe("SET LOCAL ROLE finance_reader");
+      // Papel que só lê as 4 tabelas do financeiro (criado em 03/11/2026): o próprio banco barra o resto,
+      // mesmo se um truque passar pelo sqlSeguro. Sem o papel, a consulta falha em vez de rodar como superusuário.
+      await tx.$executeRawUnsafe("SET LOCAL ROLE finance_reader");
       return tx.$queryRawUnsafe<unknown[]>(sql);
     });
   } catch (err) {
