@@ -76,7 +76,7 @@ function Painel({ d }: { d: Extract<Dados, { empty: false }> }) {
     <>
       {d.chaveVencida && (
         <div style={{ ...card, borderColor: "var(--warning)", color: "var(--warning)" }}>
-          🔑 A chave do SmartThings venceu. Mande uma nova no WhatsApp (<em>chave smartthings</em> + a chave); o gasto até lá não se perde.
+          🔑 A chave do SmartThings caiu. Toque em <em>Autorizar na Samsung</em> abaixo; o gasto até lá não se perde.
         </div>
       )}
       {!d.permanente && <ChavePermanente />}
@@ -182,7 +182,7 @@ function ChavePermanente() {
     <div style={{ ...card, display: "grid", gap: 8 }}>
       <strong style={{ fontSize: 14 }}>🔑 Deixar a chave permanente</strong>
       <div style={muted}>
-        Hoje a chave vence em 24 h. Gere uma última em account.smartthings.com/tokens marcando também <b>Aplicações</b>, cole no WhatsApp e toque abaixo: a Samsung pede para autorizar uma vez e depois ela se renova sozinha.
+        Toque abaixo e autorize na Samsung: depois a chave se renova sozinha. Se pedir uma chave antes, gere em account.smartthings.com/tokens marcando também <b>Aplicações</b> e cole no WhatsApp.
       </div>
       {volta === "erro" && <div style={{ color: "var(--danger)", fontSize: 13 }}>A autorização não completou. Toque de novo.</div>}
       {msg && <div style={{ color: "var(--danger)", fontSize: 13 }}>{msg}</div>}

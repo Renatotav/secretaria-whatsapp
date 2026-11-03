@@ -259,7 +259,7 @@ export function startScheduler(): void {
         }
       }
       // Ar-condicionado (SmartThings): lê o contador de energia de hora em hora;
-      // se a chave de 24 h venceu, avisa uma vez.
+      // a chave permanente se renova aqui; se ela (ou a colada, de 24 h) venceu, avisa uma vez.
       if (hhmm.endsWith(":05") && config.ownerPhone) {
         try {
           const aviso = await airconTick();

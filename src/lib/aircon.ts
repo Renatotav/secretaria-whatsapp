@@ -4,9 +4,10 @@ import { brl } from "./format";
 
 // Gasto do ar-condicionado (Samsung, pelo SmartThings). SÓ LEITURA: lê o
 // contador total de energia do aparelho de hora em hora; daí sai kWh e R$ por
-// dia e por mês. A chave do SmartThings vence em 24 h (regra da Samsung): ele
-// manda uma nova pelo WhatsApp ("chave smartthings <chave>") e, como o contador
-// é total, o que gastou com a chave vencida entra na conta na leitura seguinte.
+// dia e por mês. Chave: a permanente (`oauth`, autorizada uma vez no botão da aba
+// Ar, renova sozinha). Sem ela, a colada no WhatsApp ("chave smartthings <chave>"),
+// que vence em 24 h (regra da Samsung). Como o contador é total, o que gastou com a
+// chave vencida entra na conta na leitura seguinte (dividido entre os dias).
 
 const KEY = "smartthings";
 type Cfg = {
@@ -173,6 +174,10 @@ export async function airconTick(): Promise<string | null> {
   if (!r.ok && r.expired && !before.expiredWarned) {
     // A Alexa também avisa (se ele estiver fora, guarda para o "cheguei"). Import aqui: alexa.ts importa este arquivo.
     const { alexaFalar } = await import("./alexa");
+    if (before.oauth) {
+      await alexaFalar("A ligação do ar-condicionado com a Samsung caiu. Abra a aba Ar do painel e toque em Autorizar na Samsung.").catch(() => false);
+      return "🔑 A chave permanente do ar caiu (a Samsung recusou renovar).\nAbra a aba ❄️ Ar do painel e toque em *Autorizar na Samsung*. O gasto do ar não se perde nesse meio-tempo.";
+    }
     await alexaFalar("A chave do ar-condicionado venceu. Gere uma nova no SmartThings e cole no WhatsApp da secretária.").catch(() => false);
     return "🔑 A chave do SmartThings venceu (a Samsung só deixa 24 h).\n1. Toque: https://account.smartthings.com/tokens\n2. Gere uma nova e copie\n3. Cole aqui, só a chave\nO gasto do ar não se perde nesse meio-tempo.";
   }
@@ -184,7 +189,7 @@ export async function airconKeyHealth(): Promise<{ nivel: "ok" | "atencao" | "pr
   const c = await cfg();
   const titulo = "Chave do ar (SmartThings)";
   if (!c.token && !c.oauth?.refresh) return { nivel: "atencao", titulo, detalhe: "sem chave — cole uma no WhatsApp" };
-  if (c.expiredWarned) return { nivel: "problema", titulo, detalhe: "venceu — gere em account.smartthings.com/tokens e cole só a chave no WhatsApp" };
+  if (c.expiredWarned) return { nivel: "problema", titulo, detalhe: c.oauth ? "a permanente caiu — toque em Autorizar na Samsung na aba Ar" : "venceu — gere em account.smartthings.com/tokens e cole só a chave no WhatsApp" };
   const h = c.last ? Math.round((Date.now() - new Date(c.last.at).getTime()) / 3600_000) : null;
   return h != null && h > 3
     ? { nivel: "atencao", titulo, detalhe: `sem leitura há ${h} h` }
@@ -245,7 +250,7 @@ async function summary(): Promise<string> {
     `Hoje: ${kwh(hoje)} kWh · ${brl((hoje / 1000) * price)}`,
     `No mês${desde}: ${kwh(mes)} kWh · ${brl((mes / 1000) * price)}`,
     c.last.w != null ? `Agora: ${Math.round(c.last.w)} W (leitura das ${quando})` : "",
-    c.expiredWarned ? "🔑 A chave venceu: mande *chave smartthings* + uma nova para eu continuar medindo." : "",
+    c.expiredWarned ? (c.oauth ? "🔑 A chave permanente caiu: toque em *Autorizar na Samsung* na aba Ar do painel." : "🔑 A chave venceu: mande *chave smartthings* + uma nova para eu continuar medindo.") : "",
   ].filter(Boolean).join("\n");
 }
 
