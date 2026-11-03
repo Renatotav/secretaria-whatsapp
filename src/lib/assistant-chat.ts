@@ -118,7 +118,8 @@ export const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio)
 🍔 VR (vale): "gastei 45 no almoço no VR" lança na conta do VR; "quanto tenho no VR?" mostra o saldo e quanto dá pra gastar por dia.
 🛍️ Lista de desejos: "quero comprar um tênis de 300 em 3x" anota e diz se cabe; "minha lista de desejos" mostra tudo; ela avisa sozinha quando um desejo passar a caber.
 🕓 "Histórico do aluguel" / "por que a luz mudou?" / "o que mudou hoje?" — cada mudança no lançamento (valor, data, situação…) com o motivo; "desfaz a mudança 2" volta uma delas.
-🚦 "Como está o sistema?" — WhatsApp conectado, última mensagem recebida, ponte da tomada, crédito da IA e há quanto tempo está no ar. Se o WhatsApp cair, a Alexa avisa; quando volta, chega a mensagem.
+🚦 "Como está o sistema?" — WhatsApp conectado, última mensagem recebida, ponte da tomada, chave do ar, backup no Google Drive, crédito da IA e há quanto tempo está no ar. Se o WhatsApp cair, a Alexa avisa; quando volta, chega a mensagem.
+❄️ Ar-condicionado: "quanto gastei de ar?" (hoje e no mês, em R$), "quanto vem a conta de luz?" (previsão da Enel); dia errado: "ar 30/10 8,30" com o kWh do app SmartThings. "tarifa da luz 1,06" muda o preço do kWh (ar e scooter).
 ✏️ Corrigir um lançamento antigo: *responda* (citando) a mensagem dele com "foi no pix", "era 32,50", "foi dia 15/10" ou "apaga" — ela mostra a mudança e espera o "sim".
 ✂️ Pagou parte em cada (nota ou gasto): "100 no VR e 80 no cartão" ou "25 no vale antigo e o resto no cartão" — na legenda da foto da nota, logo depois dela, ou respondendo à mensagem do lançamento.
 🧪 "Testa a ia" — laboratório com mensagens e textos inventados: quantas a IA acertou, tempo e custo; "testa a ia com <modelo>" compara um candidato antes de trocar.
