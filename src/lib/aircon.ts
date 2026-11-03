@@ -116,7 +116,7 @@ export async function airconOauthStart(origin: string): Promise<{ url: string } 
     if (!oauth.ok) return { error: `A Samsung recusou o endereço de volta (HTTP ${oauth.status}).` };
     c.oauth = { appId: app.app.appId, clientId: app.oauthClientId, clientSecret: app.oauthClientSecret, redirect };
   }
-  c.oauth.state = randomBytes(24).toString("hex");
+  c.oauth.state = `${Date.now().toString(36)}.${randomBytes(24).toString("hex")}`; // hora.aleatório: vale 15 min
   await save(c);
   const q = new URLSearchParams({ client_id: c.oauth.clientId, response_type: "code", redirect_uri: redirect, scope: ESCOPO.join(" "), state: c.oauth.state });
   return { url: `https://api.smartthings.com/oauth/authorize?${q}` };
@@ -127,7 +127,9 @@ export async function airconOauthFinish(code: string, state: string): Promise<bo
   const c = await cfg();
   const o = c.oauth;
   if (!o?.state || !state || state.length !== o.state.length || !timingSafeEqual(Buffer.from(state), Buffer.from(o.state))) return false;
-  delete o.state; // uso único
+  delete o.state; // uso único: gravado antes da troca, para não valer de novo se ela falhar
+  await save(c);
+  if (Date.now() - parseInt(state.split(".")[0], 36) > 15 * 60_000) return false;
   Object.assign(o, await pedirToken(o, { grant_type: "authorization_code", code, redirect_uri: o.redirect }));
   await save(c);
   return (await readAircon()).ok;
