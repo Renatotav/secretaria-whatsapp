@@ -18,6 +18,7 @@ export interface ProviderOptions {
 }
 
 /** Modelos que não têm provedor ZDR na OpenRouter (descoberto na 1ª chamada). */
+const PENSA_SEMPRE = new Set<string>();
 const SEM_ZDR = new Set<string>();
 /** Reserva quando o modelo configurado é aposentado ou some da OpenRouter. */
 const MODELO_RESERVA = "google/gemini-3.1-flash-lite";
@@ -83,15 +84,19 @@ export async function generateResponse(
       openrouter.chat.completions.create({
         model,
         temperature,
-        max_tokens: maxTokens,
         // Sem "pensar" escondido: modelo que raciocina gastava o max_tokens nisso e cortava o JSON.
-        reasoning: { enabled: false },
+        // Modelo que obriga a pensar (gpt-5-mini): pensa pouco e ganha folga no limite.
+        ...(PENSA_SEMPRE.has(model) ? { max_tokens: maxTokens + 2000, reasoning: { effort: "low" } } : { max_tokens: maxTokens, reasoning: { enabled: false } }),
         messages: [{ role: "system", content: systemPrompt }, ...messages],
         ...(zdr ? { provider: { zdr: true, data_collection: "deny" } } : {}),
       } as Parameters<typeof openrouter.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>;
     const response = await (SEM_ZDR.has(model) ? pedir(false) : pedir(true))
       .catch((err) => {
         // Modelo sem nenhum provedor ZDR (ex.: gemini-2.5-flash-lite, só no AI Studio): lembra e vai direto nas próximas.
+        if (/reasoning is mandatory/i.test(String(err?.message))) {
+          PENSA_SEMPRE.add(model);
+          return pedir(!SEM_ZDR.has(model)).catch(() => pedir(false));
+        }
         if (/data policy|zero data retention/i.test(String(err?.message))) SEM_ZDR.add(model);
         else console.warn("[ia] provedor ZDR falhou, indo pelo normal:", err instanceof Error ? err.message.slice(0, 120) : err);
         return pedir(false);
