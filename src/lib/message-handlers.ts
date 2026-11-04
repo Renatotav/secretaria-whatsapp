@@ -158,7 +158,7 @@ async function applyDeleteByText(text: string): Promise<string | null> {
   const num = t.match(new RegExp(NUMBER_PART));
   if (t.length > 60 || !verb.test(t) || !num) return null;
   const amount = parseBrNumber(num[1]);
-  const name = t.replace(verb, " ").replace(num[0], " ").replace(/\b(r\$|reais|o|a|de|do|da|esse|este)\b/gi, " ").replace(/\s+/g, " ").trim();
+  const name = t.replace(verb, " ").replace(num[0], " ").replace(/(?<!\p{L})(r\$|reais|o|a|de|do|da|esse|este)(?!\p{L})/giu, " ").replace(/\s+/g, " ").trim();
   const e = await prisma.financeEntry.findFirst({
     where: { amount: { gte: amount - 0.01, lte: amount + 0.01 }, ...(name ? { description: { contains: name, mode: "insensitive" } } : {}) },
     orderBy: { createdAt: "desc" },
@@ -572,15 +572,20 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   for (const kind of ["edit", "split"] as const) {
     const p = kind === "edit" ? pendingQuotedEdit : pendingSplit;
     if (!p || Date.now() - p.at > 30 * 60 * 1000) continue;
-    const t = joinedText.trim();
+    // "Sim" e o pedido seguinte mandados juntos chegam numa mensagem só: responde o sim e segue com o resto.
+    const [first, ...rest] = joinedText.trim().split(/\n+/);
+    const t = first.trim();
+    const next = rest.join("\n").trim();
     if (CONFIRM_YES_RE.test(t)) {
       if (kind === "edit") pendingQuotedEdit = null; else pendingSplit = null;
       await notifyOwner(config, kind === "edit" ? await applyQuotedEdit(p.entryId, (p as NonNullable<typeof pendingQuotedEdit>).change) : await applySplit(p.entryId, (p as NonNullable<typeof pendingSplit>).parts));
+      if (next) await handleSelfMessageInner(next, { messageTimestamp: _meta.messageTimestamp });
       return;
     }
     if (CONFIRM_NO_RE.test(t)) {
       if (kind === "edit") pendingQuotedEdit = null; else pendingSplit = null;
       await notifyOwner(config, "👍 Deixei como estava.");
+      if (next) await handleSelfMessageInner(next, { messageTimestamp: _meta.messageTimestamp });
       return;
     }
   }
