@@ -22,8 +22,9 @@ const PENSA_SEMPRE = new Set<string>();
 /** Modelos que não têm provedor ZDR na OpenRouter (descoberto na 1ª chamada). */
 const SEM_ZDR = new Set<string>();
 /** Reserva quando o modelo configurado é aposentado ou some da OpenRouter.
- *  Prova de 04/11/2026 com 16 frases dele: gemini-2.5-flash 16/16 e a mais rápida (a anterior, 3.1-flash-lite, 13/16). */
-const MODELO_RESERVA = "google/gemini-2.5-flash";
+ *  Prova de 04/11/2026 com 16 frases dele: gpt-4.1-mini 16/16 e com provedor ZDR (Azure); a anterior,
+ *  3.1-flash-lite, 13/16. gemini-2.5-flash também 16/16, mas sem ZDR — não serve para finanças. */
+const MODELO_RESERVA = "openai/gpt-4.1-mini";
 const MODELO_FORA = new Set<string>();
 
 export async function generateResponse(
