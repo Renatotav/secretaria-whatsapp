@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { scooterNumbers, kmDaScooter, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
+import { scooterNumbers, diasDeScooter, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
 
 /** Dados da aba Scooter: números de agora + histórico de cargas e leituras. */
 export const GET = withErrorHandling(async (request: Request) => {
@@ -43,9 +43,9 @@ export const GET = withErrorHandling(async (request: Request) => {
   const dias = first && last ? (last.at.getTime() - first.at.getTime()) / 86_400_000 : 0;
   const kmDia = first && last && dias >= 1 ? (last.odo - first.odo) / dias : null;
 
-  // Economia vs Uber (pedido dele, 22/10/2026; pelos km desde 05/11): cada ida e volta
-  // rodada (km ÷ km de um dia de trabalho) = 1 corrida (ele ia de Uber e voltava a pé) × o preço médio das corridas de
-  // Uber que ele lançou − a energia das cargas. É estimativa.
+  // Economia vs Uber (pedido dele, 22/10/2026; revisto 05/11): cada dia de trabalho de
+  // scooter = 1 corrida inteira (ele ia de Uber e voltava a pé) × o preço médio das corridas
+  // de Uber que ele pagou − a energia das cargas. É estimativa.
   const uber = await prisma.financeEntry.aggregate({
     where: { type: "expense", amount: { lt: 60 }, OR: [{ subcategory: "Uber/Taxi" }, { description: { contains: "uber", mode: "insensitive" } }] },
     _avg: { amount: true },
@@ -53,17 +53,18 @@ export const GET = withErrorHandling(async (request: Request) => {
   });
   const corrida = uber._avg.amount ?? 0;
   const diaBrt = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
-  const { kmIdaVolta, kmTotal, kmMes } = kmDaScooter(leituras, diaBrt(new Date()).slice(0, 7));
+  const { kmIdaVolta, dias: diasRod, diasMes, kmTotal, kmMes } = diasDeScooter(leituras, diaBrt(new Date()).slice(0, 7));
   const energiaTotal = charges.reduce((a, c) => a + (c.kwh ?? 0), 0) * n.price;
-  const uberMes = (kmMes / kmIdaVolta) * corrida;
+  const uberMes = diasMes * corrida;
   const economia = corrida > 0 ? {
     corrida,
     corridasBase: uber._count,
     kmIdaVolta,
     kmTotal,
     kmMes,
-    idasVoltas: kmTotal / kmIdaVolta,
-    total: (kmTotal / kmIdaVolta) * corrida - energiaTotal,
+    dias: diasRod,
+    diasMes,
+    total: diasRod * corrida - energiaTotal,
     mes: uberMes - n.mesKwh * n.price,
     uberMes,
   } : null;

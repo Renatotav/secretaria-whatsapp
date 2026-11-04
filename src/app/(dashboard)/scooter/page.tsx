@@ -28,7 +28,7 @@ type Dados = {
   tireDue: boolean;
   tireNext: string;
   tirePsi: { front: number; rear: number };
-  economia: { corrida: number; corridasBase: number; kmIdaVolta: number; kmTotal: number; kmMes: number; idasVoltas: number; total: number; mes: number; uberMes: number } | null;
+  economia: { corrida: number; corridasBase: number; kmIdaVolta: number; kmTotal: number; kmMes: number; dias: number; diasMes: number; total: number; mes: number; uberMes: number } | null;
   tireDays: number | null;
   cargas: Carga[];
   leituras: Leitura[];
@@ -140,16 +140,16 @@ function Painel({ d }: { d: Dados }) {
             <div style={{ display: "grid", gap: 2 }}>
               <span style={muted}>Neste mês</span>
               <strong style={{ fontSize: 22, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{brl(Math.max(0, d.economia.mes))}</strong>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{n(d.economia.kmMes)} km · Uber seria {brl(d.economia.uberMes)} · energia {brl(d.mesKwh * d.price)}</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.economia.diasMes} {d.economia.diasMes === 1 ? "dia" : "dias"} · Uber seria {brl(d.economia.uberMes)} · energia {brl(d.mesKwh * d.price)}</span>
             </div>
             <div style={{ display: "grid", gap: 2 }}>
               <span style={muted}>Desde que começou</span>
               <strong style={{ fontSize: 22, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{brl(Math.max(0, d.economia.total))}</strong>
-              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{n(d.economia.kmTotal)} km ≈ {n(d.economia.idasVoltas)} idas e voltas</span>
+              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.economia.dias} dias de scooter · {n(d.economia.kmTotal)} km</span>
             </div>
           </div>
           <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-            Estimativa: km rodados ÷ {n(d.economia.kmIdaVolta)} km (sua ida e volta num dia de trabalho, pelas leituras) × 1 corrida (antes ia de Uber e voltava a pé) × {brl(d.economia.corrida)}, a média das suas {d.economia.corridasBase} corridas de Uber lançadas — menos a energia das cargas. Não desconta as parcelas da moto.
+            Estimativa: cada dia de scooter (~{n(d.economia.kmIdaVolta)} km de ida e volta, pelas suas leituras) vale 1 corrida inteira de Uber (antes ia de Uber e voltava a pé) a {brl(d.economia.corrida)}, a média das suas {d.economia.corridasBase} corridas de Uber lançadas — menos a energia das cargas. Não desconta as parcelas da moto.
           </div>
         </div>
       )}

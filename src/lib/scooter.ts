@@ -218,27 +218,40 @@ async function lastOdo(): Promise<number | null> {
 
 /** Consumo e autonomia com o que já foi registrado. */
 /**
- * Km rodados para a conta "economia vs Uber" (05/11/2026): conta pelos km, não pelos dias
- * entre leituras — 1 km em 2 dias não é ida e volta ao trabalho. A ida e volta é a mediana
- * dos dias úteis com leitura no dia seguinte (padrão 6 km enquanto não houver 3 desses).
+ * Dias de trabalho de scooter para a conta "economia vs Uber" (05/11/2026): cada dia vale
+ * uma corrida inteira de Uber, e um intervalo entre leituras só conta os dias que os km
+ * cobrem (1 km em 2 dias = nenhum). A ida e volta é a mediana dos dias úteis com leitura
+ * no dia seguinte (padrão 6 km enquanto não houver 3 desses).
  */
-export function kmDaScooter(leituras: { at: Date; odo: number }[], mesAtual: string) {
+export function diasDeScooter(leituras: { at: Date; odo: number }[], mesAtual: string) {
   const diaBrt = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
+  const meio = (d: Date) => new Date(`${diaBrt(d)}T12:00:00Z`);
+  const trechos: { km: number; uteis: number; mes: boolean }[] = [];
   const umDia: number[] = [];
-  let kmTotal = 0, kmMes = 0;
   for (let i = 1; i < leituras.length; i++) {
     const km = leituras[i].odo - leituras[i - 1].odo;
     if (km <= 0) continue;
-    kmTotal += km;
-    if (diaBrt(leituras[i].at).slice(0, 7) === mesAtual) kmMes += km;
-    const de = new Date(`${diaBrt(leituras[i - 1].at)}T12:00:00Z`);
-    const dow = de.getUTCDay();
+    let uteis = 0;
+    for (const d = meio(leituras[i - 1].at); d < meio(leituras[i].at); ) {
+      d.setUTCDate(d.getUTCDate() + 1);
+      if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) uteis++;
+    }
+    trechos.push({ km, uteis, mes: diaBrt(leituras[i].at).slice(0, 7) === mesAtual });
+    const dow = meio(leituras[i - 1].at).getUTCDay();
     // Leitura num dia útil e a seguinte no dia útil seguinte: esse km é um dia de ida e volta.
-    if (dow >= 1 && dow <= 4 && (new Date(`${diaBrt(leituras[i].at)}T12:00:00Z`).getTime() - de.getTime()) / 86_400_000 === 1) umDia.push(km);
+    if (dow >= 1 && dow <= 4 && (meio(leituras[i].at).getTime() - meio(leituras[i - 1].at).getTime()) / 86_400_000 === 1) umDia.push(km);
   }
   umDia.sort((a, b) => a - b);
   const kmIdaVolta = umDia.length >= 3 ? umDia[Math.floor(umDia.length / 2)] : 6;
-  return { kmIdaVolta, kmTotal, kmMes };
+  let dias = 0, diasMes = 0, kmTotal = 0, kmMes = 0;
+  for (const t of trechos) {
+    // Rodada no mesmo dia ou no fim de semana conta 1 dia, se os km derem.
+    const n = Math.min(Math.max(1, t.uteis), Math.round(t.km / kmIdaVolta));
+    dias += n;
+    kmTotal += t.km;
+    if (t.mes) { diasMes += n; kmMes += t.km; }
+  }
+  return { kmIdaVolta, dias, diasMes, kmTotal, kmMes };
 }
 
 export async function scooterNumbers() {

@@ -196,14 +196,15 @@ test("correção escrita sem citar: 'era' corrige; 'foi' só com data", () => {
   assert.equal(parseEditText("hoje foi bom"), null);
 });
 
-test("scooter: economia conta pelos km, não pelos dias entre leituras", async () => {
-  const { kmDaScooter } = await import("../src/lib/scooter");
-  // Leituras às 21h de Brasília (00h UTC do dia seguinte); seg a sex com 6 km por dia.
+test("scooter: economia conta dias inteiros de Uber pelos km, não pelos dias entre leituras", async () => {
+  const { diasDeScooter } = await import("../src/lib/scooter");
+  // Leituras às 21h de Brasília (00h UTC do dia seguinte): seg a qui com 6 km por dia.
   const l = (dia: string, odo: number) => ({ at: new Date(`${dia}T00:00:00Z`), odo });
-  const r = kmDaScooter([l("2026-10-06", 10), l("2026-10-07", 16), l("2026-10-08", 22), l("2026-10-09", 28),
+  const r = diasDeScooter([l("2026-10-06", 10), l("2026-10-07", 16), l("2026-10-08", 22), l("2026-10-09", 28),
     l("2026-10-31", 31), l("2026-11-04", 32)], "2026-11");
   assert.equal(r.kmIdaVolta, 6);
-  assert.equal(r.kmTotal, 22);
-  assert.equal(r.kmMes, 1); // 1 km em 2 dias úteis não vira 2 idas e voltas
-  assert.equal(kmDaScooter([l("2026-10-06", 10), l("2026-10-20", 40)], "2026-10").kmIdaVolta, 6); // sem dados: 6 km
+  assert.equal(r.dias, 4); // 3 dias de 6 km + 3 km em 3 semanas (meia ida e volta arredonda para 1)
+  assert.equal(r.diasMes, 0); // 1 km em 2 dias úteis não vira corrida
+  assert.equal(r.kmMes, 1);
+  assert.equal(diasDeScooter([l("2026-10-06", 10), l("2026-10-20", 40)], "2026-10").kmIdaVolta, 6); // sem dados: 6 km
 });
