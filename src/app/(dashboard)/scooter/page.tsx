@@ -149,7 +149,7 @@ function Painel({ d }: { d: Dados }) {
             </div>
           </div>
           <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 }}>
-            Estimativa: km rodados ÷ {n(d.economia.kmIdaVolta)} km (sua ida e volta num dia de trabalho, pelas leituras) × 2 corridas × {brl(d.economia.corrida)}, a média das suas {d.economia.corridasBase} corridas de Uber lançadas — menos a energia das cargas. Não desconta as parcelas da moto.
+            Estimativa: km rodados ÷ {n(d.economia.kmIdaVolta)} km (sua ida e volta num dia de trabalho, pelas leituras) × 1 corrida (antes ia de Uber e voltava a pé) × {brl(d.economia.corrida)}, a média das suas {d.economia.corridasBase} corridas de Uber lançadas — menos a energia das cargas. Não desconta as parcelas da moto.
           </div>
         </div>
       )}
