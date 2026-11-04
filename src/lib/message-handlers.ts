@@ -40,7 +40,7 @@ import { describeChange, histLine, undoFinanceLog } from "./finance-history";
 import type { QuotedChange } from "./finance-history";
 import { applySplit, parseSplit, splitTransactions } from "./finance-split";
 import type { SplitPart } from "./finance-split";
-import { applyQuotedEdit, entryFromQuoted, parseQuotedChange } from "./quoted-reply";
+import { applyQuotedEdit, entryFromQuoted, parseDeleteText, parseQuotedChange } from "./quoted-reply";
 import { answerChat, answerFinanceQuestion } from "./assistant-chat";
 import { BILL_STATED_RE, HIGH_VALUE, PAYMENT_QUESTION, PAYMENT_REPLY_WINDOW_MS, PAYMENT_STATED_RE, SAVINGS_REPLY_MARK, UNDO_HINT, applyExplainLimitCommand, applyPaymentReply, applySalaryReply, splitRequests } from "./finance-commands";
 export { parseSplit };
@@ -153,12 +153,9 @@ async function applyQuotedReply(text: string, quoted: string | undefined): Promi
 
 /** "apaga almoço 32" / "almoço 32 apaga" sem citar: o lançamento mais novo com esse valor (e nome), com "sim" antes. */
 async function applyDeleteByText(text: string): Promise<string | null> {
-  const t = text.trim();
-  const verb = /\b(apag[ae]r?|exclu[ia]r?|remov[ae]r?)\b/i;
-  const num = t.match(new RegExp(NUMBER_PART));
-  if (t.length > 60 || !verb.test(t) || !num) return null;
-  const amount = parseBrNumber(num[1]);
-  const name = t.replace(verb, " ").replace(num[0], " ").replace(/(?<!\p{L})(r\$|reais|o|a|de|do|da|esse|este)(?!\p{L})/giu, " ").replace(/\s+/g, " ").trim();
+  const asked = parseDeleteText(text);
+  if (!asked) return null;
+  const { amount, name } = asked;
   const e = await prisma.financeEntry.findFirst({
     where: { amount: { gte: amount - 0.01, lte: amount + 0.01 }, ...(name ? { description: { contains: name, mode: "insensitive" } } : {}) },
     orderBy: { createdAt: "desc" },
@@ -1097,7 +1094,13 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       if (ask && route.mood && route.mood !== "neutro") {
         await prisma.financeEntry.updateMany({ where: { id: ask.entryId, mood: "neutro" }, data: { mood: route.mood } });
       }
-      if (!ask && route.mood && route.mood !== "neutro") {
+      // Citou o gasto e contou como estava ("esse gasto foi de fome"): o humor vai para aquele gasto.
+      const citado = !ask && _meta.quoted ? await entryFromQuoted(_meta.quoted).catch(() => null) : null;
+      if (citado) {
+        if (route.mood && route.mood !== "neutro") await prisma.financeEntry.update({ where: { id: citado.id }, data: { mood: route.mood } });
+        response = `📔 Anotei no diário, ligado a *${citado.description || citado.category}* (${brl(citado.amount)}).`;
+      }
+      if (!ask && !citado && route.mood && route.mood !== "neutro") {
         // Diário comum ("hoje foi puxado"): marca os gastos FEITOS hoje
         // (purchaseDate; o `date` do cartão é o vencimento da fatura).
         const { start: todayStart, end: todayEnd } = brtDayRange(new Date());

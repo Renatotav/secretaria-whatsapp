@@ -50,6 +50,16 @@ export function parseQuotedChange(text: string): QuotedChange | null {
   return Object.keys(c).length ? c : null;
 }
 
+/** "apaga almoço 32" / "almoço 32 apaga" → valor e nome; null se não for pedido de apagar com valor. */
+export function parseDeleteText(text: string): { amount: number; name: string } | null {
+  const t = text.trim();
+  const verb = /\b(apag[ae]r?|exclu[ia]r?|remov[ae]r?)\b/i;
+  const num = t.match(new RegExp(NUMBER_PART));
+  if (t.length > 60 || !verb.test(t) || !num) return null;
+  const name = t.replace(verb, " ").replace(num[0], " ").replace(/(?<!\p{L})(r\$|reais|o|a|de|do|da|esse|este)(?!\p{L})/giu, " ").replace(/\s+/g, " ").trim();
+  return { amount: parseBrNumber(num[1]), name };
+}
+
 export async function applyQuotedEdit(entryId: string, c: QuotedChange): Promise<string> {
   const e = await prisma.financeEntry.findUnique({ where: { id: entryId } });
   if (!e) return "Esse lançamento não existe mais.";

@@ -7,6 +7,7 @@ import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxo
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { parseSplit } from "../src/lib/message-handlers";
+import { parseDeleteText, parseQuotedChange } from "../src/lib/quoted-reply";
 import { parsePaymentReply, splitRequests } from "../src/lib/finance-commands";
 import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
@@ -151,4 +152,19 @@ test("meio de pagamento logo depois do gasto: número, palavra ou frase; 'os doi
   assert.deepEqual(parsePaymentReply("Os dois foram VR"), { choice: "ticket", count: 2 });
   assert.equal(parsePaymentReply("almoço 32 no pix"), null);
   assert.equal(parsePaymentReply("vale a pena"), null);
+});
+
+test("apagar por texto: valor e nome, sem cortar palavra com acento", () => {
+  assert.deepEqual(parseDeleteText("Apaga almoço 32"), { amount: 32, name: "almoço" });
+  assert.deepEqual(parseDeleteText("almoço 32 apaga"), { amount: 32, name: "almoço" });
+  assert.deepEqual(parseDeleteText("apaga o uber de 18,50"), { amount: 18.5, name: "uber" });
+  assert.equal(parseDeleteText("apaga o último"), null);
+  assert.equal(parseDeleteText("almoço 32"), null);
+});
+
+test("correção citando a mensagem: meio, valor e apagar", () => {
+  assert.deepEqual(parseQuotedChange("era vr"), { paymentMethod: "ticket" });
+  assert.deepEqual(parseQuotedChange("na verdade foi 25"), { amount: 25 });
+  assert.deepEqual(parseQuotedChange("apaga"), { remove: true });
+  assert.equal(parseQuotedChange("esse gasto foi de fome"), null);
 });
