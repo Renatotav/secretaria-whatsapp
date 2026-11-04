@@ -560,6 +560,15 @@ export interface SelfMessageMeta {
 export async function handleSelfMessage(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   return withReason(`mensagem: "${joinedText.trim().slice(0, 120)}"`, () => handleSelfMessageInner(joinedText, _meta));
 }
+/** Grava pedido e resposta na conversa. Só para apagar/corrigir/confirmar (sem senha, trabalho ou chave):
+ *  sem isso a IA perde o contexto (03/11 repetiu o almoço). */
+async function recordExchange(phone: string, text: string, reply: string): Promise<void> {
+  const conv = await prisma.conversation.findFirst({ where: { phone, source: "self" } });
+  if (!conv) return;
+  await prisma.message.create({ data: { conversationId: conv.id, role: "user", content: text } });
+  await prisma.message.create({ data: { conversationId: conv.id, role: "assistant", content: reply } });
+}
+
 async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
   await restoreFlowStates();
   const config = await prisma.agentConfig.findFirst();
@@ -575,7 +584,9 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     const next = rest.join("\n").trim();
     if (CONFIRM_YES_RE.test(t)) {
       if (kind === "edit") pendingQuotedEdit = null; else pendingSplit = null;
-      await notifyOwner(config, kind === "edit" ? await applyQuotedEdit(p.entryId, (p as NonNullable<typeof pendingQuotedEdit>).change) : await applySplit(p.entryId, (p as NonNullable<typeof pendingSplit>).parts));
+      const done = kind === "edit" ? await applyQuotedEdit(p.entryId, (p as NonNullable<typeof pendingQuotedEdit>).change) : await applySplit(p.entryId, (p as NonNullable<typeof pendingSplit>).parts);
+      await notifyOwner(config, done);
+      await recordExchange(config.ownerPhone, t, done).catch(() => {});
       if (next) await handleSelfMessageInner(next, { messageTimestamp: _meta.messageTimestamp });
       return;
     }
@@ -590,6 +601,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   const quotedReply = (await applyQuotedReply(joinedText, _meta.quoted)) ?? (await applyDeleteByText(joinedText));
   if (quotedReply) {
     await notifyOwner(config, quotedReply);
+    await recordExchange(config.ownerPhone, joinedText, quotedReply).catch(() => {});
     return;
   }
   // Vários pedidos numa mensagem: um por um (sem nada esperando resposta).
