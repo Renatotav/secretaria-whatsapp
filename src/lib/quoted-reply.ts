@@ -8,6 +8,7 @@ import type { Prisma } from "@prisma/client";
 import { brlMsg as brl } from "./format";
 import { NUMBER_PART, PAYMENT_OPTIONS, entryCard, parseBrNumber } from "./finance-text";
 import type { QuotedChange } from "./finance-history";
+import { FINANCE_TAXONOMY_DATA } from "./finance-taxonomy";
 
 /** Acha o lançamento da mensagem citada: o cartão "📝 … 💰 R$ …", a nota salva, ou a mensagem original dele. */
 export async function entryFromQuoted(quoted: string) {
@@ -31,10 +32,27 @@ export async function entryFromQuoted(quoted: string) {
   return log?.entryId ? prisma.financeEntry.findUnique({ where: { id: log.entryId } }) : null;
 }
 
+const fold = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/** "era besteira", "categoria saídas", "muda pra bar" → categoria (e subcategoria) da lista; só o nome exato, para não pegar "era 25". */
+function categoryInText(t: string): QuotedChange | null {
+  const m = t.match(/^(?:era|é|e|foi|categoria|muda(?:r)? (?:para|pra)|passa(?:r)? (?:para|pra)|coloca(?:r)? em)\s+(?:(?:de|em|na|no|pra|para)\s+)?(.+?)[.!]?$/);
+  if (!m) return null;
+  const want = fold(m[1]);
+  for (const [category, subs] of Object.entries(FINANCE_TAXONOMY_DATA.expense)) {
+    if (fold(category) === want) return { category, subcategory: subs.length === 1 ? subs[0] : "" };
+    const sub = subs.find((s) => fold(s) === want || fold(s).split("/").includes(want));
+    if (sub) return { category, subcategory: sub };
+  }
+  return null;
+}
+
 /** "foi no pix", "era 32,50", "foi dia 15/10", "foi ontem", "apaga" → mudança; null se não entendeu. */
 export function parseQuotedChange(text: string): QuotedChange | null {
   const t = text.trim().toLowerCase();
   if (/^(apag[ae]|exclu[ia]|remov[ae]|desfaz(er)?|cancel[ae])\b/.test(t)) return { remove: true };
+  const cat = categoryInText(t);
+  if (cat) return cat;
   const c: QuotedChange = {};
   const pm = t.match(/\b(pix|d[eé]bito|dinheiro|esp[eé]cie|boleto|cart[aã]o|cr[eé]dito|vr|va|vale|ticket)\b/);
   if (pm) c.paymentMethod = PAYMENT_OPTIONS[pm[1].normalize("NFD").replace(/[̀-ͯ]/g, "")] ?? PAYMENT_OPTIONS[pm[1]] ?? (pm[1] === "boleto" ? "boleto" : undefined);
@@ -70,6 +88,7 @@ export async function applyQuotedEdit(entryId: string, c: QuotedChange): Promise
   }
   const data: Prisma.FinanceEntryUpdateInput = {};
   if (c.amount != null) data.amount = c.amount;
+  if (c.category) Object.assign(data, { category: c.category, subcategory: c.subcategory ?? "" });
   const method = c.paymentMethod ?? e.paymentMethod;
   if (c.paymentMethod || c.purchase) {
     const purchase = c.purchase ? new Date(c.purchase) : e.purchaseDate ?? e.date;

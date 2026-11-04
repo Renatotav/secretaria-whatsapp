@@ -168,3 +168,12 @@ test("correção citando a mensagem: meio, valor e apagar", () => {
   assert.deepEqual(parseQuotedChange("apaga"), { remove: true });
   assert.equal(parseQuotedChange("esse gasto foi de fome"), null);
 });
+
+test("correção citando: categoria só com o nome exato da lista", () => {
+  assert.deepEqual(parseQuotedChange("era besteira"), { category: "Besteira", subcategory: "" });
+  assert.deepEqual(parseQuotedChange("Categoria saídas"), { category: "Saídas", subcategory: "" });
+  assert.deepEqual(parseQuotedChange("era bar"), { category: "Saídas", subcategory: "Bar" });
+  assert.deepEqual(parseQuotedChange("muda pra uber"), { category: "Transporte", subcategory: "Uber/Taxi" });
+  assert.deepEqual(parseQuotedChange("era vr"), { paymentMethod: "ticket" });
+  assert.deepEqual(parseQuotedChange("era 25"), { amount: 25 });
+});

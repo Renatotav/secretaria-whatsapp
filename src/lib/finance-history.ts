@@ -68,13 +68,14 @@ export async function undoFinanceLog(logId: string): Promise<string> {
 // lançamento, mostra a mudança e espera o "sim". "100 no VR e 80 no cartão"
 // (respondendo à nota, na legenda da foto ou logo depois dela) divide a compra
 // em um lançamento por forma de pagamento, sem duplicar o total.
-export type QuotedChange = { amount?: number; paymentMethod?: string; purchase?: string; remove?: boolean };
+export type QuotedChange = { amount?: number; paymentMethod?: string; purchase?: string; remove?: boolean; category?: string; subcategory?: string };
 
-export function describeChange(e: { amount: number; paymentMethod: string; purchaseDate: Date | null; date: Date }, c: QuotedChange): string {
+export function describeChange(e: { amount: number; paymentMethod: string; purchaseDate: Date | null; date: Date; category: string; subcategory?: string | null }, c: QuotedChange): string {
   if (c.remove) return "apagar este lançamento";
   const ps: string[] = [];
   if (c.amount != null && Math.abs(c.amount - e.amount) > 0.001) ps.push(`valor ${brl(e.amount)} → ${brl(c.amount)}`);
   if (c.paymentMethod && c.paymentMethod !== e.paymentMethod) ps.push(`pagamento ${PAYMENT_NAMES[e.paymentMethod] ?? e.paymentMethod} → ${PAYMENT_NAMES[c.paymentMethod] ?? c.paymentMethod}`);
+  if (c.category && (c.category !== e.category || (c.subcategory ?? "") !== (e.subcategory ?? ""))) ps.push(`categoria ${e.category} → ${c.category}${c.subcategory ? ` › ${c.subcategory}` : ""}`);
   if (c.purchase) ps.push(`data da compra ${formatFullDate(e.purchaseDate ?? e.date)} → ${formatFullDate(new Date(c.purchase))}`);
   return ps.join("; ");
 }

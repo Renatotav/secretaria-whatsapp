@@ -120,7 +120,8 @@ export const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio)
 🕓 "Histórico do aluguel" / "por que a luz mudou?" / "o que mudou hoje?" — cada mudança no lançamento (valor, data, situação…) com o motivo; "desfaz a mudança 2" volta uma delas.
 🚦 "Como está o sistema?" — WhatsApp conectado, última mensagem recebida, ponte da tomada, chave do ar, backup no Google Drive, crédito da IA e há quanto tempo está no ar. Se o WhatsApp cair, a Alexa avisa; quando volta, chega a mensagem.
 ❄️ Ar-condicionado: "quanto gastei de ar?" (hoje e no mês, em R$), "quanto vem a conta de luz?" (previsão da Enel); dia errado: "ar 30/10 8,30" com o kWh do app SmartThings. "tarifa da luz 1,06" muda o preço do kWh (ar e scooter).
-✏️ Corrigir um lançamento antigo: *responda* (citando) a mensagem dele com "foi no pix", "era 32,50", "foi dia 15/10" ou "apaga" — ela mostra a mudança e espera o "sim".
+✏️ Corrigir um lançamento antigo: *responda* (citando) a mensagem dele com "foi no pix", "era 32,50", "foi dia 15/10", "era besteira" (categoria) ou "apaga" — ela mostra a mudança e espera o "sim". Citar e contar como estava ("esse foi de fome") vai para o diário ligado ao gasto.
+🗑️ Apagar sem citar: "apaga almoço 32" — mostra qual achou e espera o "sim". Gasto igual a um que já existe (mesmo nome, valor e dia): ela pergunta antes de lançar outro.
 ✂️ Pagou parte em cada (nota ou gasto): "100 no VR e 80 no cartão" ou "25 no vale antigo e o resto no cartão" — na legenda da foto da nota, logo depois dela, ou respondendo à mensagem do lançamento.
 🧪 "Testa a ia" — laboratório com mensagens e textos inventados: quantas a IA acertou, tempo e custo; "testa a ia com <modelo>" compara um candidato antes de trocar.
 🧮 "Por que meu limite é esse?" — a conta do limite do cartão aberta: entradas, fatura, contas e o que sobra por dia.
@@ -137,7 +138,7 @@ export const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio)
 📅 "Fechamento do mês" — como fechou o mês passado, com gráfico.
 📈 Gráfico quando pedir: "gráfico dos gastos" (mês por categoria), "gráfico de entradas e saídas" (6 meses), "gráfico do mercado" (uma categoria), "gráfico das metas".
 💳 Pagou a fatura do cartão? "paguei a fatura" (ou "paguei a fatura do Santander") dá baixa em todas as compras dela de uma vez; no painel tem o botão "Marcar como paga".
-↩️ Corrigir o último lançamento: "desfazer" apaga; "na verdade foi 250" troca o valor. Gasto sem valor ("gastei com uber"): ela pergunta quanto foi.
+↩️ Corrigir o último lançamento: "desfazer" apaga; "na verdade foi 250" troca o valor; "vr", "foi no pix" ou "os dois foram vr" trocam o meio de pagamento. Gasto sem valor ("gastei com uber"): ela pergunta quanto foi.
 🔁 "Quanto gasto com assinaturas?" — contas fixas e assinaturas.
 ❓ Pergunta livre sobre os números: "quanto gastei com Uber em setembro?", "qual minha maior compra no cartão?", "quanto falta pagar do Samsung?".
 🛒 Simulador: "posso comprar um tênis de 200 em 3x?", "e se meu salário for 3300?".
