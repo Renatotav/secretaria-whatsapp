@@ -781,6 +781,24 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
         response = `🧐 *Confere antes de eu lançar:*\n📝 ${route.description}\n💰 ${how}\n📂 ${route.category}${route.subcategory ? ` › ${route.subcategory}` : ""}\n\nResponda *sim* para lançar ou *não* para cancelar.`;
         break;
       }
+      // Mesmo nome, valor e dia de compra de um que já existe: pergunta antes (03/11 o almoço de 32 foi lançado 3 vezes).
+      if (route.financeType === "expense" && route.description && confirmedHighValueText !== joinedText) {
+        const dia = route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT();
+        const range = { gte: new Date(dia.getTime() - 12 * 3600_000), lt: new Date(dia.getTime() + 12 * 3600_000) }; // dia vem ao meio-dia
+        const igual = await prisma.financeEntry.findFirst({
+          where: {
+            type: "expense",
+            amount: { gte: route.amount - 0.01, lte: route.amount + 0.01 },
+            description: { equals: route.description, mode: "insensitive" },
+            OR: [{ purchaseDate: range }, { purchaseDate: null, date: range }],
+          },
+        });
+        if (igual) {
+          pendingHighValue = { text: joinedText, at: Date.now() };
+          response = `⚠️ Já tem um igual: *${igual.description}* ${brl(igual.amount)}, compra ${formatFullDate(igual.purchaseDate ?? igual.date)} (lançado ${fmtBRT(igual.createdAt, true)}).\nLanço outro mesmo assim? Responda *sim* ou *não*.`;
+          break;
+        }
+      }
       confirmedHighValueText = null;
 
       // Gasto sem meio de pagamento dito na mensagem = cartão (o normal dele);
