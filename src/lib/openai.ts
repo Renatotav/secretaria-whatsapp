@@ -17,11 +17,13 @@ export interface ProviderOptions {
   openrouterModel?: string;
 }
 
-/** Modelos que não têm provedor ZDR na OpenRouter (descoberto na 1ª chamada). */
+/** Modelos que obrigam a "pensar" (recusam reasoning desligado; descoberto na 1ª chamada). */
 const PENSA_SEMPRE = new Set<string>();
+/** Modelos que não têm provedor ZDR na OpenRouter (descoberto na 1ª chamada). */
 const SEM_ZDR = new Set<string>();
-/** Reserva quando o modelo configurado é aposentado ou some da OpenRouter. */
-const MODELO_RESERVA = "google/gemini-3.1-flash-lite";
+/** Reserva quando o modelo configurado é aposentado ou some da OpenRouter.
+ *  Prova de 04/11/2026 com 16 frases dele: gemini-2.5-flash 16/16 e a mais rápida (a anterior, 3.1-flash-lite, 13/16). */
+const MODELO_RESERVA = "google/gemini-2.5-flash";
 const MODELO_FORA = new Set<string>();
 
 export async function generateResponse(
