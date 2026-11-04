@@ -8,7 +8,9 @@ import { runWorkSkill } from "./work-ai";
 // roda os modelos atuais; "testa a ia com <modelo>" roda um candidato no
 // lugar dos dois. ~15 chamadas pequenas (centavos).
 
-type RouterCase = { text: string; type: string; amount?: number; paymentMethod?: string; financeType?: string };
+// notType: o que NÃO pode sair (ex.: comentário/correção virar gasto novo); ctx: conversa anterior inventada.
+type RouterCase = { text: string; type?: string; notType?: string; ctx?: string; amount?: number; paymentMethod?: string; financeType?: string };
+const CTX_ALMOCO = "Dono: almoço 27 reais no crédito\nSecretária: ✅ Lançamento salvo! 📝 Almoço 💰 R$ 27,00 📂 Alimentação › Restaurantes 💳 Cartão";
 const ROUTER_CASES: RouterCase[] = [
   { text: "almoço 32,50 no pix", type: "finance", amount: 32.5, paymentMethod: "pix" },
   { text: "gastei 120 no mercado no cartão", type: "finance", amount: 120, paymentMethod: "cartão" },
@@ -20,6 +22,11 @@ const ROUTER_CASES: RouterCase[] = [
   { text: "hoje foi um dia cansativo, fiquei meio triste", type: "diary" },
   { text: "posso comprar uma tv de 2000 em 10x?", type: "finance_simulation" },
   { text: "quanto gastei com alimentação esse mês?", type: "agenda_query" },
+  // Os erros reais de 03–04/11/2026, com valores inventados: comentário ou correção nunca vira gasto novo.
+  { text: "esse gasto foi porque eu estava com muita fome", ctx: CTX_ALMOCO, type: "diary" },
+  { text: "almoço 27 apaga", ctx: CTX_ALMOCO, notType: "finance" },
+  { text: "o almoço de 27 de ontem era vr", ctx: CTX_ALMOCO, notType: "finance" },
+  { text: "os dois foram vr", ctx: CTX_ALMOCO, notType: "finance" },
 ];
 
 // Texto com erro de português + termos que não podem mudar.
@@ -32,6 +39,13 @@ const FIX_CASES: FixCase[] = [
   { text: "o advogado nao consegue peticionar no 0012345-37.2025.8.06.0112 pois o botao [Juntar documentos] nao aparece.", keep: ["0012345-37.2025.8.06.0112", "[Juntar documentos]"], fixed: ["não", "botão"] },
 ];
 
+
+/** Modelos com provedor que não guarda dados (ZDR) na OpenRouter; null = não deu para saber. */
+async function comZdr(): Promise<Set<string> | null> {
+  const r = await fetch("https://openrouter.ai/api/v1/endpoints/zdr", { signal: AbortSignal.timeout(15000) }).catch(() => null);
+  const j = (await r?.json().catch(() => null)) as { data?: { model_id?: string }[] } | null;
+  return j?.data ? new Set(j.data.map((e) => String(e.model_id ?? "").replace(/:.*$/, ""))) : null;
+}
 
 async function precos(): Promise<Map<string, { in: number; out: number }>> {
   const r = await fetch("https://openrouter.ai/api/v1/models", { signal: AbortSignal.timeout(15000) }).catch(() => null);
@@ -47,7 +61,8 @@ export async function runAiLab(candidate?: string): Promise<string> {
   if (!config?.openrouterApiKey) return "🧪 Sem chave da OpenRouter configurada.";
   const routerModel = candidate || config.openrouterModel;
   const fixModel = candidate || config.workAiModel;
-  const tabela = await precos();
+  const [tabela, zdr] = await Promise.all([precos(), comZdr()]);
+  const semZdr = (m: string) => (zdr && !zdr.has(m) ? " ⚠️ pode guardar seus dados (sem provedor ZDR)" : "");
 
   // 1) Entender mensagens (o roteador).
   let okRouter = 0;
@@ -55,9 +70,10 @@ export async function runAiLab(candidate?: string): Promise<string> {
   const t0 = Date.now();
   for (const c of ROUTER_CASES) {
     try {
-      const r = (await routePersonalMessage(c.text, "Renato", { aiProvider: "openrouter", openrouterApiKey: config.openrouterApiKey, openrouterModel: routerModel }, "", config.systemPrompt, 10, 4)) as Record<string, unknown>;
+      const r = (await routePersonalMessage(c.text, "Renato", { aiProvider: "openrouter", openrouterApiKey: config.openrouterApiKey, openrouterModel: routerModel }, c.ctx ?? "", config.systemPrompt, 10, 4)) as Record<string, unknown>;
       const certo =
-        r.type === c.type &&
+        (c.type === undefined || r.type === c.type) &&
+        (c.notType === undefined || r.type !== c.notType) &&
         (c.amount === undefined || Math.abs(Number(r.amount) - c.amount) < 0.01) &&
         (c.paymentMethod === undefined || r.paymentMethod === c.paymentMethod) &&
         (c.financeType === undefined || r.financeType === c.financeType);
@@ -93,11 +109,11 @@ export async function runAiLab(candidate?: string): Promise<string> {
   return [
     `🧪 *Laboratório da IA*${candidate ? ` — testando ${candidate}` : " — modelos atuais"}`,
     "",
-    `*Entender mensagens* (${routerModel})`,
+    `*Entender mensagens* (${routerModel})${semZdr(routerModel)}`,
     `${okRouter === ROUTER_CASES.length ? "🟢" : okRouter >= ROUTER_CASES.length - 1 ? "🟡" : "🔴"} ${okRouter}/${ROUTER_CASES.length} certas · ${ms(tRouter / ROUTER_CASES.length)} por mensagem`,
     ...erradas.slice(0, 5).map((e) => `  ✗ ${e}`),
     "",
-    `*Corretor do trabalho* (${fixModel})`,
+    `*Corretor do trabalho* (${fixModel})${semZdr(fixModel)}`,
     `${okFix === FIX_CASES.length ? "🟢" : okFix >= FIX_CASES.length - 1 ? "🟡" : "🔴"} ${okFix}/${FIX_CASES.length} perfeitos · ${ms(tFix / FIX_CASES.length)} por texto${custoFix != null ? ` · ${reais(custoFix / FIX_CASES.length)} por texto` : ""}`,
     ...falhas.slice(0, 5).map((f) => `  ✗ ${f}`),
     "",
