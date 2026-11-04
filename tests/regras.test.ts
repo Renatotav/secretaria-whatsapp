@@ -6,7 +6,7 @@ import { parseLocalDate, creditCardBillDate } from "../src/lib/dates";
 import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxonomy";
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
-import { parseSplit } from "../src/lib/message-handlers";
+import { looksLikeSecret, parseSplit } from "../src/lib/message-handlers";
 import { parseDeleteText, parseQuotedChange } from "../src/lib/quoted-reply";
 import { parsePaymentReply, splitRequests } from "../src/lib/finance-commands";
 import { brl } from "../src/lib/format";
@@ -176,4 +176,11 @@ test("correção citando: categoria só com o nome exato da lista", () => {
   assert.deepEqual(parseQuotedChange("muda pra uber"), { category: "Transporte", subcategory: "Uber/Taxi" });
   assert.deepEqual(parseQuotedChange("era vr"), { paymentMethod: "ticket" });
   assert.deepEqual(parseQuotedChange("era 25"), { amount: 25 });
+});
+
+test("chave colada no WhatsApp não vai para a IA", () => {
+  assert.equal(looksLikeSecret("chave do app 00000000-1111-2222-3333-444444444444"), true);
+  assert.equal(looksLikeSecret("minha chave sk-teste-aaaaaaaaaaaaaaaaaaaaaaaa"), true);
+  assert.equal(looksLikeSecret("almoço 32 no cartão"), false);
+  assert.equal(looksLikeSecret("paguei o boleto 23793381286000000000"), false);
 });

@@ -151,6 +151,11 @@ async function applyQuotedReply(text: string, quoted: string | undefined): Promi
   return `✏️ Em "${label}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.${parcela}\nConfirma? Responda *sim* ou *não*.`;
 }
 
+/** UUID ou token de API (sk-…, ghp_…, xoxb-…) no texto. */
+export function looksLikeSecret(text: string): boolean {
+  return /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\b(?:sk|pk|rk|ghp|gho|github_pat|xox[abp]|AIza)[-_]?[A-Za-z0-9_-]{20,}/i.test(text);
+}
+
 /** "apaga almoço 32" / "almoço 32 apaga" sem citar: o lançamento mais novo com esse valor (e nome), com "sim" antes. */
 async function applyDeleteByText(text: string): Promise<string | null> {
   const asked = parseDeleteText(text);
@@ -709,6 +714,11 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     .map((m) => `${m.role === "user" ? "Dono" : "Secretária"}: ${m.content}`)
     .join("\n");
 
+  // Chave/token colado (28/10 a do SmartThings): não vai para a IA nem fica na conversa.
+  if (looksLikeSecret(joinedText)) {
+    await notifyOwner(config, "🔐 Isso parece uma chave ou senha: *não guardei* e não mandei para a IA. A chave do ar já se renova sozinha; se for outra, passe pelo Claude.");
+    return;
+  }
   let route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
   // Citou uma mensagem e só comentou, sem valor: é relato, não gasto novo (03/11 "esse gasto foi me alimentar…" repetiu o almoço).
   if (route.type === "finance" && _meta.quoted && !/\d/.test(joinedText)) {
