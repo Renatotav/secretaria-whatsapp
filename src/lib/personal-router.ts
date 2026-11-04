@@ -182,6 +182,7 @@ Tipos:
 4. diary — RELATO pessoal: como foi o dia, o que sentiu, uma reflexão ou desabafo.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
    Cumprimentos, perguntas e papo NÃO são diário (use chat).
+   Comentário sobre um gasto JÁ lançado, sem valor novo ("esse gasto foi de fome", "comprei porque estava triste") é diary — NUNCA finance: não repita um lançamento do contexto.
 
 5. savings_add — guardar OU tirar dinheiro de uma Meta de Economia (SavingsGoal)
    Ex: "Guarda 100 reais pra viagem" → type "savings_add", amount: 100, goalName: "viagem"
