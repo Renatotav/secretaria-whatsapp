@@ -84,6 +84,8 @@ export async function generateResponse(
         model,
         temperature,
         max_tokens: maxTokens,
+        // Sem "pensar" escondido: modelo que raciocina gastava o max_tokens nisso e cortava o JSON.
+        reasoning: { enabled: false },
         messages: [{ role: "system", content: systemPrompt }, ...messages],
         ...(zdr ? { provider: { zdr: true, data_collection: "deny" } } : {}),
       } as Parameters<typeof openrouter.chat.completions.create>[0]) as Promise<OpenAI.Chat.Completions.ChatCompletion>;
