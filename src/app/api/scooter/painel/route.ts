@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { scooterNumbers, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
+import { scooterNumbers, kmDaScooter, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
 
 /** Dados da aba Scooter: números de agora + histórico de cargas e leituras. */
 export const GET = withErrorHandling(async (request: Request) => {
@@ -43,51 +43,35 @@ export const GET = withErrorHandling(async (request: Request) => {
   const dias = first && last ? (last.at.getTime() - first.at.getTime()) / 86_400_000 : 0;
   const kmDia = first && last && dias >= 1 ? (last.odo - first.odo) / dias : null;
 
-  // Economia vs Uber (pedido dele, 22/10/2026): dias ÚTEIS em que a scooter rodou
-  // (o ODO subiu no intervalo) × 2 corridas (ida e volta) × o preço médio das
-  // corridas de Uber que ele lançou − a energia das cargas. É estimativa.
+  // Economia vs Uber (pedido dele, 22/10/2026; pelos km desde 05/11): cada ida e volta
+  // rodada (km ÷ km de um dia de trabalho) = 2 corridas × o preço médio das corridas de
+  // Uber que ele lançou − a energia das cargas. É estimativa.
   const uber = await prisma.financeEntry.aggregate({
     where: { type: "expense", amount: { lt: 60 }, OR: [{ subcategory: "Uber/Taxi" }, { description: { contains: "uber", mode: "insensitive" } }] },
     _avg: { amount: true },
     _count: true,
   });
   const corrida = uber._avg.amount ?? 0;
-  // Dias úteis (seg–sex) depois de "de" até "ate", no dia de Brasília.
   const diaBrt = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
-  const diasUteis = (de: Date, ate: Date) => {
-    let n = 0;
-    const fim = diaBrt(ate);
-    for (let d = new Date(`${diaBrt(de)}T12:00:00Z`); ; ) {
-      d.setUTCDate(d.getUTCDate() + 1);
-      const k = d.toISOString().slice(0, 10);
-      if (k > fim) break;
-      if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) n++;
-    }
-    return n;
-  };
-  const mesAtual = diaBrt(new Date()).slice(0, 7);
-  let diasRod = 0, diasMes = 0;
-  for (let i = 1; i < leituras.length; i++) {
-    if (leituras[i].odo <= leituras[i - 1].odo) continue;
-    const n0 = Math.max(1, diasUteis(leituras[i - 1].at, leituras[i].at));
-    diasRod += n0;
-    if (diaBrt(leituras[i].at).slice(0, 7) === mesAtual) diasMes += n0;
-  }
+  const { kmIdaVolta, kmTotal, kmMes } = kmDaScooter(leituras, diaBrt(new Date()).slice(0, 7));
   const energiaTotal = charges.reduce((a, c) => a + (c.kwh ?? 0), 0) * n.price;
+  const uberMes = (kmMes / kmIdaVolta) * 2 * corrida;
   const economia = corrida > 0 ? {
     corrida,
     corridasBase: uber._count,
-    dias: diasRod,
-    diasMes,
-    total: diasRod * 2 * corrida - energiaTotal,
-    mes: diasMes * 2 * corrida - n.mesKwh * n.price,
-    uberMes: diasMes * 2 * corrida,
+    kmIdaVolta,
+    kmTotal,
+    kmMes,
+    idasVoltas: kmTotal / kmIdaVolta,
+    total: (kmTotal / kmIdaVolta) * 2 * corrida - energiaTotal,
+    mes: uberMes - n.mesKwh * n.price,
+    uberMes,
   } : null;
 
   // Quando recarregar: pelos km de um DIA DE USO (dias úteis em que rodou), não pela média
   // com dias parados — semana parada não empurra a data. Conta só dias úteis à frente.
   const folga = n.kmSince != null ? n.safeKm - n.kmSince : null;
-  const kmUso = first && last && diasRod > 0 ? (last.odo - first.odo) / diasRod : null;
+  const kmUso = leituras.length > 1 ? kmIdaVolta : null;
   let recarregarEm: Date | null = null;
   if (folga != null && kmUso && kmUso > 0) {
     let faltam = Math.max(0, Math.floor(folga / kmUso));

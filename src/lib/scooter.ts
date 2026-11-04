@@ -217,6 +217,30 @@ async function lastOdo(): Promise<number | null> {
 }
 
 /** Consumo e autonomia com o que já foi registrado. */
+/**
+ * Km rodados para a conta "economia vs Uber" (05/11/2026): conta pelos km, não pelos dias
+ * entre leituras — 1 km em 2 dias não é ida e volta ao trabalho. A ida e volta é a mediana
+ * dos dias úteis com leitura no dia seguinte (padrão 6 km enquanto não houver 3 desses).
+ */
+export function kmDaScooter(leituras: { at: Date; odo: number }[], mesAtual: string) {
+  const diaBrt = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
+  const umDia: number[] = [];
+  let kmTotal = 0, kmMes = 0;
+  for (let i = 1; i < leituras.length; i++) {
+    const km = leituras[i].odo - leituras[i - 1].odo;
+    if (km <= 0) continue;
+    kmTotal += km;
+    if (diaBrt(leituras[i].at).slice(0, 7) === mesAtual) kmMes += km;
+    const de = new Date(`${diaBrt(leituras[i - 1].at)}T12:00:00Z`);
+    const dow = de.getUTCDay();
+    // Leitura num dia útil e a seguinte no dia útil seguinte: esse km é um dia de ida e volta.
+    if (dow >= 1 && dow <= 4 && (new Date(`${diaBrt(leituras[i].at)}T12:00:00Z`).getTime() - de.getTime()) / 86_400_000 === 1) umDia.push(km);
+  }
+  umDia.sort((a, b) => a - b);
+  const kmIdaVolta = umDia.length >= 3 ? umDia[Math.floor(umDia.length / 2)] : 6;
+  return { kmIdaVolta, kmTotal, kmMes };
+}
+
 export async function scooterNumbers() {
   const logs = await prisma.scooterLog.findMany({ orderBy: { at: "asc" } });
   if (!logs.length) return null;
