@@ -78,6 +78,23 @@ export function parseDeleteText(text: string): { amount: number; name: string } 
   return { amount: parseBrNumber(num[1]), name };
 }
 
+/** "o cupom de 56,38 de 31/10 era vr" sem citar → valor, dia (se disse) e a mudança (meio ou categoria).
+ *  "era" sempre é correção; "foi" só com data ("almoço 32 foi no pix" é gasto novo). */
+export function parseEditText(text: string): { amount: number; day: Date | null; change: QuotedChange } | null {
+  const t = text.trim().toLowerCase();
+  const m = t.match(/\b(era|eram|foi|foram)\s+((?:(?:no|na|em|de|pelo|pela|pra|para)\s+)?[\p{L}/]+)[.!]?$/u);
+  if (t.length > 90 || !m) return null;
+  const change = parseQuotedChange(`era ${m[2]}`);
+  if (!change || !(change.paymentMethod || change.category)) return null;
+  const head = t.slice(0, m.index);
+  const dm = head.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  if (/^f/.test(m[1]) && !dm) return null;
+  const num = (dm ? head.replace(dm[0], " ") : head).match(new RegExp(NUMBER_PART));
+  if (!num) return null;
+  const y = dm?.[3] ? (dm[3].length === 2 ? 2000 + Number(dm[3]) : Number(dm[3])) : todayBRT().getFullYear();
+  return { amount: parseBrNumber(num[1]), day: dm ? new Date(y, Number(dm[2]) - 1, Number(dm[1]), 12) : null, change };
+}
+
 export async function applyQuotedEdit(entryId: string, c: QuotedChange): Promise<string> {
   const e = await prisma.financeEntry.findUnique({ where: { id: entryId } });
   if (!e) return "Esse lançamento não existe mais.";

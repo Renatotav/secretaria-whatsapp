@@ -7,7 +7,7 @@ import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxo
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { looksLikeSecret, parseSplit } from "../src/lib/message-handlers";
-import { parseDeleteText, parseQuotedChange } from "../src/lib/quoted-reply";
+import { parseDeleteText, parseEditText, parseQuotedChange } from "../src/lib/quoted-reply";
 import { parsePaymentReply, splitRequests } from "../src/lib/finance-commands";
 import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
@@ -183,4 +183,15 @@ test("chave colada no WhatsApp não vai para a IA", () => {
   assert.equal(looksLikeSecret("minha chave sk-teste-aaaaaaaaaaaaaaaaaaaaaaaa"), true);
   assert.equal(looksLikeSecret("almoço 32 no cartão"), false);
   assert.equal(looksLikeSecret("paguei o boleto 23793381286000000000"), false);
+});
+
+test("correção escrita sem citar: 'era' corrige; 'foi' só com data", () => {
+  const c = parseEditText("O cupom de R$ 56,38 de 31/10 era vr");
+  assert.equal(c?.amount, 56.38);
+  assert.equal(c?.day?.getDate(), 31);
+  assert.deepEqual(c?.change, { paymentMethod: "ticket" });
+  assert.deepEqual(parseEditText("o uber de 18 era besteira")?.change, { category: "Besteira", subcategory: "" });
+  assert.equal(parseEditText("almoço 32 foi no pix"), null);
+  assert.equal(parseEditText("almoço 32 de 30/10 foi no pix")?.amount, 32);
+  assert.equal(parseEditText("hoje foi bom"), null);
 });
