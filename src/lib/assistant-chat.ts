@@ -169,6 +169,10 @@ Regras:
   const prompt = `${recentContext ? `Conversa recente:\n${recentContext}\n\n` : ""}Mensagem dele agora: "${message}"`;
   try {
     const { content } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
+    // Mesmo proibida, a IA copiava o cartão "Lançamento salvo" ou dizia "vou ajustar" sem mudar nada (31/10 "os dois foram VR").
+    if (/Lançamento salvo|\b(vou (ajustar|anotar|guardar|registrar|lançar|salvar|corrigir|mudar)|ajustei|atualizei|corrigi|registrei|lancei|salvei|anotei|guardei|mudei)\b/i.test(content)) {
+      return "🤔 Não entendi o que fazer e *não mudei nada*.\nPara corrigir um gasto: *cite* a mensagem dele e mande *era vr*, *na verdade foi 25* ou *apaga*.\nLogo depois de lançar, vale mandar só *vr*, *pix* ou *os dois foram vr*.";
+    }
     return content.trim() || "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
   } catch {
     // Sem resposta da IA (fora do ar, sem crédito): não culpar a frase dele.

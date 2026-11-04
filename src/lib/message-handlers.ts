@@ -812,7 +812,9 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       // fatura ("pagamento para dia 10/11"), vale o que ele disse — o
       // fechamento às vezes muda (ex: feriado/eleição).
       const isCardExpense = route.paymentMethod === "cartão" && route.financeType === "expense";
-      const cardPurchaseDate = route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT();
+      // Compra no futuro não existe: a IA confundia a fatura dita ("pagamento 10/11") com o dia da compra (26/10).
+      const saidPurchase = route.purchaseDate ? parseLocalDate(route.purchaseDate) : null;
+      const cardPurchaseDate = saidPurchase && saidPurchase <= todayBRT() ? saidPurchase : todayBRT();
       // Cartão de outra pessoa citado ("no santander do bruno"): vai para ele, com o vencimento dele.
       const cardName = isCardExpense ? cardInText(config, joinedText) : "";
       if (isCardExpense) {

@@ -7,7 +7,7 @@ import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxo
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { parseSplit } from "../src/lib/message-handlers";
-import { splitRequests } from "../src/lib/finance-commands";
+import { parsePaymentReply, splitRequests } from "../src/lib/finance-commands";
 import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
 import { sqlSeguro } from "../src/lib/assistant-chat";
@@ -143,4 +143,12 @@ test("ar: período com a chave vencida é dividido entre os dias (mês e hoje n�
   const todos = { ...c, arDias: { "2026-10-30": 8.3, "2026-10-31": 6.5, "2026-11-01": 8, "2026-11-02": 7 } };
   assert.equal(spentSince(todos, "2026-11-03"), 3200); // manhã: 32000 − 29800 = 2200, + 1000 medido
 
+});
+
+test("meio de pagamento logo depois do gasto: número, palavra ou frase; 'os dois' pega os 2 últimos", () => {
+  assert.deepEqual(parsePaymentReply("5"), { choice: "ticket", count: 1 });
+  assert.deepEqual(parsePaymentReply("foi no pix"), { choice: "pix", count: 1 });
+  assert.deepEqual(parsePaymentReply("Os dois foram VR"), { choice: "ticket", count: 2 });
+  assert.equal(parsePaymentReply("almoço 32 no pix"), null);
+  assert.equal(parsePaymentReply("vale a pena"), null);
 });

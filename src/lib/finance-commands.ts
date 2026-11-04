@@ -124,41 +124,55 @@ export const UNDO_HINT = "↩️ Errou? Responda *desfazer* ou *na verdade foi 2
  * data (cartão vai pro vencimento da fatura; o resto sai no dia da compra).
  * Devolve a mensagem de confirmação, ou null se não for esse caso.
  */
-export async function applyPaymentReply(text: string, config: AgentConfig): Promise<string | null> {
-  const choice = PAYMENT_OPTIONS[text.trim().toLowerCase().replace(/[.!]+$/, "")];
-  if (!choice) return null;
+/** "5", "vr", "foi no pix", "os dois foram VR" → meio e quantos lançamentos (os últimos); null se não for isso. */
+export function parsePaymentReply(text: string): { choice: (typeof PAYMENT_OPTIONS)[string]; count: number } | null {
+  const m = text.trim().toLowerCase().replace(/[.!]+$/, "").match(/^(?:(os dois|as duas|ambos|ambas|todos|todas)\s+)?(?:(?:foi|foram|era|eram|paguei)\s+)?(?:(?:no|na|em|com|de|pelo|pela)\s+)?(\S+)$/);
+  const choice = m ? PAYMENT_OPTIONS[m[2]] : undefined;
+  if (!m || !choice) return null;
+  return { choice, count: !m[1] ? 1 : /todo|toda/.test(m[1]) ? 10 : 2 };
+}
 
-  const entry = await prisma.financeEntry.findFirst({
+export async function applyPaymentReply(text: string, config: AgentConfig): Promise<string | null> {
+  const parsed = parsePaymentReply(text);
+  if (!parsed) return null;
+  const { choice, count } = parsed;
+
+  const entries = await prisma.financeEntry.findMany({
     where: {
       source: "whatsapp",
       type: "expense",
       createdAt: { gte: new Date(Date.now() - PAYMENT_REPLY_WINDOW_MS) },
     },
     orderBy: { createdAt: "desc" },
+    take: count,
   });
-  if (!entry || /Parcela \d+\/\d+/.test(entry.description)) return null;
+  if (!entries.length || entries.some((e) => /Parcela \d+\/\d+/.test(e.description))) return null;
 
-  const label = entry.description || entry.category;
-  if (entry.paymentMethod === choice) {
-    return `👍 "${label}" (${brl(entry.amount)}) já estava como ${paymentLabel(entry.paymentMethod, entry.date)}.`;
+  const lines: string[] = [];
+  for (const entry of entries) {
+    const label = entry.description || entry.category;
+    if (entry.paymentMethod === choice) {
+      lines.push(`👍 "${label}" (${brl(entry.amount)}) já estava como ${paymentLabel(entry.paymentMethod, entry.date)}.`);
+      continue;
+    }
+    const purchase = entry.purchaseDate ?? entry.date;
+    const isCard = choice === "cartão";
+    const date = isCard
+      ? creditCardBillDate(purchase, config.creditCardDueDay || 10, config.creditCardBestDay || 5)
+      : purchase;
+    await prisma.financeEntry.update({
+      where: { id: entry.id },
+      // VR = conta do vale; trocar de VR para outro meio volta para a conta principal.
+      data: {
+        paymentMethod: choice,
+        date,
+        status: isCard ? "pending" : "paid",
+        account: choice === "ticket" ? "VR" : /vr|ticket|vale/i.test(entry.account) ? "Principal" : entry.account,
+      },
+    });
+    lines.push(`✅ Corrigido: "${label}" (${brl(entry.amount)}) agora é ${paymentLabel(choice, date)}.`);
   }
-
-  const purchase = entry.purchaseDate ?? entry.date;
-  const isCard = choice === "cartão";
-  const date = isCard
-    ? creditCardBillDate(purchase, config.creditCardDueDay || 10, config.creditCardBestDay || 5)
-    : purchase;
-  await prisma.financeEntry.update({
-    where: { id: entry.id },
-    // VR = conta do vale; trocar de VR para outro meio volta para a conta principal.
-    data: {
-      paymentMethod: choice,
-      date,
-      status: isCard ? "pending" : "paid",
-      account: choice === "ticket" ? "VR" : /vr|ticket|vale/i.test(entry.account) ? "Principal" : entry.account,
-    },
-  });
-  return `✅ Corrigido: "${label}" (${brl(entry.amount)}) agora é ${paymentLabel(choice, date)}.`;
+  return lines.join("\n");
 }
 
 export const SAVINGS_REPLY_MARK = "Responda *guarda*";
