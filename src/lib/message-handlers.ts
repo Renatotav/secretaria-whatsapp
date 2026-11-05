@@ -1959,7 +1959,7 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
       amount: invoice.total,
       category: invoice.category || "Alimentação",
       subcategory: invoice.subcategory || "Supermercado",
-      description: `Nota Fiscal (${invoice.items.length} itens) - ${caption}`,
+      description: `Nota Fiscal (${invoice.items.length} itens)${caption.trim() ? ` - ${caption.trim()}` : ""}`,
       date: invoiceDate,
       purchaseDate: purchaseDate,
       paymentMethod: paymentMethod,

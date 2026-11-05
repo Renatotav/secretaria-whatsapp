@@ -66,7 +66,7 @@ export async function applySplit(entryId: string, parts: SplitPart[]): Promise<s
     });
   }
   const linhas = parts.map((p) => { const d = datesFor(p.paymentMethod); return `• ${brl(p.amount)} — ${paymentLabel(p.paymentMethod, d.date)}${p.account === "Vale antigo" ? " (vale antigo)" : ""}`; });
-  return `✂️ *Pagamento dividido:* ${base.replace(/^Nota Fiscal \(\d+ itens\) - ?/, "Nota fiscal ").trim() || e.category} · total ${brl(parts.reduce((a, p) => a + p.amount, 0))}\n${linhas.join("\n")}${e.description.startsWith("Nota Fiscal") ? "\nOs itens da nota ficam no primeiro lançamento." : ""}`;
+  return `✂️ *Pagamento dividido:* ${base.replace(/^Nota Fiscal \(\d+ itens\)(?: - ?)?/, "Nota fiscal ").trim() || e.category} · total ${brl(parts.reduce((a, p) => a + p.amount, 0))}\n${linhas.join("\n")}${e.description.startsWith("Nota Fiscal") ? "\nOs itens da nota ficam no primeiro lançamento." : ""}`;
 }
 
 /**
