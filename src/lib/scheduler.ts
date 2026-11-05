@@ -31,6 +31,8 @@ let lastWishCheckDate = "";
 let lastReminderHour = -1;
 let lastWorkBriefDate = "";
 const meetingWarned = new Set<string>(); // reuniões do Outlook já avisadas
+/** "06:50" + 10 → "07:00". */
+const somaMin = (hhmm: string, min: number) => { const t = Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5)) + min; return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; };
 let lastMorningDate = "";
 let lastTireDate = "";
 let lastSalaryNudgeDate = "";
@@ -251,7 +253,8 @@ export function startScheduler(): void {
         }
       }
       // Rodou (a tomada carregou) e não mandou o ODO: lembra às 20h, uma vez por carga.
-      if (hhmm === "20:00" && config.ownerPhone) {
+      // Janela de 30 min (o odoReminder só avisa uma vez por carga): um reinício às 20:00 não perde o dia.
+      if (hhmm >= "20:00" && hhmm < "20:30" && config.ownerPhone) {
         try {
           const aviso = await odoReminder();
           if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
@@ -317,7 +320,8 @@ export function startScheduler(): void {
 
       // Resumo da manhã na Alexa (seg–sex, no horário de "alexa bom dia", padrão 06:50).
       const wd = brtDate.getUTCDay();
-      if (wd >= 1 && wd <= 5 && config.alexaMorning && hhmm === config.alexaMorning && lastMorningDate !== todayDate) {
+      // Até 10 min depois do horário (lastMorningDate segura a repetição): um reinício no minuto exato não perde o dia.
+      if (wd >= 1 && wd <= 5 && config.alexaMorning && hhmm >= config.alexaMorning && hhmm < somaMin(config.alexaMorning, 10) && lastMorningDate !== todayDate) {
         lastMorningDate = todayDate;
         try {
           await falarResumoManha();
