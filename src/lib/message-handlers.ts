@@ -2082,7 +2082,8 @@ async function applyCommitmentCommands(text: string, config: AgentConfig): Promi
   const t = text.trim();
   if (/^agenda[.!]*$/i.test(t)) {
     const p = pendingCommitment;
-    if (!p || Date.now() - p.at > 24 * 3600_000) return "🤔 Não tenho nenhum compromisso esperando para salvar.";
+    // Sem compromisso esperando, "agenda" é pedido para ver a agenda (segue para o roteador).
+    if (!p || Date.now() - p.at > 24 * 3600_000) return null;
     pendingCommitment = null;
     // Lembrete: 1h antes; compromisso antes das 9h (ou sem hora) avisa às 21h da véspera.
     const eventBRT = new Date(p.event.getTime() - 3 * 3600_000);
