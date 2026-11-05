@@ -43,7 +43,8 @@ const clean = (v: unknown, max = 2000) => (typeof v === "string" ? maskPersonalD
 /**
  * Onde estão os chamados que ainda não acabaram, pela planilha dele (a mesma
  * fila do Assyst): "na fila" = aguardando abertura de Redmine, pendente,
- * relógio parado ou 1º nível (mesmo que a Central já tenha marcado resolvido);
+ * ou relógio parado (mesmo que a Central já tenha marcado resolvido); "atribuído
+ * ao 1N" não conta: saiu da equipe dele;
  * "no 3º nível" = atribuído ao 3N (saiu da fila dele); "encerrar aqui" =
  * a planilha já diz ENCERRADO e a Central ainda está como aberto. Antes o
  * "em aberto" somava tudo (19) e a fila dele tinha 8.
@@ -54,7 +55,7 @@ export async function queueSplit(): Promise<{ naFila: number; no3n: number; ence
   for (const t of rows) {
     const st = (t.sheetStatus || "").toUpperCase();
     const aberto = t.status === "aberto" || t.status === "pendente";
-    if (/AGUARD|PENDENT|REL[OÓ]GIO|\b1N\b/.test(st) || (!st && aberto)) naFila++;
+    if (/AGUARD|PENDENT|REL[OÓ]GIO/.test(st) || (!st && aberto)) naFila++;
     else if (aberto && /^ATRIBU/.test(st) && /3N/.test(st)) no3n++;
     else if (aberto && /^ENCERRAD/.test(st)) encerrarAqui++;
   }
