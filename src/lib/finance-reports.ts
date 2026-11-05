@@ -428,6 +428,7 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
   const fits: string[] = [];
   for (const w of wishes) if ((await checkWish(w)).level === "green") fits.push(w.name);
 
+  const correcoes = await prisma.financeLog.count({ where: { reason: { startsWith: "correção:" }, at: { gte, lte } } });
   const lines = [
     `📊 *Sua semana — ${formatDayMonth(monday)} a ${formatDayMonth(sunday)}*`,
     `💰 Entrou ${brl(income)} · 💸 gastou ${brl(out)}`,
@@ -436,6 +437,7 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
     `\n${(await monthForecastLine(today.getFullYear(), today.getMonth())).trim()}`,
     due.length ? `\n📅 *Próxima semana:*\n${due.join("\n")}` : "\n📅 Próxima semana: nada vencendo.",
     fits.length ? `\n🛍️ Já cabe da lista de desejos: ${fits.join(", ")}` : "",
+    correcoes ? `\n✏️ Você corrigiu ${correcoes} lançamento(s) esta semana. Peça ao Claude *olha as correções* para virarem regra.` : "",
   ].filter(Boolean);
 
   // Trabalho (Central do Atendente): só números, fora do comentário da IA.

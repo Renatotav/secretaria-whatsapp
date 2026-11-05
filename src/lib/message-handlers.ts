@@ -121,8 +121,8 @@ export async function applyHistoryCommand(text: string): Promise<string | null> 
   return `${titulo}\n\n${logs.map((l, i) => histLine(i + 1, l)).join("\n")}\n\nPara voltar uma mudança: *desfaz a mudança N*.`;
 }
 
-let pendingQuotedEdit: { entryId: string; change: QuotedChange; at: number } | null = null;
-let pendingSplit: { entryId: string; parts: SplitPart[]; at: number } | null = null;
+let pendingQuotedEdit: { entryId: string; change: QuotedChange; at: number; text?: string } | null = null;
+let pendingSplit: { entryId: string; parts: SplitPart[]; at: number; text?: string } | null = null;
 let lastNotaEntry: { id: string; at: number } | null = null;
 
 /** Resposta citando uma mensagem antiga. null = não é o caso (segue o fluxo normal). */
@@ -140,13 +140,13 @@ async function applyQuotedReply(text: string, quoted: string | undefined): Promi
   const split = looksSplit ? parseSplit(t, e.amount) : null;
   if (split && "erro" in split) return `✂️ ${split.erro}`;
   if (split) {
-    pendingSplit = { entryId: e.id, parts: split, at: Date.now() };
+    pendingSplit = { entryId: e.id, parts: split, at: Date.now(), text: t };
     return `✂️ Dividir "${label}" (${brl(e.amount)}) assim?\n${split.map((p) => `• ${brl(p.amount)} no ${p.label}`).join("\n")}\nResponda *sim* ou *não*.`;
   }
   if (!change) return null;
   const desc = describeChange(e, change);
   if (!desc) return `👍 "${label}" já está assim.`;
-  pendingQuotedEdit = { entryId: e.id, change, at: Date.now() };
+  pendingQuotedEdit = { entryId: e.id, change, at: Date.now(), text: t };
   const parcela = /Parcela \d+\/\d+/.test(e.description) ? "\n(Só esta parcela muda.)" : "";
   return `✏️ Em "${label}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.${parcela}\nConfirma? Responda *sim* ou *não*.`;
 }
@@ -166,7 +166,7 @@ async function applyDeleteByText(text: string): Promise<string | null> {
     orderBy: { createdAt: "desc" },
   });
   if (!e) return `🤔 Não achei lançamento de ${brl(amount)}${name ? ` com "${name}"` : ""}.`;
-  pendingQuotedEdit = { entryId: e.id, change: { remove: true }, at: Date.now() };
+  pendingQuotedEdit = { entryId: e.id, change: { remove: true }, at: Date.now(), text };
   return `🗑️ Apagar "${e.description || e.category}" (${brl(e.amount)}, compra ${formatFullDate(e.purchaseDate ?? e.date)}, lançado ${fmtBRT(e.createdAt, true)})?\nResponda *sim* ou *não*.`;
 }
 
@@ -198,7 +198,7 @@ async function applyEditByText(text: string): Promise<string | null> {
   if (!e) return null;
   const desc = describeChange(e, change);
   if (!desc) return null;
-  pendingQuotedEdit = { entryId: e.id, change, at: Date.now() };
+  pendingQuotedEdit = { entryId: e.id, change, at: Date.now(), text };
   return `✏️ Em "${e.description || e.category}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.\nConfirma? Responda *sim* ou *não*.`;
 }
 
@@ -621,7 +621,8 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     const next = rest.join("\n").trim();
     if (CONFIRM_YES_RE.test(t)) {
       if (kind === "edit") pendingQuotedEdit = null; else pendingSplit = null;
-      const done = kind === "edit" ? await applyQuotedEdit(p.entryId, (p as NonNullable<typeof pendingQuotedEdit>).change) : await applySplit(p.entryId, (p as NonNullable<typeof pendingSplit>).parts);
+      // O histórico guarda a frase da correção, não o "sim" (é ela que vira regra depois).
+      const done = await withReason(`correção: "${(p.text ?? t).trim().slice(0, 120)}"`, () => kind === "edit" ? applyQuotedEdit(p.entryId, (p as NonNullable<typeof pendingQuotedEdit>).change) : applySplit(p.entryId, (p as NonNullable<typeof pendingSplit>).parts));
       await notifyOwner(config, done);
       await recordExchange(config.ownerPhone, t, done).catch(() => {});
       if (next) await handleSelfMessageInner(next, { messageTimestamp: _meta.messageTimestamp });
@@ -737,7 +738,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     (await applyInvoicePayment(joinedText)) ??
     (await applySavingsReply(joinedText, conv?.messages)) ??
     (await applySalaryReply(joinedText, conv?.messages)) ??
-    (await applyPaymentReply(joinedText, config));
+    (await withReason(`correção: "${joinedText.trim().slice(0, 120)}"`, () => applyPaymentReply(joinedText, config)));
   if (paymentReply) {
     if (!conv) {
       conv = await prisma.conversation.create({
