@@ -93,6 +93,16 @@ export type PersonalRouteResult =
       confirmation: string;
     };
 
+/** Jeitos dele de escrever que a IA lia errado (histórico até 04/11/2026): "182, 58" virava 58,
+ *  "meus gases" (gastos) virava categoria vazia, "Agenda" sozinha caía no bate-papo. */
+export function ajustaFrase(text: string): string {
+  return text
+    // 3+ dígitos antes da vírgula: "22, 30" pode ser dois valores, "182, 58" não.
+    .replace(/(\d{3,}),\s(\d{2})(?![\d,.])/g, "$1,$2")
+    .replace(/\bmeus\s+gases\b/gi, "meus gastos")
+    .replace(/^\s*(?:minha\s+)?agenda\s*[?.!]*\s*$/i, "o que tenho na agenda?");
+}
+
 export async function routePersonalMessage(
   message: string,
   ownerName: string,
@@ -258,7 +268,7 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
 }`;
 
   const { content } = await generateResponse(
-    [{ role: "user", content: message }],
+    [{ role: "user", content: ajustaFrase(message) }],
     systemPrompt,
     0.3,
     512,

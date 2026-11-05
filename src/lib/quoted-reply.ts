@@ -82,8 +82,11 @@ export function parseDeleteText(text: string): { amount: number; name: string } 
 export function parseDidLogText(text: string): number | null {
   const t = text.trim();
   if (t.length > 80 || !/\?\s*$/.test(t) || !/\b(anotou|lan[cç]ou|registrou|salvou|guardou)\b/i.test(t)) return null;
-  const num = t.match(new RegExp(NUMBER_PART));
-  return num ? parseBrNumber(num[1]) : null;
+  // Chamado, senha e chave seguem para os comandos próprios (dado do trabalho não vai para a conversa).
+  if (/\b(chamado|senha|chave|token|processo)\b/i.test(t)) return null;
+  const num = t.match(new RegExp(String.raw`(?<![\w.,-])${NUMBER_PART}(?![\w-])`));
+  const v = num ? parseBrNumber(num[1]) : NaN;
+  return v > 0 && v < 100000 ? v : null;
 }
 
 /** "o cupom de 56,38 de 31/10 era vr" sem citar → valor, dia (se disse) e a mudança (meio ou categoria).

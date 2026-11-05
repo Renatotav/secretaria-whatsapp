@@ -214,4 +214,16 @@ test("pergunta 'você anotou?' acha o valor e não vira gasto", () => {
   assert.equal(parseDidLogText("lançou os 32,90 do almoço?"), 32.9);
   assert.equal(parseDidLogText("anotei 85,55 de mercado"), null); // afirmação, não pergunta
   assert.equal(parseDidLogText("você anotou?"), null); // sem valor: segue o fluxo normal
+  assert.equal(parseDidLogText("você registrou o chamado 1812793?"), null); // trabalho segue o comando próprio
+  assert.equal(parseDidLogText("anotou a senha abc123?"), null);
+});
+
+test("frases dele que a IA lia errado são ajustadas antes", async () => {
+  const { ajustaFrase } = await import("../src/lib/personal-router");
+  assert.equal(ajustaFrase("Mercantil 182, 58 e vencimento 10/09"), "Mercantil 182,58 e vencimento 10/09");
+  assert.equal(ajustaFrase("como estão meus gases"), "como estão meus gastos");
+  assert.equal(ajustaFrase("Agenda"), "o que tenho na agenda?");
+  assert.equal(ajustaFrase("almoço 22, 30 de uber"), "almoço 22, 30 de uber"); // podem ser dois valores
+  assert.equal(ajustaFrase("1, 2 e 3"), "1, 2 e 3");
+  assert.equal(ajustaFrase("agenda reunião amanhã 14h"), "agenda reunião amanhã 14h");
 });

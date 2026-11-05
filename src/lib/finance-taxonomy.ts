@@ -54,6 +54,7 @@ REGRAS:
   Assinaturas › Academia (cobrança mensal); Spotify/Netflix = Assinaturas › Streaming; Claude/ChatGPT/hospedagem
   de site = Assinaturas › Apps/Softwares; IOF de compra internacional = Impostos e taxas › IOF;
   marmita/restaurante = Alimentação › Restaurantes; iFood = Alimentação › Delivery;
+  mercantil/mercadinho/mercearia/atacadão = Alimentação › Supermercado (no Ceará "mercantil" é o mercado);
   bar/boteco/barzinho, espetinho ou restaurante numa saída à noite = Saídas › Bar (ou Restaurante/Espetinho);
   festa, show, balada, ingresso = Saídas › Festa/Show; cerveja/bebida alcoólica comprada no mercado ou na
   adega para beber em casa = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete

@@ -634,8 +634,19 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       return;
     }
   }
+  // Chave/token colado (28/10 a do SmartThings): não vai para a IA nem fica na conversa.
+  if (looksLikeSecret(joinedText)) {
+    await notifyOwner(config, "🔐 Isso parece uma chave ou senha: *não guardei* e não mandei para a IA. A chave do ar já se renova sozinha; se for outra, passe pelo Claude.");
+    return;
+  }
+  // Pergunta "você anotou X?": só consulta, não grava na conversa.
+  const didLog = await applyDidLogText(joinedText);
+  if (didLog) {
+    await notifyOwner(config, didLog);
+    return;
+  }
   // Respondeu (citou) uma mensagem antiga: corrige aquele lançamento.
-  const quotedReply = (await applyQuotedReply(joinedText, _meta.quoted)) ?? (await applyDeleteByText(joinedText)) ?? (await applyDidLogText(joinedText)) ?? (await applyEditByText(joinedText));
+  const quotedReply = (await applyQuotedReply(joinedText, _meta.quoted)) ?? (await applyDeleteByText(joinedText)) ?? (await applyEditByText(joinedText));
   if (quotedReply) {
     await notifyOwner(config, quotedReply);
     await recordExchange(config.ownerPhone, joinedText, quotedReply).catch(() => {});
@@ -746,10 +757,14 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     .map((m) => `${m.role === "user" ? "Dono" : "Secretária"}: ${m.content}`)
     .join("\n");
 
-  // Chave/token colado (28/10 a do SmartThings): não vai para a IA nem fica na conversa.
-  if (looksLikeSecret(joinedText)) {
-    await notifyOwner(config, "🔐 Isso parece uma chave ou senha: *não guardei* e não mandei para a IA. A chave do ar já se renova sozinha; se for outra, passe pelo Claude.");
-    return;
+  // "Sim"/"Não" soltos sem nada esperando resposta (25/10 a IA respondeu "não sei o que fazer").
+  // Se a última mensagem dela foi uma pergunta recente, a IA ainda decide com o contexto.
+  if (/^(sim|s|n[aã]o)[.!]*$/i.test(joinedText.trim())) {
+    const ultima = conv?.messages.find((m) => m.role === "assistant");
+    if (!ultima || !ultima.content.includes("?") || Date.now() - ultima.createdAt.getTime() > 30 * 60 * 1000) {
+      await notifyOwner(config, "👍 Não tinha nada esperando resposta agora (a confirmação vale por 30 min). Se era para lançar ou mudar algo, mande o pedido de novo.");
+      return;
+    }
   }
   let route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
   // Citou uma mensagem e só comentou, sem valor: é relato, não gasto novo (03/11 "esse gasto foi me alimentar…" repetiu o almoço).
