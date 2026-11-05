@@ -27,6 +27,8 @@ const ROUTER_CASES: RouterCase[] = [
   { text: "almoço 27 apaga", ctx: CTX_ALMOCO, notType: "finance" },
   { text: "o almoço de 27 de ontem era vr", ctx: CTX_ALMOCO, notType: "finance" },
   { text: "os dois foram vr", ctx: CTX_ALMOCO, notType: "finance" },
+  { text: "Doido e quero ficar bebi", type: "diary" },
+  { text: "Mercantil 182, 58 no cartão", type: "finance", amount: 182.58 },
 ];
 
 // Texto com erro de português + termos que não podem mudar.

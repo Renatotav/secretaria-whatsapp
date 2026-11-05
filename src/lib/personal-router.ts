@@ -192,6 +192,8 @@ Tipos:
 4. diary — RELATO pessoal: como foi o dia, o que sentiu, uma reflexão ou desabafo.
    Infira "mood" ("pessimo", "ruim", "neutro", "bom", "otimo").
    Cumprimentos, perguntas e papo NÃO são diário (use chat).
+   Frase curta só de estado ou vontade também é diary: "Cansado.", "Doido e quero ficar bebo", "Casando e com raiva"
+   (ele digita rápido: "casando" = cansado, "bebi" = bêbado). Na dúvida entre diary e chat para um sentimento, use diary.
    Comentário sobre um gasto JÁ lançado, sem valor novo ("esse gasto foi de fome", "comprei porque estava triste") é diary — NUNCA finance: não repita um lançamento do contexto.
 
 5. savings_add — guardar OU tirar dinheiro de uma Meta de Economia (SavingsGoal)
