@@ -40,7 +40,7 @@ import { describeChange, histLine, undoFinanceLog } from "./finance-history";
 import type { QuotedChange } from "./finance-history";
 import { applySplit, parseSplit, splitTransactions } from "./finance-split";
 import type { SplitPart } from "./finance-split";
-import { applyQuotedEdit, entryFromQuoted, parseDeleteText, parseEditText, parseQuotedChange } from "./quoted-reply";
+import { applyQuotedEdit, entryFromQuoted, parseDeleteText, parseDidLogText, parseEditText, parseQuotedChange } from "./quoted-reply";
 import { answerChat, answerFinanceQuestion } from "./assistant-chat";
 import { BILL_STATED_RE, HIGH_VALUE, PAYMENT_QUESTION, PAYMENT_REPLY_WINDOW_MS, PAYMENT_STATED_RE, SAVINGS_REPLY_MARK, UNDO_HINT, applyExplainLimitCommand, applyPaymentReply, applySalaryReply, splitRequests } from "./finance-commands";
 export { parseSplit };
@@ -168,6 +168,15 @@ async function applyDeleteByText(text: string): Promise<string | null> {
   if (!e) return `🤔 Não achei lançamento de ${brl(amount)}${name ? ` com "${name}"` : ""}.`;
   pendingQuotedEdit = { entryId: e.id, change: { remove: true }, at: Date.now() };
   return `🗑️ Apagar "${e.description || e.category}" (${brl(e.amount)}, compra ${formatFullDate(e.purchaseDate ?? e.date)}, lançado ${fmtBRT(e.createdAt, true)})?\nResponda *sim* ou *não*.`;
+}
+
+/** "Você anotou o gasto de 85,55?": mostra o que achou com esse valor, sem lançar nada. */
+async function applyDidLogText(text: string): Promise<string | null> {
+  const amount = parseDidLogText(text);
+  if (amount == null) return null;
+  const found = await prisma.financeEntry.findMany({ where: { amount: { gte: amount - 0.01, lte: amount + 0.01 } }, orderBy: { createdAt: "desc" }, take: 3 });
+  if (!found.length) return `🤔 Não tenho nenhum lançamento de ${brl(amount)}. Para lançar, mande por exemplo *gastei ${brl(amount).replace("R$", "").trim()} no mercado*.`;
+  return `✅ Tenho sim:\n${found.map((e) => `• ${e.description || e.category} — ${brl(e.amount)} (compra ${formatFullDate(e.purchaseDate ?? e.date)}, lançado ${fmtBRT(e.createdAt, true)})`).join("\n")}`;
 }
 
 /** Correção escrita sem citar ("o cupom de 56,38 de 31/10 era vr"): acha o lançamento e pede o "sim".
@@ -626,7 +635,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     }
   }
   // Respondeu (citou) uma mensagem antiga: corrige aquele lançamento.
-  const quotedReply = (await applyQuotedReply(joinedText, _meta.quoted)) ?? (await applyDeleteByText(joinedText)) ?? (await applyEditByText(joinedText));
+  const quotedReply = (await applyQuotedReply(joinedText, _meta.quoted)) ?? (await applyDeleteByText(joinedText)) ?? (await applyDidLogText(joinedText)) ?? (await applyEditByText(joinedText));
   if (quotedReply) {
     await notifyOwner(config, quotedReply);
     await recordExchange(config.ownerPhone, joinedText, quotedReply).catch(() => {});

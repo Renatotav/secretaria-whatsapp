@@ -78,6 +78,14 @@ export function parseDeleteText(text: string): { amount: number; name: string } 
   return { amount: parseBrNumber(num[1]), name };
 }
 
+/** "você anotou o gasto de 85,55?" é pergunta: procura o lançamento, nunca lança (27/08 virou gasto novo). */
+export function parseDidLogText(text: string): number | null {
+  const t = text.trim();
+  if (t.length > 80 || !/\?\s*$/.test(t) || !/\b(anotou|lan[cç]ou|registrou|salvou|guardou)\b/i.test(t)) return null;
+  const num = t.match(new RegExp(NUMBER_PART));
+  return num ? parseBrNumber(num[1]) : null;
+}
+
 /** "o cupom de 56,38 de 31/10 era vr" sem citar → valor, dia (se disse) e a mudança (meio ou categoria).
  *  "era" sempre é correção; "foi" só com data ("almoço 32 foi no pix" é gasto novo). */
 export function parseEditText(text: string): { amount: number; day: Date | null; change: QuotedChange } | null {

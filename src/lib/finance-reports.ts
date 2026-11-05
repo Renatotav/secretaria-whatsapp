@@ -256,7 +256,11 @@ export async function buildVrBalance(): Promise<string> {
   const balance = paid.reduce((s, e) => s + (e.type === "income" ? e.amount : -e.amount), 0);
   const next = await prisma.financeEntry.findFirst({ where: { ...isVoucher, type: "income", status: "pending" }, orderBy: { date: "asc" } });
   const lines = [`🍔 *Saldo do VR:* ${brl(balance)}`];
-  if (next) {
+  // Crédito previsto para hoje ou antes e ainda não confirmado: dividir o saldo por 1 dia
+  // dava "R$ 657 por dia" (30/10). Pede a confirmação em vez da conta.
+  if (next && next.date.getTime() <= todayBRT().getTime()) {
+    lines.push(`📅 O crédito de ${brl(next.amount)} estava previsto para ${formatDayMonth(next.date)}. Quando cair, me diga *caiu ${Math.round(next.amount)} no VR*.`);
+  } else if (next) {
     const days = Math.max(1, Math.ceil((next.date.getTime() - todayBRT().getTime()) / 86400000));
     lines.push(`📅 Próximo crédito previsto: ${brl(next.amount)} em ${formatDayMonth(next.date)}`);
     lines.push(`🍽️ Dá pra gastar até ${brl(Math.max(0, balance) / days)} por dia até lá.`);
@@ -270,8 +274,8 @@ export async function vrBalanceShort(): Promise<string> {
   if (paid.length === 0) return "";
   const balance = paid.reduce((sum, e) => sum + (e.type === "income" ? e.amount : -e.amount), 0);
   const next = await prisma.financeEntry.findFirst({ where: { ...isVoucher, type: "income", status: "pending" }, orderBy: { date: "asc" } });
-  const days = next ? Math.max(1, Math.ceil((next.date.getTime() - todayBRT().getTime()) / 86400000)) : 0;
-  return `🍔 VR: ${brl(balance)}${next ? ` (${brl(Math.max(0, balance) / days)}/dia até ${formatDayMonth(next.date)})` : ""}`;
+  const days = next ? Math.ceil((next.date.getTime() - todayBRT().getTime()) / 86400000) : 0;
+  return `🍔 VR: ${brl(balance)}${next && days >= 1 ? ` (${brl(Math.max(0, balance) / days)}/dia até ${formatDayMonth(next.date)})` : ""}`;
 }
 
 /**

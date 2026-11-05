@@ -7,7 +7,7 @@ import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxo
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { looksLikeSecret, parseSplit } from "../src/lib/message-handlers";
-import { parseDeleteText, parseEditText, parseQuotedChange } from "../src/lib/quoted-reply";
+import { parseDeleteText, parseDidLogText, parseEditText, parseQuotedChange } from "../src/lib/quoted-reply";
 import { parsePaymentReply, splitRequests } from "../src/lib/finance-commands";
 import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
@@ -207,4 +207,11 @@ test("scooter: economia conta dias inteiros de Uber pelos km, não pelos dias en
   assert.equal(r.diasMes, 0); // 1 km em 2 dias úteis não vira corrida
   assert.equal(r.kmMes, 1);
   assert.equal(diasDeScooter([l("2026-10-06", 10), l("2026-10-20", 40)], "2026-10").kmIdaVolta, 6); // sem dados: 6 km
+});
+
+test("pergunta 'você anotou?' acha o valor e não vira gasto", () => {
+  assert.equal(parseDidLogText("Olá, você anotou o gasto de 85.55?"), 85.55);
+  assert.equal(parseDidLogText("lançou os 32,90 do almoço?"), 32.9);
+  assert.equal(parseDidLogText("anotei 85,55 de mercado"), null); // afirmação, não pergunta
+  assert.equal(parseDidLogText("você anotou?"), null); // sem valor: segue o fluxo normal
 });

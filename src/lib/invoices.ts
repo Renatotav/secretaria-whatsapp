@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { todayBRT } from "./dates";
 
 // Faturas de cartão = compras no cartão ainda a pagar, agrupadas por cartão
 // (campo "card": vazio = o cartão do dono; ex: "Santander do Bruno") e por
@@ -23,7 +24,8 @@ export function invoiceLabel(card: string): string {
 
 /** Faturas em aberto a partir do mês atual, da mais próxima para a mais distante. */
 export async function listOpenInvoices(): Promise<OpenInvoice[]> {
-  const today = new Date();
+  // Dia de Brasília: das 21h às 24h do último dia do mês o relógio UTC já está no mês seguinte.
+  const today = todayBRT();
   const entries = await prisma.financeEntry.findMany({
     where: {
       status: "pending",
