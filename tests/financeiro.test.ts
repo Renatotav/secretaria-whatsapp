@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseLocalDate } from "../src/lib/dates";
-import { addMonths, budgetIcon, isInstallment, isRecurring } from "../src/lib/finance-common";
+import { addMonths, budgetIcon, isInstallment, isRecurring, vrDisponivel } from "../src/lib/finance-common";
 import { parseBrNumber, paymentLabel, formatFullDate } from "../src/lib/finance-text";
 import { parseInstallmentInfo, applyInvoiceDates } from "../src/lib/statement-import";
 import { parseQuotedChange } from "../src/lib/quoted-reply";
@@ -64,4 +64,18 @@ test("histórico e teto em linguagem dele", () => {
   assert.equal(histValue("amount", 25.9), "R$ 25,90");
   assert.equal(histValue("status", "paid"), "pago");
   assert.deepEqual([69, 70, 100].map(budgetIcon), ["🟢", "🟡", "🔴"]);
+});
+
+test("vrDisponivel: crédito do fim do mês só paga a comida do mês seguinte", () => {
+  const dia = (m: number, d: number, y = 2026) => new Date(y, m - 1, d, 12);
+  const vr = [
+    { type: "income", amount: 600, status: "paid", date: dia(10, 30) },
+    { type: "expense", amount: 580, status: "paid", date: dia(11, 3) },
+    { type: "income", amount: 700, status: "pending", date: dia(11, 30) },
+    { type: "income", amount: 700, status: "pending", date: dia(12, 30) },
+  ];
+  assert.equal(vrDisponivel(vr, 2026, 10).toFixed(2), "20.00"); // novembro: só o saldo
+  assert.equal(vrDisponivel(vr, 2026, 11).toFixed(2), "720.00"); // dezembro: saldo + crédito de 30/11
+  assert.equal(vrDisponivel(vr, 2027, 0).toFixed(2), "720.00"); // janeiro: não acumula os dois créditos
+  assert.equal(vrDisponivel([{ type: "expense", amount: 10, status: "paid", date: dia(11, 3) }], 2026, 10), 0);
 });

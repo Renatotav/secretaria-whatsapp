@@ -129,6 +129,23 @@ export async function monthForecast(year: number, monthIndex: number) {
 }
 
 /**
+ * Quanto do VR paga a comida do mês: o saldo já confirmado mais o crédito
+ * previsto no mês anterior. O crédito cai no fim do mês, então o do próprio mês
+ * só serve para o seguinte; somar todos fazia o vale cobrir a comida dos meses à
+ * frente e a previsão sobrar mais do que o real.
+ */
+export function vrDisponivel(entries: { type: string; amount: number; status: string; date: Date }[], year: number, monthIndex: number): number {
+  const ini = new Date(year, monthIndex - 1, 1).getTime();
+  const fim = new Date(year, monthIndex, 1).getTime();
+  let total = 0;
+  for (const e of entries) {
+    if (e.status === "paid") total += e.type === "income" ? e.amount : -e.amount;
+    else if (e.type === "income" && e.date.getTime() >= ini && e.date.getTime() < fim) total += e.amount;
+  }
+  return Math.max(0, total);
+}
+
+/**
  * Resultado do mês na conta corrente, separado em: o que JÁ saiu (pago),
  * o que ainda está a pagar/receber e o que ainda pode sair pelos tetos.
  */
@@ -151,9 +168,9 @@ export async function monthForecastParts(year: number, monthIndex: number) {
   }
   const vrEntries = await prisma.financeEntry.findMany({
     where: { date: { lte: monthEnd }, OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) },
-    select: { type: true, amount: true },
+    select: { type: true, amount: true, status: true, date: true },
   });
-  const vrAvailable = Math.max(0, vrEntries.reduce((sum, e) => sum + (e.type === "income" ? e.amount : -e.amount), 0));
+  const vrAvailable = vrDisponivel(vrEntries, year, monthIndex);
   const { items } = await budgetStatus(year, monthIndex);
   let stillFood = 0;
   let stillOther = 0;
