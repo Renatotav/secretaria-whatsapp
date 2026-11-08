@@ -254,37 +254,50 @@ export function diasDeScooter(leituras: { at: Date; odo: number }[], mesAtual: s
   return { kmIdaVolta, dias, diasMes, kmTotal, kmMes };
 }
 
+type Ciclo = { km: number; dias: number; kwh: number };
+/** Mínimos quadrados de kWh = km × porKm + dias × porDia (sem constante). */
+function ajusta(ciclos: Ciclo[]): { porKm: number; porDia: number } | null {
+  let kk = 0, kd = 0, dd = 0, ke = 0, de = 0;
+  for (const c of ciclos) { kk += c.km * c.km; kd += c.km * c.dias; dd += c.dias * c.dias; ke += c.km * c.kwh; de += c.dias * c.kwh; }
+  const det = kk * dd - kd * kd;
+  return Math.abs(det) < 1e-9 ? null : { porKm: (ke * dd - kd * de) / det, porDia: (kk * de - kd * ke) / det };
+}
+
 /**
  * Gasto de rodar × gasto parada (08/11/2026): cada carga repõe km × X + dias × Y
- * (alarme e segurança ficam ligados). Mínimos quadrados com as cargas que têm ODO
- * e kWh. Só vira regra do painel quando "pronto": 6+ ciclos, 2+ com 10 dias ou
- * mais (senão Y fica apoiado num ciclo só) e erro de no máximo 6% em todos.
+ * (alarme e segurança ficam ligados). Não exige semana parada: basta a rotina
+ * variar um pouco. "Pronto" = 6+ ciclos, erro de no máximo 6% em cada um e
+ * números estáveis: tirar qualquer uma das cargas muda X em até 15% e Y em até
+ * 25%, e as que sobram ainda têm intervalos 3+ dias diferentes.
  */
 export function calibrarParada(cargas: { at: Date; kwh: number | null; odo: number | null }[]) {
-  const ciclos: { km: number; dias: number; kwh: number }[] = [];
+  const ciclos: Ciclo[] = [];
   for (let i = 1; i < cargas.length; i++) {
     const a = cargas[i - 1], b = cargas[i];
     if (a.odo == null || b.odo == null || !b.kwh || b.odo <= a.odo) continue;
     ciclos.push({ km: b.odo - a.odo, dias: (b.at.getTime() - a.at.getTime()) / 86_400_000, kwh: b.kwh });
   }
   if (ciclos.length < 3) return null;
-  let kk = 0, kd = 0, dd = 0, ke = 0, de = 0;
-  for (const c of ciclos) { kk += c.km * c.km; kd += c.km * c.dias; dd += c.dias * c.dias; ke += c.km * c.kwh; de += c.dias * c.kwh; }
-  const det = kk * dd - kd * kd;
-  if (Math.abs(det) < 1e-9) return null;
-  const porKm = (ke * dd - kd * de) / det, porDia = (kk * de - kd * ke) / det;
-  const erroMax = Math.max(...ciclos.map((c) => Math.abs(c.km * porKm + c.dias * porDia - c.kwh) / c.kwh));
-  const longos = ciclos.filter((c) => c.dias >= 10).length;
-  const pronto = ciclos.length >= 6 && longos >= 2 && erroMax <= 0.06 && porKm > 0 && porDia >= 0;
-  return { whKm: porKm * 1000, whDia: porDia * 1000, erroMax, ciclos: ciclos.length, longos, pronto };
+  const f = ajusta(ciclos);
+  if (!f) return null;
+  const erroMax = Math.max(...ciclos.map((c) => Math.abs(c.km * f.porKm + c.dias * f.porDia - c.kwh) / c.kwh));
+  // Tirando qualquer carga, as outras ainda precisam variar 3+ dias de intervalo: com todas
+  // iguais, Y sai certo só por sorte.
+  const estavel = ciclos.length >= 4 && ciclos.every((_, i) => {
+    const resto = ciclos.filter((__, j) => j !== i);
+    const g = ajusta(resto);
+    return !!g && Math.max(...resto.map((c) => c.dias)) - Math.min(...resto.map((c) => c.dias)) >= 3 && Math.abs(g.porKm - f.porKm) <= Math.abs(f.porKm) * 0.15 && Math.abs(g.porDia - f.porDia) <= Math.max(Math.abs(f.porDia), 0.02) * 0.25;
+  });
+  const pronto = ciclos.length >= 6 && estavel && erroMax <= 0.06 && f.porKm > 0 && f.porDia >= 0;
+  return { whKm: f.porKm * 1000, whDia: f.porDia * 1000, erroMax, ciclos: ciclos.length, estavel, pronto };
 }
 
 /** Uma linha para a mensagem da carga e para o painel. */
 export function linhaCalibracao(c: ReturnType<typeof calibrarParada>): string {
   if (!c) return "";
-  const falta = [c.ciclos < 6 ? `${6 - c.ciclos} carga(s)` : "", c.longos < 2 ? `${2 - c.longos} com 10+ dias de intervalo` : ""].filter(Boolean).join(", ");
+  const falta = [c.ciclos < 6 ? `falta ${6 - c.ciclos} carga(s)` : "", !c.estavel ? "falta mais uma carga com intervalo diferente das outras" : "", c.erroMax > 0.06 ? "erro acima de 6%" : ""].filter(Boolean).join("; ");
   return `🔬 Gasto parada × rodando (${c.ciclos} cargas): ~${fmt(c.whKm)} Wh/km rodando + ~${fmt(c.whDia)} Wh/dia parada, erro até ${fmt(c.erroMax * 100)}%. ${
-    c.pronto ? "Confirmado: já dá para usar na conta da bateria." : `Ainda calibrando${falta ? ` (falta ${falta})` : c.erroMax > 0.06 ? " (erro acima de 6%)" : ""}. Mande o ODO todo dia.`}`;
+    c.pronto ? "Confirmado: já dá para usar na conta da bateria." : `Ainda calibrando${falta ? ` (${falta})` : ""}. Mande o ODO no dia da carga.`}`;
 }
 
 export async function scooterNumbers() {

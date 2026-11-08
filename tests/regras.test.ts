@@ -240,7 +240,14 @@ test("calibrarParada: separa o gasto de rodar do gasto parada", () => {
   const c = calibrarParada(cargas)!;
   assert.equal(Math.round(c.whKm), 30);
   assert.equal(Math.round(c.whDia), 50);
-  assert.equal(c.pronto, false); // só 4 ciclos e 1 longo
-  assert.match(linhaCalibracao(c), /falta 2 carga\(s\), 1 com 10\+ dias/);
+  assert.equal(c.pronto, false); // só 4 ciclos
+  assert.match(linhaCalibracao(c), /falta 2 carga\(s\)/);
+  // Sem nenhuma semana parada: 6 ciclos de 4 a 9 dias já confirmam.
+  const seis = [[1, 0], [6, 25], [13, 55], [21, 80], [30, 110], [36, 140], [40, 165]].map(([dia, odo]) => ({ at: at(dia), odo, kwh: 0 as number | null }));
+  for (let i = 1; i < seis.length; i++) {
+    const km = seis[i].odo - seis[i - 1].odo, dias = (seis[i].at.getTime() - seis[i - 1].at.getTime()) / 86_400_000;
+    seis[i].kwh = (km * 30 + dias * 50) / 1000;
+  }
+  assert.equal(calibrarParada(seis)!.pronto, true);
   assert.equal(calibrarParada(cargas.slice(0, 3)), null); // 2 ciclos: pouco
 });
