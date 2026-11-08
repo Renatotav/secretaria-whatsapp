@@ -68,6 +68,8 @@ model AgentConfig {
   deviceToken      String  @default("")
   /// Comando para a tomada da scooter ("on|ms", "off|ms", "status|ms"); o vigia do servidor busca e executa.
   plugCommand      String  @default("")
+  /// Último estado da tomada da scooter mandado pelo vigia: JSON {on, power, at}.
+  plugState        String  @default("")
   /// Tarifa da luz em R$/kWh (com impostos) para o custo das cargas da scooter.
   kwhPrice         Float   @default(0.95)
   /// Alexa falando os avisos (Voice Monkey): chave da API, ID do aparelho e horário de silêncio "22-7".

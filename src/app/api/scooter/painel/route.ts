@@ -9,7 +9,7 @@ export const GET = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  const [n, logs] = await Promise.all([scooterNumbers(), prisma.scooterLog.findMany({ orderBy: { at: "asc" } })]);
+  const [n, logs, cfg] = await Promise.all([scooterNumbers(), prisma.scooterLog.findMany({ orderBy: { at: "asc" } }), prisma.agentConfig.findFirst({ select: { plugState: true } })]);
   if (!n) return NextResponse.json({ empty: true });
 
   // Cada carga com os km rodados desde a anterior e o consumo desse ciclo
@@ -102,6 +102,7 @@ export const GET = withErrorHandling(async (request: Request) => {
     naConta: ultimaConta && kwhMes ? { kwhMes, pct: (kwhMes / ultimaConta.kwh) * 100, conta: ultimaConta.valor } : null,
     economia,
     tirePsi: TIRE_PSI,
+    tomada: cfg?.plugState ? (JSON.parse(cfg.plugState) as { on: boolean; power: number; at: string }) : null,
     cargas: cargas.reverse(),
     leituras,
     pneus: logs.filter((l) => l.kind === "pneu").map((p) => ({ at: p.at, front: p.psiFront, rear: p.psiRear })).reverse(),

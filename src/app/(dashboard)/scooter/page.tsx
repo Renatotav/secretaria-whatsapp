@@ -28,6 +28,7 @@ type Dados = {
   tireDue: boolean;
   tireNext: string;
   tirePsi: { front: number; rear: number };
+  tomada: { on: boolean; power: number; at: string } | null;
   economia: { corrida: number; corridasBase: number; kmIdaVolta: number; kmTotal: number; kmMes: number; dias: number; diasMes: number; total: number; mes: number; uberMes: number } | null;
   tireDays: number | null;
   cargas: Carga[];
@@ -88,6 +89,7 @@ function Painel({ d }: { d: Dados }) {
 
   return (
     <>
+      {d.tomada && <Tomada t={d.tomada} />}
       <div style={{ ...card, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <strong style={{ fontSize: 22, color: cor }}>
@@ -235,6 +237,21 @@ function CargaCard({ c, price }: { c: Carga; price: number }) {
 }
 
 type Barra = { de: string; at: string; odoDe: number; odo: number; km: number; dias: number; cargas: Carga[] };
+
+/** Tomada Tapo agora, como na aba Ar: o vigia manda quando muda e a cada 10 min. */
+function Tomada({ t }: { t: { on: boolean; power: number; at: string } }) {
+  const carregando = t.on && t.power >= 100;
+  // Sem notícia há mais de 20 min: o vigia ou a ponte do Fire TV caiu, então não afirma o estado.
+  const velho = Date.now() - new Date(t.at).getTime() > 20 * 60_000;
+  return (
+    <div style={{ ...card, display: "grid", gap: 4 }}>
+      <strong style={{ fontSize: 18, color: velho ? "var(--text-muted)" : t.on ? "var(--accent)" : "var(--text-muted)" }}>
+        🔌 Tomada {t.on ? `ligada${t.power > 1 ? ` · ${n(t.power)} W` : ""}${carregando ? " · carregando" : ""}` : "desligada"}
+      </strong>
+      <span style={muted}>{velho ? `Sem notícia da tomada desde ${dia(t.at)} às ${hora(t.at)}` : `Atualizado às ${hora(t.at)}`}</span>
+    </div>
+  );
+}
 
 /** Km por dia entre uma leitura e a seguinte (barra), linha tracejada = média, ⚡ = carregou nesse intervalo. Tocar na barra mostra o detalhe. */
 function GraficoKm({ leituras, cargas, media }: { leituras: Leitura[]; cargas: Carga[]; media: number | null }) {

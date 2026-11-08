@@ -5,7 +5,7 @@ import { notePonte } from "@/lib/health";
 import { notifyOwner } from "@/lib/message-handlers";
 
 // Aviso do vigia da tomada (servidor): a ponte até a tomada de casa caiu ou
-// voltou. Mesma chave do fim de carga (deviceToken). Só manda o aviso.
+// voltou, ou o estado da tomada mudou. Mesma chave do fim de carga (deviceToken).
 async function authorized(request: Request): Promise<boolean> {
   const cfg = await prisma.agentConfig.findFirst({ select: { deviceToken: true } });
   const expected = cfg?.deviceToken || "";
@@ -17,6 +17,12 @@ export async function POST(request: Request) {
   if (!(await authorized(request))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => ({}));
   const minutos = Math.max(0, Math.round(Number(body.minutes) || 0));
+  // Estado da tomada (ligada/desligada e watts) para a aba Scooter: só guarda, sem aviso.
+  if (body.state === "plug") {
+    const plugState = JSON.stringify({ on: !!body.on, power: Math.max(0, Number(body.power) || 0), at: new Date().toISOString() });
+    await prisma.agentConfig.updateMany({ data: { plugState } });
+    return NextResponse.json({ ok: true });
+  }
   let msg = "";
   if (body.state === "down") {
     msg = `⚠️ A ponte da tomada da scooter caiu há ${minutos} min — não consigo ler a tomada. O Fire TV está ligado e no Wi-Fi? (Se a tomada mudou de IP, me avise.)`;
