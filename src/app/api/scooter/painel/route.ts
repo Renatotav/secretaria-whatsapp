@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
-import { scooterNumbers, diasDeScooter, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
+import { scooterNumbers, diasDeScooter, calibrarParada, linhaCalibracao, CHARGER_EFF, TIRE_PSI } from "@/lib/scooter";
 
 /** Dados da aba Scooter: números de agora + histórico de cargas e leituras. */
 export const GET = withErrorHandling(async (request: Request) => {
@@ -102,6 +102,7 @@ export const GET = withErrorHandling(async (request: Request) => {
     naConta: ultimaConta && kwhMes ? { kwhMes, pct: (kwhMes / ultimaConta.kwh) * 100, conta: ultimaConta.valor } : null,
     economia,
     tirePsi: TIRE_PSI,
+    calibracao: linhaCalibracao(calibrarParada(charges)) || null,
     tomada: cfg?.plugState ? (JSON.parse(cfg.plugState) as { on: boolean; power: number; at: string }) : null,
     cargas: cargas.reverse(),
     leituras,

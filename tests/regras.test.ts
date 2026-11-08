@@ -13,6 +13,7 @@ import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
 import { sqlSeguro } from "../src/lib/assistant-chat";
 import { kwhPorDia, spentSince } from "../src/lib/aircon";
+import { calibrarParada, linhaCalibracao } from "../src/lib/scooter";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -226,4 +227,20 @@ test("frases dele que a IA lia errado são ajustadas antes", async () => {
   assert.equal(ajustaFrase("almoço 22, 30 de uber"), "almoço 22, 30 de uber"); // podem ser dois valores
   assert.equal(ajustaFrase("1, 2 e 3"), "1, 2 e 3");
   assert.equal(ajustaFrase("agenda reunião amanhã 14h"), "agenda reunião amanhã 14h");
+});
+
+test("calibrarParada: separa o gasto de rodar do gasto parada", () => {
+  // Dados inventados: 30 Wh/km + 50 Wh/dia, exatos.
+  const at = (dia: number) => new Date(Date.UTC(2026, 0, dia, 12));
+  const cargas = [[1, 0], [8, 30], [15, 55], [28, 85], [35, 110]].map(([dia, odo]) => ({ at: at(dia), odo, kwh: 0 as number | null }));
+  for (let i = 1; i < cargas.length; i++) {
+    const km = cargas[i].odo - cargas[i - 1].odo, dias = (cargas[i].at.getTime() - cargas[i - 1].at.getTime()) / 86_400_000;
+    cargas[i].kwh = (km * 30 + dias * 50) / 1000;
+  }
+  const c = calibrarParada(cargas)!;
+  assert.equal(Math.round(c.whKm), 30);
+  assert.equal(Math.round(c.whDia), 50);
+  assert.equal(c.pronto, false); // só 4 ciclos e 1 longo
+  assert.match(linhaCalibracao(c), /falta 2 carga\(s\), 1 com 10\+ dias/);
+  assert.equal(calibrarParada(cargas.slice(0, 3)), null); // 2 ciclos: pouco
 });

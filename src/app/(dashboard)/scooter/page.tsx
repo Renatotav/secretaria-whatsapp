@@ -29,6 +29,7 @@ type Dados = {
   tireNext: string;
   tirePsi: { front: number; rear: number };
   tomada: { on: boolean; power: number; at: string } | null;
+  calibracao: string | null;
   economia: { corrida: number; corridasBase: number; kmIdaVolta: number; kmTotal: number; kmMes: number; dias: number; diasMes: number; total: number; mes: number; uberMes: number } | null;
   tireDays: number | null;
   cargas: Carga[];
@@ -121,6 +122,7 @@ function Painel({ d }: { d: Dados }) {
         </div>
       </div>
 
+      {d.calibracao && <div style={muted}>{d.calibracao}</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(130px, 100%), 1fr))", gap: 10, alignItems: "start" }}>
         <Kpi titulo="Consumo médio" valor={d.whKm ? `${n(d.whKm, 1)} Wh/km` : "—"} dica={d.whKm ? `${d.measured} ciclo(s) medido(s)` : "precisa de 2 cargas"}
           explica="Energia que cada carga repôs dividida pelos km rodados desde a carga anterior (das últimas 4 cargas). Já desconta a perda do carregador." />

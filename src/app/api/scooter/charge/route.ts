@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { alexaFalar } from "@/lib/alexa";
-import { recordCharge, scooterNumbers } from "@/lib/scooter";
+import { calibrarParada, linhaCalibracao, recordCharge, scooterNumbers } from "@/lib/scooter";
 import { notifyOwner } from "@/lib/message-handlers";
 
 // Fim de carga da scooter, enviado pelo programinha do notebook que lê a
@@ -43,7 +43,8 @@ export async function POST(request: Request) {
   }
   try {
     const config = await prisma.agentConfig.findFirst();
-    if (config) await notifyOwner(config, msg);
+    const cal = linhaCalibracao(calibrarParada(await prisma.scooterLog.findMany({ where: { kind: "carga" }, orderBy: { at: "asc" } })));
+    if (config) await notifyOwner(config, cal ? `${msg}\n${cal}` : msg);
   } catch (err) {
     console.error("[scooter] aviso da carga falhou", err);
   }
