@@ -125,7 +125,7 @@ function Painel({ d }: { d: Dados }) {
           explica="Soma das cargas do mês × a tarifa. Já vem dentro da conta da Enel, não é gasto à parte." />
         <Kpi titulo="Na conta de luz" valor={d.naConta ? `~${n(d.naConta.pct, 1)}%` : "—"} dica={d.naConta ? `${n(d.naConta.kwhMes, 1)} kWh por mês` : "precisa de 2 cargas"}
           explica={d.naConta ? `Média das cargas por mês dividida pela última conta da Enel (${brl(d.naConta.conta)}). Para comparar: o ar é perto de metade da conta.` : "Média das cargas por mês dividida pela última conta da Enel."} />
-        <Kpi titulo="ODO" valor={d.odoNow != null ? `${n(d.odoNow)} km` : "—"} dica={d.leituras.length ? `última: ${dia(d.leituras.at(-1)!.at)}` : ""}
+        <Kpi titulo="ODO" valor={d.odoNow != null ? `${n(d.odoNow)} km` : "—"} dica={d.ultimoOdo ? `última: ${dia(d.ultimoOdo)}` : ""}
           explica="Último km que você mandou (texto ou vídeo do painel). Mande todo dia ao chegar para o gráfico ficar certo." />
       </div>
 
