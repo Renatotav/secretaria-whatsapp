@@ -90,6 +90,40 @@ export function subscriptionKey(description: string, amount: number, targetDate:
 
 export const SUBSCRIPTION_PROJECTION_MONTHS = 11;
 
+const semAcento = (d: string) => d.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+/** 1ª palavra do nome com 4+ letras ("" se curta): basta para casar uma previsão com a linha real. */
+export function primeiraPalavra(d: string): string {
+  const w = semAcento(d).replace(/[^a-z0-9]+/g, " ").trim().split(" ")[0] ?? "";
+  return w.length >= 4 ? w : "";
+}
+
+type LinhaFatura = { id: string; type: string; amount: number; description: string; purchaseDate: Date | null };
+/**
+ * Avisos depois de importar a fatura (não apaga nada), dos erros reais em
+ * docs/financeiro-erros-conhecidos.md: parcelado que veio à vista (1) e data
+ * da compra lida como "Parcela X/Y" (5).
+ */
+export function avisosFatura(linhas: LinhaFatura[], daFatura: Set<string>): string[] {
+  const avisos: string[] = [];
+  const serie = (d: string) => d.match(/Parcela (\d+)\/(\d+)/);
+  const real = linhas.filter((l) => daFatura.has(l.id) && l.type === "expense");
+  const velhas = linhas.filter((l) => !daFatura.has(l.id) && l.type === "expense");
+  for (const r of real.filter((l) => !serie(l.description))) {
+    const p = velhas.find((v) => {
+      const m = serie(v.description);
+      return m && primeiraPalavra(v.description) && primeiraPalavra(v.description) === primeiraPalavra(r.description) &&
+        Math.abs(v.amount * Number(m[2]) - r.amount) <= r.amount * 0.015;
+    });
+    if (p) avisos.push(`"${r.description}" (${brl(r.amount)}) veio à vista, mas ainda existe a série parcelada "${p.description}": o parcelamento pode ter sido cancelado.`);
+  }
+  for (const r of real.filter((l) => serie(l.description))) {
+    const dm = (d: Date | null) => (d ? `${d.getDate()}/${d.getMonth()}` : "");
+    const gemea = velhas.find((v) => !serie(v.description) && Math.abs(v.amount - r.amount) < 0.01 && dm(v.purchaseDate) === dm(r.purchaseDate));
+    if (gemea) avisos.push(`"${r.description}" tem o mesmo valor e o mesmo dia de "${gemea.description}": a data pode ter sido lida como parcela.`);
+  }
+  return avisos;
+}
+
 /**
  * Núcleo compartilhado: expande parcelas restantes e assinaturas recorrentes
  * em entradas futuras "(previsto)", dedupe contra o banco, e insere o que é
@@ -211,7 +245,8 @@ export async function projectAndInsertFinanceEntries(
     },
     select: { id: true, description: true, date: true, amount: true, category: true },
   });
-  const existingKeys = new Set<string>();
+  // Chave → id do lançamento que já existe: o que a fatura confirmou conta como "visto" na conferência.
+  const existingKeys = new Map<string, string>();
   // Chave sem o nome: a mesma parcela/assinatura anotada com outro nome
   // ("Moto Scooter Elétrica - Parcela 1/5" x "MOVYX MOBILIDADE - Parcela 1/5").
   const existingLooseKeys = new Map<string, { id: string; amount: number }[]>();
@@ -220,11 +255,11 @@ export async function projectAndInsertFinanceEntries(
   for (const e of existing) {
     const info = parseInstallmentInfo(e.description, e.date);
     if (info) {
-      existingKeys.add(installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date));
+      existingKeys.set(installmentKey(info.baseDescription, info.purchaseDate, info.total, e.amount, e.date), e.id);
       addLoose(looseInstallmentKey(info.current, info.total, e.date), e.id, e.amount);
     } else if (e.category === "Assinaturas" || /\(recorrente\)/.test(e.description)) {
       const baseDescription = e.description.replace(/\s*\(previsto\)/, "").replace(/\s*\(recorrente\)/, "").trim();
-      existingKeys.add(subscriptionKey(baseDescription, e.amount, e.date));
+      existingKeys.set(subscriptionKey(baseDescription, e.amount, e.date), e.id);
       addLoose(looseSubscriptionKey(e.date), e.id, e.amount);
     }
   }
@@ -267,18 +302,23 @@ export async function projectAndInsertFinanceEntries(
   // dólar): não cria outra — a regra da fatura troca pelo valor real depois.
   const previstos = await prisma.financeEntry.findMany({
     where: { status: "pending", description: { contains: "(previsto)" } },
-    select: { description: true, date: true },
+    select: { id: true, description: true, date: true },
   });
   const mesKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
-  const previstoNoMes = new Set(previstos.map((p) => `${nameKey(p.description)}|${mesKey(p.date)}`));
+  const previstoNoMes = new Map(previstos.map((p) => [`${nameKey(p.description)}|${mesKey(p.date)}`, p.id]));
+  const vistos: string[] = [];
   for (const c of candidates) {
     const isProjection = c.entry.description.includes("(previsto)");
-    if (isProjection && previstoNoMes.has(`${nameKey(c.entry.description)}|${mesKey(c.date)}`)) {
+    const jaPrevisto = isProjection ? previstoNoMes.get(`${nameKey(c.entry.description)}|${mesKey(c.date)}`) : undefined;
+    if (jaPrevisto) {
+      vistos.push(jaPrevisto);
       duplicates++;
       continue;
     }
     if (c.key) {
       if (existingKeys.has(c.key) || seenThisBatch.has(c.key)) {
+        const id = existingKeys.get(c.key);
+        if (id) vistos.push(id);
         duplicates++;
         continue;
       }
@@ -306,7 +346,8 @@ export async function projectAndInsertFinanceEntries(
         !usedManual.has(m.id) &&
         m.type === c.entry.type &&
         Math.abs(m.amount - c.entry.amount) <= AMOUNT_TOLERANCE &&
-        Math.abs((m.purchaseDate ?? m.date).getTime() - bought.getTime()) <= 5 * DAY_MS
+        // Estorno: ele anota quando o crédito aparece, semanas depois da compra.
+        Math.abs((m.purchaseDate ?? m.date).getTime() - bought.getTime()) <= (c.entry.type === "income" ? 45 : 5) * DAY_MS
       );
       if (match) {
         usedManual.add(match.id);
@@ -332,7 +373,8 @@ export async function projectAndInsertFinanceEntries(
           !usedManual.has(m.id) &&
           m.type === c.entry.type &&
           m.status === "pending" &&
-          nameKey(m.description) === key &&
+          // Previsão/estimativa: basta a 1ª palavra do nome ("OPENROUTER, INC NE (estimado)" x "OPENROUTER, INC").
+          (nameKey(m.description) === key || (/\((previsto|estimado)\)/i.test(m.description) && primeiraPalavra(m.description) === primeiraPalavra(c.entry.description))) &&
           Math.abs(m.date.getTime() - c.date.getTime()) <= 20 * DAY_MS &&
           Math.abs(m.amount - c.entry.amount) <= Math.max(5, m.amount * 0.3)
         )
@@ -400,7 +442,7 @@ export async function projectAndInsertFinanceEntries(
     });
   }
 
-  return { toInsert, duplicates, projected, matchedManual, adjusted, touchedIds: updates.map((u) => u.id) };
+  return { toInsert, duplicates, projected, matchedManual, adjusted, touchedIds: [...updates.map((u) => u.id), ...vistos] };
 }
 
 /**

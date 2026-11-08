@@ -16,8 +16,10 @@ Erros que já aconteceram de verdade ao importar a fatura do cartão (PDF ou pri
 | 8 | Fechamento antes do melhor dia configurado | Compra do dia 2 entrou na fatura e a do dia 3 não | Antes de mexer em `creditCardBestDay`, conferir em mais de uma fatura |
 | 9 | Cobrança por uso projetada como assinatura fixa | Serviço cobrado por recarga (créditos de IA) vira "(previsto)" em todos os meses seguintes | Perguntar ao dono se é mensal. Se não for, tirar as projeções |
 
-## Próximo passo no código
+## O que o código já faz (desde 08/11/2026)
 
-- Ler o "total deste cartão" do PDF e avisar quando a soma importada não bater.
-- Na importação, casar previsão e estorno anotados com o real mesmo com valor ou data diferentes (padrões 2 e 3).
-- Não aceitar "Parcela X/Y" cuja data de compra caia mais de um ano antes da fatura (padrão 5).
+Depois de importar, a resposta da importação (`cardBillAfterImport` em `message-handlers.ts`) mostra o total da fatura no app ao lado do total do PDF e lista o que sobrou no app sem aparecer na fatura, inclusive parcelas e assinaturas. Também avisa os padrões 1 e 5 (`avisosFatura` em `statement-import.ts`). Ela nunca apaga nada: avisa e espera o "sim" do dono.
+
+- Padrão 2: uma previsão "(previsto)/(estimado)" casa com a linha real pela 1ª palavra do nome, com valor até 30% ou R$ 5 diferente.
+- Padrão 3: um estorno anotado casa com o da fatura até 45 dias de diferença na data.
+- Os padrões 4, 6, 7, 8 e 9 ainda são conferência à mão.

@@ -24,7 +24,7 @@ import { applyUsageCommand } from "./work-usage";
 import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
 import { fetchNfce, repairNfeKey } from "./nfce";
 import { budgetStatus, dayRange, formatDayMonth, isoDay, MESES_FALA, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
-import { applyInvoiceDates, budgetAlertsAfterImport, projectAndInsertFinanceEntries } from "./statement-import";
+import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, projectAndInsertFinanceEntries } from "./statement-import";
 import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseChart, sendMonthChart } from "./finance-charts";
 import { checkWish, levelIcon, wishLabel } from "./finance-wishes";
 import type { WishVerdict } from "./finance-wishes";
@@ -1371,7 +1371,7 @@ ${piece}`;
       ? `\n🧮 Conferi: ${brl(read)} = ${total !== null ? "total da fatura" : "subtotal da fatura"} ✅`
       : `\n🧮 Conferi: li ${brl(read)}, mas a fatura diz ${brl(expected)} (diferença ${brl(Math.abs(diff))}). Vale dar uma olhada no painel.`;
   }
-  if (due) check += await cardBillAfterImport(due, started, touchedIds);
+  if (due) check += await cardBillAfterImport(due, started, touchedIds, expected);
   await notifyOwner(config, check);
 }
 
@@ -1380,19 +1380,26 @@ ${piece}`;
  * o app vai cobrar) e o que ficou no app sem aparecer na fatura — previsão que
  * não veio, gasto anotado à mão com valor errado ou repetido. Não apaga nada.
  */
-async function cardBillAfterImport(due: Date, started: Date, touchedIds: string[]): Promise<string> {
+async function cardBillAfterImport(due: Date, started: Date, touchedIds: string[], expected: number | null): Promise<string> {
   const from = new Date(due.getTime() - 12 * 3600_000), to = new Date(due.getTime() + 36 * 3600_000);
   const bill = await prisma.financeEntry.findMany({
     where: { paymentMethod: "cartão", card: "", date: { gte: from, lt: to } },
-    select: { id: true, type: true, amount: true, description: true, category: true, createdAt: true },
+    select: { id: true, type: true, amount: true, description: true, category: true, createdAt: true, purchaseDate: true },
   });
   if (!bill.length) return "";
   const total = bill.reduce((acc, e) => acc + (e.type === "expense" ? e.amount : -e.amount), 0);
   const touched = new Set(touchedIds);
-  // Ficou de fora: já existia antes desta importação e nenhuma linha da fatura casou com ele.
-  const left = bill.filter((e) => e.createdAt < started && !touched.has(e.id) && !/Parcela \d+\/\d+|\(recorrente\)/.test(e.description) && e.category !== "Assinaturas");
+  // Ficou de fora: já existia antes desta importação e nenhuma linha da fatura casou com ele
+  // (parcelas e assinaturas também: as que a fatura confirmou vêm em touchedIds).
+  const left = bill.filter((e) => e.createdAt < started && !touched.has(e.id));
+  const daFatura = new Set(bill.filter((e) => e.createdAt >= started || touched.has(e.id)).map((e) => e.id));
   const dueTxt = `${String(due.getDate()).padStart(2, "0")}/${String(due.getMonth() + 1).padStart(2, "0")}`;
   let out = `\n💳 *Fatura de ${dueTxt} no app: ${brl(total)}* (valor real, já com o que eu troquei).`;
+  if (expected !== null && Math.abs(total - expected) >= 0.05) {
+    out += `\n⚠️ No app a fatura ficou ${brl(total)}, mas o PDF diz ${brl(expected)} (diferença ${brl(Math.abs(total - expected))}). Os lançamentos abaixo explicam a diferença: nada apago sem o seu "sim".`;
+  }
+  const avisos = avisosFatura(bill, daFatura);
+  if (avisos.length) out += `\n${avisos.map((a) => `⚠️ ${a}`).join("\n")}`;
   if (left.length) {
     out += `\n🔎 ${left.length} lançamento(s) do app não apareceram na fatura — confira se são repetidos ou de outro mês:\n${left
       .slice(0, 10)
