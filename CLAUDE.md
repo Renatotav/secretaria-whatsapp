@@ -51,6 +51,8 @@ Arquivos-chave:
 `AgentConfig`: uma linha só, com chaves das IAs, Evolution, telefone do dono, `creditCardDueDay`, `creditCardBestDay`.
 `SavingsGoal`: metas (meta concluída quando `currentAmount >= targetAmount`).
 
+Importou fatura ou vai conciliar à mão? Leia antes [docs/financeiro-erros-conhecidos.md](docs/financeiro-erros-conhecidos.md): erros que já aconteceram e a regra de bater no centavo com o PDF. Erro novo entra lá.
+
 ## 4. Regras de ouro (guardrails)
 
 1. **Produção é real.** Não existe ambiente de teste: o que vai para o `master` e é implantado chega direto no dono.
