@@ -85,15 +85,24 @@ function Painel({ d }: { d: Dados }) {
   // Bateria estimada: a carga vai até o cheio, então sobra o que os km ainda não gastaram.
   const pct = d.kmSince != null ? Math.max(0, Math.min(1, 1 - d.kmSince / d.rangeKm)) : null;
   const ultima = d.cargas[0];
+  // O topo mostra o máximo que ainda dá rodar; a folga (até a reserva de segurança) vira o aviso.
+  const restante = d.kmSince != null ? Math.max(0, d.rangeKm - d.kmSince) : null;
   const pneu = d.pneus[0];
 
   return (
     <>
       {d.tomada && <Tomada t={d.tomada} />}
-      <div style={{ ...card, display: "grid", gap: 10 }}>
+      {folga != null && folga <= 8 && (
+        <div role="alert" style={{ ...card, borderColor: cor, color: cor, fontWeight: 600 }}>
+          {folga <= 0
+            ? `⚠️ Hora de carregar: restam ~${n(restante!)} km de bateria. Passou da reserva de segurança.`
+            : `🔔 Ponto de atenção: carregue nos próximos ~${n(folga)} km (restam ~${n(restante!)} km de bateria).`}
+        </div>
+      )}
+      <div style={{ ...card, display: "grid", gap: 10, borderColor: folga != null && folga <= 8 ? cor : "var(--border)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <strong style={{ fontSize: 22, color: cor }}>
-            {folga == null ? "Sem carga registrada" : folga <= 0 ? "Recarregue hoje" : `Folga de ~${n(folga)} km`}
+            {d.kmSince == null ? "Sem carga registrada" : `~${n(restante!)} km de bateria`}
           </strong>
           {pct != null && <span style={{ fontSize: 22, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{n(pct * 100)}%</span>}
         </div>
@@ -106,7 +115,7 @@ function Painel({ d }: { d: Dados }) {
           <div style={{ fontSize: 13, color: "var(--text-muted)" }}>🅿️ Parada desde {dia(d.ultimoOdo)} ({d.paradaDias} dias sem ODO novo). Se rodou, mande o ODO no WhatsApp.</div>
         )}
         <div style={muted}>
-          {d.kmSince != null && `${n(d.kmSince)} km desde a carga${ultima ? ` de ${dia(ultima.at)}` : ""} · recarregar até ~${n(d.safeKm)} km`}
+          {d.kmSince != null && `${n(d.kmSince)} km desde a carga${ultima ? ` de ${dia(ultima.at)}` : ""} · recarregar quando faltar ~${n(d.rangeKm - d.safeKm)} km${folga != null && folga > 0 ? ` (ainda dá ~${n(folga)} km)` : ""}`}
           {d.daysSince != null && d.daysSince > 0 && ` · faz ${d.daysSince} dia(s)`}
           {d.recarregarEm && folga != null && folga > 0 && ` · rodando ${d.kmUso ? `~${n(d.kmUso, 1)} km por dia útil` : "no seu ritmo"}, recarregar por volta de ${dia(d.recarregarEm)}`}
         </div>
