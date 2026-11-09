@@ -1,8 +1,8 @@
 import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
 import { corrigeBebida, taxonomyPrompt } from "./finance-taxonomy";
-import { perfil } from "./perfil";
 
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
+const FINANCE_TAXONOMY = taxonomyPrompt();
 
 export type PersonalQueryIntent = "pending_today" | "open_tickets" | "finance_summary" | "group_summary" | "savings_summary" | "month_closing" | "subscriptions" | "month_diagnosis" | "category_summary" | "chart" | "bills_due" | "budget_status" | "vr_balance" | "wish_list";
 
@@ -158,7 +158,7 @@ Tipos:
        "gráfico das metas" → "goals"
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
-   ${taxonomyPrompt(perfil())}
+   ${FINANCE_TAXONOMY}
    Ex: "Gastei 45 no mercado" → expense, 45, categoria "Alimentação", subcategoria "Supermercado"
    Ex: "Recebi 3000 de salário" → income, 3000, categoria "Salário", subcategoria "Salário fixo"
    Ex: "Paguei 120 de internet" → expense, 120, categoria "Moradia", subcategoria "Internet"
@@ -476,7 +476,7 @@ Para cada transação, identifique:
   Compra internacional mostra o valor em dólar e a cotação (ex: "USD 21,36 | Cotação USD: R$5,42  115,82"):
   use SEMPRE o valor em REAIS cobrado na fatura (115,82), nunca o valor em dólar.
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
-- category e subcategory: ${taxonomyPrompt(perfil())}
+- category e subcategory: ${FINANCE_TAXONOMY}
   Se não der pra inferir a subcategoria, deixe vazio.
 - paymentMethod: OBRIGATÓRIO. Se for extrato/fatura de cartão de crédito, retorne "cartão" para todas as linhas. Se for extrato de conta corrente, tente inferir ("pix", "boleto", "dinheiro" ou "cartão" se for compra no débito). Se não souber, retorne "pix".
 - account: OBRIGATÓRIO. Tente inferir a conta ("Principal" ou "VR"). Faturas de cartão e extratos bancários normais são "Principal". Ticket, Vale, Sodexo, VR, VA são "VR".
@@ -663,7 +663,7 @@ Metadados:
 - date: data da COMPRA que aparece no topo/cabeçalho do cupom (formato ISO YYYY-MM-DD). NÃO use datas da seção "Forma de Pagamento" ou vencimento. Se não conseguir ler a data claramente, use a data de hoje.
 - total: o VALOR A PAGAR final da nota (após descontos, número, sem cifrão). Ex: "VALOR A PAGAR R$ 65,39" -> total: 65.39.
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
-${taxonomyPrompt(perfil())}
+${FINANCE_TAXONOMY}
 - paymentMethod: descubra a forma de pagamento ("cartão", "débito", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". "DEBITO", "Cartão de Débito", "TEF Débito" → use "débito". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". Se a nota NÃO mostrar a forma de pagamento, retorne "" (vazio) — não chute.
 - account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "VR" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
 - status: REGRA ABSOLUTA: cartão de crédito ("cartão", TEF Rotativo, Credito Rotativo) = SEMPRE "pending" (nunca paid). pix, dinheiro, débito, ticket = "paid".
@@ -772,7 +772,7 @@ Classifique a imagem em "kind":
 - "estorno": a imagem é principalmente sobre um reembolso/estorno/devolução de dinheiro.
 - "outro": qualquer outra coisa (saldo de app, tela de banco sem transação, conversa, propaganda...).
 Para "compra"/"estorno", extraia: description (curta: loja + o que foi, ex: "Mercado Livre — baú traseiro"), amount (valor TOTAL efetivamente pago, ou o valor do reembolso), date (YYYY-MM-DD do pagamento; null se não aparecer), paymentMethod ("cartão" = crédito, "pix", "débito", "boleto", "dinheiro", "ticket" = VR/vale; null se o meio de pagamento não aparecer na imagem nem na legenda — não chute), installments (nº de parcelas se parcelado no cartão, senão null), category e subcategory desta lista:
-${taxonomyPrompt(perfil())}
+${taxonomyPrompt()}
 (Estorno: category "Outros", subcategory "Reembolso".)
 "summary": uma frase em português simples dizendo o que você viu, com o valor.
 "suggestion": só para "outro" — o que ele pode fazer com isso na secretária (ou "" se nada).

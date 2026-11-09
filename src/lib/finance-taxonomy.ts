@@ -37,77 +37,31 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
   },
 };
 
-/**
- * Partes do financeiro que mudam de pessoa para pessoa (questionário em
- * docs/questionario-financeiro.md). Vazio = o jeito do Renato, como sempre foi.
- */
-export type PerfilFinanceiro = {
-  /** Gasto a partir deste valor pede confirmação (padrão 500). */
-  gastoAlto?: number;
-  /** Nome do cartão principal nas mensagens (padrão "C6"). */
-  cartaoPrincipal?: string;
-  /** Categorias de despesa que a pessoa não usa (ex.: ["Scooter", "Besteira"]). */
-  categoriasDesligadas?: string[];
-  /** Categorias próprias: nome → subcategorias. */
-  categoriasExtras?: Record<string, string[]>;
-  /** Dicas extras para a IA ("mercadinho = Alimentação › Supermercado"). */
-  dicas?: string[];
-};
-
-/** Exemplos para a IA; os que citam uma categoria desligada saem do texto. */
-const EXEMPLOS: [string, string][] = [
-  ["", "Uber/99 = Transporte › Uber/Taxi"],
-  ["Scooter", "MOVYX/scooter/moto elétrica = Scooter › Parcela; seguro da scooter = Scooter › Seguro; peças/acessórios da scooter ou moto = Scooter › Manutenção/peças"],
-  ["", "farmácia = Saúde › Farmácia; academia = Assinaturas › Academia (cobrança mensal); Spotify/Netflix = Assinaturas › Streaming"],
-  ["", "Claude/ChatGPT/hospedagem de site = Assinaturas › Apps/Softwares; IOF de compra internacional = Impostos e taxas › IOF"],
-  ["", "marmita/restaurante = Alimentação › Restaurantes; iFood = Alimentação › Delivery"],
-  ["", "mercantil/mercadinho/mercearia/atacadão = Alimentação › Supermercado (no Ceará \"mercantil\" é o mercado)"],
-  ["Saídas", "bar/boteco/barzinho, espetinho ou restaurante numa saída à noite = Saídas › Bar (ou Restaurante/Espetinho); festa, show, balada, ingresso = Saídas › Festa/Show"],
-  ["Besteira", "cerveja/bebida alcoólica comprada no mercado ou na adega para beber em casa = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete comprados à parte = Besteira › Salgadinho/Doces; se ele disser \"besteira\", use Besteira"],
-  ["", "refrigerante, Coca, guaraná, suco ou água comprados à parte = Alimentação › Padaria/Lanche (não é Besteira)"],
-  ["", "Amazon/Mercado Livre = Compras (Eletrônicos, Casa, Roupas ou Online, pelo produto)"],
-];
-
-/** Categorias de despesa desta pessoa: a lista padrão sem as desligadas, mais as próprias. */
-export function despesasDoPerfil(p: PerfilFinanceiro = {}): Record<string, string[]> {
-  const fora = new Set(p.categoriasDesligadas ?? []);
-  const base = Object.fromEntries(Object.entries(FINANCE_TAXONOMY_DATA.expense).filter(([c]) => !fora.has(c)));
-  return { ...base, ...(p.categoriasExtras ?? {}) };
-}
-
 /** Texto da lista para o prompt da IA. */
-export function taxonomyPrompt(p: PerfilFinanceiro = {}): string {
+export function taxonomyPrompt(): string {
   const fmt = (m: Record<string, string[]>) =>
     Object.entries(m).map(([cat, subs]) => `${cat} (${subs.join(", ")})`).join("; ");
-  const fora = new Set(p.categoriasDesligadas ?? []);
-  const exemplos = [...EXEMPLOS.filter(([cat]) => !fora.has(cat)).map(([, t]) => t), ...(p.dicas ?? [])];
   return `Categorias de RECEITA (income): ${fmt(FINANCE_TAXONOMY_DATA.income)}.
-Categorias de DESPESA (expense): ${fmt(despesasDoPerfil(p))}.
+Categorias de DESPESA (expense): ${fmt(FINANCE_TAXONOMY_DATA.expense)}.
 REGRAS:
 - Use SEMPRE uma categoria E uma subcategoria desta lista (subcategoria nunca vazia).
 - A categoria é O QUE foi comprado, nunca COMO foi pago: compra parcelada ou no cartão
-  continua na categoria do produto (celular ou teclado = Compras › Eletrônicos). "Impostos e taxas" só
-  para IOF, juros, tarifas, impostos e empréstimos.
-- Exemplos: ${exemplos.join(";\n  ")}.
+  continua na categoria do produto (parcela da scooter = Scooter › Parcela; celular ou
+  teclado = Compras › Eletrônicos). "Impostos e taxas" só para IOF, juros, tarifas,
+  impostos e empréstimos.
+- Exemplos: Uber/99 = Transporte › Uber/Taxi; MOVYX/scooter/moto elétrica = Scooter › Parcela; seguro
+  da scooter = Scooter › Seguro; peças/acessórios da scooter ou moto = Scooter › Manutenção/peças; farmácia = Saúde › Farmácia; academia =
+  Assinaturas › Academia (cobrança mensal); Spotify/Netflix = Assinaturas › Streaming; Claude/ChatGPT/hospedagem
+  de site = Assinaturas › Apps/Softwares; IOF de compra internacional = Impostos e taxas › IOF;
+  marmita/restaurante = Alimentação › Restaurantes; iFood = Alimentação › Delivery;
+  mercantil/mercadinho/mercearia/atacadão = Alimentação › Supermercado (no Ceará "mercantil" é o mercado);
+  bar/boteco/barzinho, espetinho ou restaurante numa saída à noite = Saídas › Bar (ou Restaurante/Espetinho);
+  festa, show, balada, ingresso = Saídas › Festa/Show; cerveja/bebida alcoólica comprada no mercado ou na
+  adega para beber em casa = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete
+  comprados à parte = Besteira › Salgadinho/Doces; se ele disser "besteira", use Besteira;
+  refrigerante, Coca, guaraná, suco ou água comprados à parte = Alimentação › Padaria/Lanche (não é Besteira);
+  Amazon/Mercado Livre = Compras (Eletrônicos, Casa, Roupas ou Online, pelo produto).
 - Só use "Outros › Imprevistos" se nada da lista servir.`;
-}
-
-/** Perfil salvo no banco (JSON livre): só o que tem o tipo certo passa. */
-export function normalizaPerfil(v: unknown): PerfilFinanceiro {
-  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-  const out: PerfilFinanceiro = {};
-  if (typeof o.gastoAlto === "number" && o.gastoAlto > 0) out.gastoAlto = o.gastoAlto;
-  if (typeof o.cartaoPrincipal === "string" && o.cartaoPrincipal.trim()) out.cartaoPrincipal = o.cartaoPrincipal.trim();
-  if (Array.isArray(o.categoriasDesligadas)) out.categoriasDesligadas = o.categoriasDesligadas.filter((x): x is string => typeof x === "string");
-  if (o.categoriasExtras && typeof o.categoriasExtras === "object" && !Array.isArray(o.categoriasExtras)) {
-    out.categoriasExtras = Object.fromEntries(
-      Object.entries(o.categoriasExtras as Record<string, unknown>)
-        .filter(([, subs]) => Array.isArray(subs) && subs.length)
-        .map(([cat, subs]) => [cat, (subs as unknown[]).filter((x): x is string => typeof x === "string")]),
-    );
-  }
-  if (Array.isArray(o.dicas)) out.dicas = o.dicas.filter((x): x is string => typeof x === "string" && !!x.trim());
-  return out;
 }
 
 /**

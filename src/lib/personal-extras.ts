@@ -1,6 +1,5 @@
 import { prisma } from "./prisma";
-import { despesasDoPerfil, FINANCE_TAXONOMY_DATA, merchantKey } from "./finance-taxonomy";
-import { perfil } from "./perfil";
+import { FINANCE_TAXONOMY_DATA, merchantKey } from "./finance-taxonomy";
 import { brl } from "./format";
 
 // Quatro ajudas do canal pessoal, todas sem IA:
@@ -23,8 +22,7 @@ async function kvSet(key: string, value: object): Promise<void> {
 /** "Saúde › Farmácia", "saude farmacia", "Farmácia" → par da lista única; null se não achar. */
 export function resolveCategory(raw: string, type: "income" | "expense" = "expense"): { category: string; subcategory: string } | null {
   const t = norm(raw.replace(/[›>/,-]/g, " "));
-  // Despesa: as categorias desta pessoa (sem as desligadas, com as próprias).
-  const tax = type === "expense" ? despesasDoPerfil(perfil()) : FINANCE_TAXONOMY_DATA[type];
+  const tax = FINANCE_TAXONOMY_DATA[type];
   for (const [cat, subs] of Object.entries(tax)) {
     for (const sub of subs) if (t === norm(`${cat} ${sub}`) || t === norm(sub) || t.includes(norm(sub)) && t.includes(norm(cat))) return { category: cat, subcategory: sub };
   }
@@ -70,7 +68,7 @@ async function applyRuleCommand(text: string): Promise<string | null> {
   if (cria) {
     const pattern = norm(cria[1]).replace(/^(o|a|os|as|no|na|do|da)\s+/, "");
     const cat = resolveCategory(cria[2]);
-    if (!cat) return `🤔 Não achei a categoria "${cria[2]}". Use uma da lista, ex.: *regra: ${pattern} é Saúde › Farmácia*.\nCategorias: ${Object.keys(despesasDoPerfil(perfil())).join(", ")}.`;
+    if (!cat) return `🤔 Não achei a categoria "${cria[2]}". Use uma da lista, ex.: *regra: ${pattern} é Saúde › Farmácia*.\nCategorias: ${Object.keys(FINANCE_TAXONOMY_DATA.expense).join(", ")}.`;
     if (pattern.length < 3) return "🤔 O nome da loja ficou curto demais para virar regra.";
     await prisma.categoryRule.upsert({ where: { pattern }, create: { pattern, ...cat }, update: cat });
     return `📏 Regra criada: tudo com "${pattern}" vai para *${cat.category} › ${cat.subcategory}* (vale antes da IA e da memória por loja). Ver todas: *minhas regras*.`;

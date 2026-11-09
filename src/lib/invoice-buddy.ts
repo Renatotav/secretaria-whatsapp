@@ -2,7 +2,6 @@ import { prisma } from "./prisma";
 import { sendTextWithTyping } from "./evolution";
 import { brl } from "./format";
 import { listOpenInvoices } from "./invoices";
-import { normalizaPerfil } from "./finance-taxonomy";
 
 // Aviso das faturas para o irmão (pedido dele, 21/10/2026): ele é o titular do
 // C6 (o Renato é o adicional) e o dono do cartão Santander. A secretária só
@@ -20,16 +19,14 @@ export async function invoiceBuddyMessage(hoje = new Date()): Promise<string> {
     return f.total >= 1 && AVISAR_DIAS.includes(dias);
   });
   if (!faturas.length) return "";
-  const cfg = await prisma.agentConfig.findFirst({ select: { invoiceBuddyName: true, ownerName: true, perfilFinanceiro: true } });
-  const dono = cfg?.ownerName?.split(" ")[0] || "dono";
-  const principal = normalizaPerfil(cfg?.perfilFinanceiro).cartaoPrincipal ?? "C6";
+  const cfg = await prisma.agentConfig.findFirst({ select: { invoiceBuddyName: true } });
   const linhas = faturas.map((f) => {
     const [, m, d] = f.dueDate.split("-").map(Number);
     const quando = `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
-    const nome = f.card ? (/santander/i.test(f.card) ? "Santander" : f.card) : principal;
-    return `💳 *${nome}* vence *${quando}* — parte do ${dono}: *${brl(f.total)}*`;
+    const nome = f.card ? (/santander/i.test(f.card) ? "Santander" : f.card) : "C6";
+    return `💳 *${nome}* vence *${quando}* — parte do Renato: *${brl(f.total)}*`;
   });
-  return `Oi${cfg?.invoiceBuddyName ? `, ${cfg.invoiceBuddyName}` : ""}! 👋 Lembrete das faturas:\n${linhas.join("\n")}\n\n_(Aviso automático da secretária do ${dono}.)_`;
+  return `Oi${cfg?.invoiceBuddyName ? `, ${cfg.invoiceBuddyName}` : ""}! 👋 Lembrete das faturas:\n${linhas.join("\n")}\n\n_(Aviso automático da secretária do Renato.)_`;
 }
 
 /** Agendador (9h): manda o aviso para o irmão, se houver fatura vencendo em 3 dias ou hoje. */
