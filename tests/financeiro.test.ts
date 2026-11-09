@@ -8,6 +8,8 @@ import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, contaPeloNome, p
 import { parseQuotedChange } from "../src/lib/quoted-reply";
 import { splitMethod, parseSplit } from "../src/lib/finance-split";
 import { histValue } from "../src/lib/finance-history";
+import { idadeDoDinheiro } from "../src/lib/idade-dinheiro";
+
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -118,4 +120,19 @@ test("contaPeloNome: 'paguei o seguro' acha a conta prevista pelo nome", () => {
   assert.equal(contaPeloNome("paguei o aluguel", contas), "a");
   assert.equal(contaPeloNome("paguei o seguro", contas), null); // empate entre dois seguros: pergunta o valor
   assert.equal(contaPeloNome("paguei a luz", contas), null);
+});
+
+test("idade do dinheiro: saída paga com a entrada mais antiga", () => {
+  const d = (dia: number) => new Date(2026, 0, dia, 12);
+  const movs = [
+    { date: d(1), amount: 1000, type: "income" },
+    { date: d(11), amount: 100, type: "expense" }, // 10 dias
+    { date: d(21), amount: 100, type: "expense" }, // 20 dias
+    { date: d(31), amount: 100, type: "expense" }, // 30 dias
+  ];
+  assert.equal(idadeDoDinheiro(movs), 20);
+  // Gastou tudo e o salário novo é gasto no mesmo dia: a idade cai.
+  const curta = [{ date: d(1), amount: 300, type: "income" }, ...[2, 3, 4].map((x) => ({ date: d(x), amount: 100, type: "expense" })), { date: d(10), amount: 300, type: "income" }, ...[10, 10, 10].map((x) => ({ date: d(x), amount: 100, type: "expense" }))];
+  assert.equal(idadeDoDinheiro(curta, 3), 0);
+  assert.equal(idadeDoDinheiro(movs.slice(0, 2)), null); // poucas saídas
 });

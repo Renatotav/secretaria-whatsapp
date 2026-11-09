@@ -13,6 +13,8 @@ import { workDigestLine, workWeekSection } from "./work";
 import { baseName, budgetIcon, budgetStatus, dayRange, dueBetween, formatDayMonth, isInstallment, isRecurring, MESES_FALA, MONTH_NAMES, monthForecastParts, monthTotals, reaisFala, SALARY_REPLY_MARK, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
 import { buildWishList, checkWish } from "./finance-wishes";
 import { findReserveGoal, goalMonthlyNeed, goalsViabilityLine, reserveNow } from "./finance-goals";
+import { listOpenInvoices } from "./invoices";
+import { idadeDoDinheiro } from "./idade-dinheiro";
 
 /**
  * Fechamento de um mês: entrou x saiu, top 3 categorias contra o mês
@@ -309,6 +311,30 @@ export async function cardLimitData() {
   return { left, close, days, month, note, saldo, vales: saldo.reduce((a, v) => a + v.saldo, 0) };
 }
 
+/** Quanto do dinheiro já está comprometido com faturas em aberto (ideia do YNAB: o da fatura não é sobra). */
+export async function faturasSeparadasLine(): Promise<string> {
+  const faturas = await listOpenInvoices();
+  if (!faturas.length) return "";
+  const total = faturas.reduce((a, f) => a + f.total, 0);
+  const prox = faturas[0];
+  return `🧾 Já separado para faturas: ${brl(total)} (próxima: ${prox.dueDate.slice(8, 10)}/${prox.dueDate.slice(5, 7)}, ${brl(prox.total)}).`;
+}
+
+/** Idade do dinheiro hoje e há 7 dias, só com o que já saiu da conta (sem vale). */
+export async function idadeDoDinheiroLine(): Promise<string> {
+  const desde = new Date(Date.now() - 180 * 86_400_000);
+  const movs = await prisma.financeEntry.findMany({
+    where: { status: "paid", date: { gte: desde, lte: new Date() }, paymentMethod: { not: "ticket" }, NOT: { account: { in: ["VR", "Vale antigo"] } } },
+    select: { date: true, amount: true, type: true },
+  });
+  const hoje = idadeDoDinheiro(movs);
+  if (hoje == null) return "";
+  const corte = Date.now() - 7 * 86_400_000;
+  const antes = idadeDoDinheiro(movs.filter((m) => m.date.getTime() <= corte));
+  const seta = antes == null ? "" : hoje > antes ? ` ↑ (era ${antes})` : hoje < antes ? ` ↓ (era ${antes})` : "";
+  return `⏳ Idade do dinheiro: ${hoje} dia(s)${seta}. É quanto tempo o dinheiro fica parado antes de sair: quanto mais, mais folga.`;
+}
+
 export async function cardLimitLine(): Promise<string> {
   const { left, close, days, month, note, saldo, vales } = await cardLimitData();
   const comida = saldo.length
@@ -376,6 +402,7 @@ export async function buildDailyDigest(): Promise<string> {
   }
   lines.push((await monthForecastLine(today.getFullYear(), today.getMonth())).trim());
   lines.push(await cardLimitLine());
+  lines.push(await faturasSeparadasLine().catch(() => ""));
   lines.push(await limitChallengeLine().catch(() => ""));
   const vr = await vrBalanceShort();
   if (vr) {
@@ -429,6 +456,7 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
   for (const w of wishes) if ((await checkWish(w)).level === "green") fits.push(w.name);
 
   const correcoes = await prisma.financeLog.count({ where: { reason: { startsWith: "correção:" }, at: { gte, lte } } });
+  const idade = await idadeDoDinheiroLine().catch(() => "");
   const lines = [
     `📊 *Sua semana — ${formatDayMonth(monday)} a ${formatDayMonth(sunday)}*`,
     `💰 Entrou ${brl(income)} · 💸 gastou ${brl(out)}`,
@@ -437,6 +465,7 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
     `\n${(await monthForecastLine(today.getFullYear(), today.getMonth())).trim()}`,
     due.length ? `\n📅 *Próxima semana:*\n${due.join("\n")}` : "\n📅 Próxima semana: nada vencendo.",
     fits.length ? `\n🛍️ Já cabe da lista de desejos: ${fits.join(", ")}` : "",
+    idade ? `\n${idade}` : "",
     correcoes ? `\n✏️ Você corrigiu ${correcoes} lançamento(s) esta semana. Peça ao Claude *olha as correções* para virarem regra.` : "",
   ].filter(Boolean);
 
