@@ -70,6 +70,8 @@ model AgentConfig {
   plugCommand      String  @default("")
   /// Último estado da tomada da scooter mandado pelo vigia: JSON {on, power, at}.
   plugState        String  @default("")
+  /// Sem uso nesta secretária (o financeiro genérico virou projeto à parte). Fica para o db push não apagar coluna.
+  perfilFinanceiro Json    @default("{}")
   /// Tarifa da luz em R$/kWh (com impostos) para o custo das cargas da scooter.
   kwhPrice         Float   @default(0.95)
   /// Alexa falando os avisos (Voice Monkey): chave da API, ID do aparelho e horário de silêncio "22-7".
