@@ -105,6 +105,18 @@ export function palavrasDaLoja(d: string): string[] {
   return [...new Set(loja.match(/[a-z0-9]{5,}/g) ?? [])].filter((w) => !GENERICAS.has(w));
 }
 
+const PALAVRAS_DE_PAGAR = new Set(["paguei", "quitei", "baixa", "conta", "boleto", "hoje", "ontem", "reais", "valor", "parcela", "compra"]);
+/**
+ * "Paguei o seguro scooter Sura": a conta prevista com mais palavras da frase no
+ * nome (4+ letras). Só devolve se houver uma melhor que todas as outras.
+ */
+export function contaPeloNome(texto: string, contas: { id: string; description: string }[]): string | null {
+  const palavras = [...new Set(semAcento(texto).match(/[a-z0-9]{4,}/g) ?? [])].filter((w) => !PALAVRAS_DE_PAGAR.has(w));
+  if (!palavras.length) return null;
+  const notas = contas.map((c) => ({ id: c.id, n: palavras.filter((w) => semAcento(c.description).includes(w)).length })).sort((a, b) => b.n - a.n);
+  return notas[0] && notas[0].n > 0 && (notas.length === 1 || notas[1].n < notas[0].n) ? notas[0].id : null;
+}
+
 type LinhaFatura = { id: string; type: string; amount: number; description: string; purchaseDate: Date | null };
 /**
  * Avisos depois de importar a fatura (não apaga nada), dos erros reais em

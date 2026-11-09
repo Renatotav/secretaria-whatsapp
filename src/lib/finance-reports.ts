@@ -586,7 +586,9 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   };
   const total = items.reduce((sum, i) => sum + i.amount, 0);
   const title = mode === "reminder" ? "⏰ *Contas vencendo*" : `📋 *Contas a pagar até o fim de ${MONTH_NAMES[today.getMonth()]}*`;
-  const footer = mode === "reminder" ? `\nJá pagou? Me diga "paguei o aluguel" que eu dou baixa.` : "";
+  // Exemplo com o nome de uma conta da lista (antes era sempre "o aluguel").
+  const exemplo = items.find((i) => !i.label.startsWith("💳"))?.label.replace(/\s*-\s*Parcela \d+\/\d+.*$/i, "").replace(/\s*\(.*$/, "").trim().toLowerCase();
+  const footer = mode === "reminder" ? `\nJá pagou? Me diga "paguei ${exemplo || "a fatura"}" que eu dou baixa.` : "";
   return `${title}\n${items.map(line).join("\n")}\n\nTotal: ${brl(total)}${footer}`;
 }
 

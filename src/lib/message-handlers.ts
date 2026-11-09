@@ -24,7 +24,7 @@ import { applyUsageCommand } from "./work-usage";
 import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
 import { fetchNfce, repairNfeKey } from "./nfce";
 import { budgetStatus, dayRange, formatDayMonth, isoDay, MESES_FALA, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
-import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
+import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, contaPeloNome, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
 import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseChart, sendMonthChart } from "./finance-charts";
 import { checkWish, levelIcon, wishLabel } from "./finance-wishes";
 import type { WishVerdict } from "./finance-wishes";
@@ -805,6 +805,23 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       if (route.financeType === "expense") {
         const regra = await categoryRuleFor(route.description || "", joinedText).catch(() => null);
         if (regra) Object.assign(route, { category: regra.category, subcategory: regra.subcategory });
+      }
+      // "Paguei o seguro scooter Sura" sem valor: é a conta prevista com esse nome, baixa direto.
+      if (!(route.amount > 0) && route.financeType === "expense" && /\b(paguei|quitei|dei baixa)\b/i.test(joinedText)) {
+        const hoje = todayBRT();
+        const contas = await prisma.financeEntry.findMany({
+          where: { type: "expense", status: "pending", paymentMethod: { not: "cartão" }, date: { gte: new Date(hoje.getTime() - 45 * 86400000), lte: new Date(hoje.getTime() + 10 * 86400000) } },
+          orderBy: { date: "asc" },
+          select: { id: true, description: true, amount: true, category: true },
+        });
+        const id = contaPeloNome(joinedText, contas);
+        const conta = contas.find((c) => c.id === id);
+        if (conta) {
+          lastSaved = null;
+          await prisma.financeEntry.update({ where: { id: conta.id }, data: { status: "paid" } });
+          response = `✅ Baixa confirmada na conta pendente:\n${conta.description || conta.category} (${brl(conta.amount)})\nSe o valor foi outro, mande *na verdade foi X*.`;
+          break;
+        }
       }
       // Sem valor ("gastei com uber"): não grava, pergunta e espera a resposta.
       if (!(route.amount > 0)) {

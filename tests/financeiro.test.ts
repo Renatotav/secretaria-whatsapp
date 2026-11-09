@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { parseLocalDate } from "../src/lib/dates";
 import { addMonths, budgetIcon, isInstallment, isRecurring, vrDisponivel } from "../src/lib/finance-common";
 import { parseBrNumber, paymentLabel, formatFullDate } from "../src/lib/finance-text";
-import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, palavrasDaLoja, primeiraPalavra } from "../src/lib/statement-import";
+import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, contaPeloNome, palavrasDaLoja, primeiraPalavra } from "../src/lib/statement-import";
 import { parseQuotedChange } from "../src/lib/quoted-reply";
 import { splitMethod, parseSplit } from "../src/lib/finance-split";
 import { histValue } from "../src/lib/finance-history";
@@ -106,4 +106,16 @@ test("palavrasDaLoja: acha a loja pelo nome, sem palavras genéricas", () => {
   assert.deepEqual(palavrasDaLoja("Pizzaria Suprema — pizza grande 8 pedaços"), ["suprema"]);
   assert.deepEqual(palavrasDaLoja("Supermercado Guará — compras"), ["guara"]);
   assert.deepEqual(palavrasDaLoja("Uber — ida ao trabalho"), []); // curta demais: sem palpite
+});
+
+test("contaPeloNome: 'paguei o seguro' acha a conta prevista pelo nome", () => {
+  const contas = [
+    { id: "a", description: "Aluguel (recorrente)" },
+    { id: "b", description: "Seguro scooter Sura - Parcela 1/10 (compra em 10/2026)" },
+    { id: "c", description: "Seguro do celular" },
+  ];
+  assert.equal(contaPeloNome("Paguei o seguro scooter Sura", contas), "b");
+  assert.equal(contaPeloNome("paguei o aluguel", contas), "a");
+  assert.equal(contaPeloNome("paguei o seguro", contas), null); // empate entre dois seguros: pergunta o valor
+  assert.equal(contaPeloNome("paguei a luz", contas), null);
 });
