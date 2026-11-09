@@ -1501,13 +1501,14 @@ async function applyBankImportReply(text: string, config: AgentConfig): Promise<
     pendingBankImport = null;
     return false;
   }
-  const answer = text.trim().toLowerCase();
-  if (/^(cancela|n[aã]o\b)/.test(answer)) {
+  // Resposta exata: "ok" ou "não gastei hoje" no meio da conversa não decidem o extrato.
+  const answer = text.trim().toLowerCase().replace(/[.!]+$/, "");
+  if (/^(cancela|cancelar|n[aã]o)$/.test(answer)) {
     pendingBankImport = null;
     await notifyOwner(config, "👍 Ok, não anotei nada do extrato.");
     return true;
   }
-  if (!/^(sim|s|pode|anota|ok)\b/.test(answer) || answer.length > 20) return false;
+  if (!/^(sim|pode|pode anotar|anota)$/.test(answer)) return false;
   const { entries } = pendingBankImport;
   pendingBankImport = null;
   await withReason("extrato do banco", () => saveStatementEntries(config, entries, "o extrato do banco"));
