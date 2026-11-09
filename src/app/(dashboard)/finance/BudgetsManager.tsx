@@ -6,6 +6,7 @@ type Budget = {
   id: string;
   category: string;
   amount: number;
+  sobra?: number;
   month: string;
 };
 
@@ -113,6 +114,7 @@ export function BudgetsManager({
                   <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
                     R$ {b.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} 
                     {b.month === "default" ? " (Fixo)" : ` (${b.month})`}
+                    {b.sobra ? <span style={{ color: "var(--success)" }}> + {b.sobra.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} que sobrou do mês passado</span> : null}
                   </div>
                 </div>
                 <button

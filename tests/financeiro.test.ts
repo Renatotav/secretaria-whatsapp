@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseLocalDate } from "../src/lib/dates";
-import { addMonths, budgetIcon, isInstallment, isRecurring, vrDisponivel } from "../src/lib/finance-common";
+import { addMonths, budgetIcon, isInstallment, isRecurring, sobraDoMes, vrDisponivel } from "../src/lib/finance-common";
 import { parseBrNumber, paymentLabel, formatFullDate } from "../src/lib/finance-text";
 import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, contaPeloNome, palavrasDaLoja, primeiraPalavra } from "../src/lib/statement-import";
 import { parseQuotedChange } from "../src/lib/quoted-reply";
@@ -135,4 +135,11 @@ test("idade do dinheiro: saída paga com a entrada mais antiga", () => {
   const curta = [{ date: d(1), amount: 300, type: "income" }, ...[2, 3, 4].map((x) => ({ date: d(x), amount: 100, type: "expense" })), { date: d(10), amount: 300, type: "income" }, ...[10, 10, 10].map((x) => ({ date: d(x), amount: 100, type: "expense" }))];
   assert.equal(idadeDoDinheiro(curta, 3), 0);
   assert.equal(idadeDoDinheiro(movs.slice(0, 2)), null); // poucas saídas
+});
+
+test("sobra do teto: só o que sobrou passa; estouro não desconta", () => {
+  const lim = new Map([["Alimentação", 900], ["Transporte", 150], ["Lazer", 200]]);
+  const gasto = { Alimentação: 800, Transporte: 190 }; // Lazer sem gasto
+  assert.deepEqual([...sobraDoMes(lim, gasto)], [["Alimentação", 100], ["Lazer", 200]]);
+  assert.equal(sobraDoMes(lim, { Alimentação: 900.004, Transporte: 150, Lazer: 200 }).size, 0);
 });

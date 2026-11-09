@@ -34,16 +34,49 @@ export async function monthTotals(year: number, monthIndex: number) {
   return { income, expense, byCategory };
 }
 
-/** Tetos do mês (o do mês específico vale mais que o "default") e o gasto de cada categoria. */
-export async function budgetStatus(year: number, monthIndex: number) {
+/** Tetos do mês, sem sobra: o do mês específico vale mais que o "default". */
+async function limitesBase(year: number, monthIndex: number): Promise<Map<string, number>> {
   const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
   const rows = await prisma.budget.findMany({ where: { subcategory: "", month: { in: [monthKey, "default"] } } });
   const limits = new Map<string, number>();
   for (const b of rows.filter((r) => r.month === "default")) limits.set(b.category, b.amount);
   for (const b of rows.filter((r) => r.month === monthKey)) limits.set(b.category, b.amount);
-  const { byCategory } = await monthTotals(year, monthIndex);
+  return limits;
+}
+
+/**
+ * Sobra do teto (ideia do YNAB, pedido dele em 09/11/2026): o que não foi
+ * gasto do teto de uma categoria no mês anterior soma no teto deste mês. Só
+ * a sobra passa; estouro não desconta (já aparece no fechamento). Passa só do
+ * mês anterior, sem acumular de meses mais velhos.
+ */
+export const SOBRA_DESDE = "2026-12";
+export function sobraDoMes(limitesAnt: Map<string, number>, gastoAnt: Record<string, number>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [cat, lim] of limitesAnt) {
+    const sobra = Math.round((lim - (gastoAnt[cat] ?? 0)) * 100) / 100;
+    if (sobra > 0) out.set(cat, sobra);
+  }
+  return out;
+}
+
+/** Sobra que cada categoria traz do mês anterior para este (vazio antes de SOBRA_DESDE). */
+export async function sobrasDoMes(year: number, monthIndex: number): Promise<Map<string, number>> {
+  const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+  if (monthKey < SOBRA_DESDE) return new Map();
+  const ant = new Date(year, monthIndex - 1, 1);
+  const [lim, { byCategory }] = await Promise.all([limitesBase(ant.getFullYear(), ant.getMonth()), monthTotals(ant.getFullYear(), ant.getMonth())]);
+  return sobraDoMes(lim, byCategory);
+}
+
+/** Tetos do mês (com a sobra do mês anterior) e o gasto de cada categoria. */
+export async function budgetStatus(year: number, monthIndex: number) {
+  const [limits, sobras, { byCategory }] = await Promise.all([limitesBase(year, monthIndex), sobrasDoMes(year, monthIndex), monthTotals(year, monthIndex)]);
   const items = [...limits.entries()]
-    .map(([category, limit]) => ({ category, limit, spent: byCategory[category] ?? 0 }))
+    .map(([category, base]) => {
+      const sobra = sobras.get(category) ?? 0;
+      return { category, limit: base + sobra, base, sobra, spent: byCategory[category] ?? 0 };
+    })
     .sort((a, b) => b.spent / b.limit - a.spent / a.limit);
   const withoutLimit = Object.entries(byCategory).filter(([c, v]) => !limits.has(c) && v > 0);
   return { items, withoutLimit };

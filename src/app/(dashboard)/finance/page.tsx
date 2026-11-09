@@ -91,7 +91,7 @@ export default function FinancePage() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [customSubcategories, setCustomSubcategories] = useState<Record<string, string[]>>({});
   const [showCategoryManager, setShowCategoryManager] = useState(false);
-  const [budgets, setBudgets] = useState<{id: string, category: string, amount: number, month: string}[]>([]);
+  const [budgets, setBudgets] = useState<{id: string, category: string, amount: number, month: string; sobra?: number}[]>([]);
   const [showBudgetsManager, setShowBudgetsManager] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
@@ -255,7 +255,8 @@ export default function FinancePage() {
   const dadosCategorias = (() => {
     const soma: Record<string, number> = {};
     for (const e of entries) if (e.type === "expense") soma[e.category || "Outros"] = (soma[e.category || "Outros"] ?? 0) + e.amount;
-    const teto = (c: string) => budgets.find((b) => b.category === c && b.month === month)?.amount ?? budgets.find((b) => b.category === c && b.month === "default")?.amount ?? null;
+    const tetoBase = (c: string) => budgets.find((b) => b.category === c && b.month === month) ?? budgets.find((b) => b.category === c && b.month === "default");
+    const teto = (c: string) => { const b = tetoBase(c); return b ? b.amount + (b.sobra ?? 0) : null; };
     return Object.entries(soma).sort((a, b) => b[1] - a[1]).map(([categoria, gasto]) => ({ categoria, gasto: Math.round(gasto * 100) / 100, teto: teto(categoria) }));
   })();
   function verLancamentos(tipo: "income" | "expense") {

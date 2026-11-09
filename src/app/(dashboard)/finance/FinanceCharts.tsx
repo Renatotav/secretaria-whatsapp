@@ -16,7 +16,7 @@ export function CategoryDonut({
   onSelectCategory,
 }: {
   entries: FinanceEntry[];
-  budgets: {id: string, category: string, amount: number}[];
+  budgets: {id: string, category: string, amount: number; sobra?: number}[];
   selectedCategory: string | null;
   onSelectCategory: (category: string | null, matchNames: string[]) => void;
 }) {
@@ -121,7 +121,9 @@ export function CategoryDonut({
       <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, minWidth: 180 }}>
         {segments.map((seg, i) => {
           const isSelected = selectedCategory === seg.name;
-          const budget = budgets.find((b) => b.category === seg.name);
+          const achado = budgets.find((b) => b.category === seg.name);
+          // Teto do mês = o cadastrado + a sobra do mês anterior.
+          const budget = achado ? { ...achado, amount: achado.amount + (achado.sobra ?? 0) } : undefined;
           const percent = budget ? Math.min((seg.value / budget.amount) * 100, 100) : 0;
           return (
             <div
