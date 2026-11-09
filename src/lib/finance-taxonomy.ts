@@ -42,6 +42,10 @@ export const FINANCE_TAXONOMY_DATA: Record<"income" | "expense", Record<string, 
  * docs/questionario-financeiro.md). Vazio = o jeito do Renato, como sempre foi.
  */
 export type PerfilFinanceiro = {
+  /** 1 = configurado pela tela "Meu financeiro" ou pelo questionário: base genérica + escolhas da pessoa. Sem isso, o jeito do Renato. */
+  versao?: number;
+  /** Categorias de despesa da lista que a pessoa usa (configurado sem esta lista = a lista genérica). */
+  categorias?: string[];
   /** Gasto a partir deste valor pede confirmação (padrão 500). */
   gastoAlto?: number;
   /** Nome do cartão principal nas mensagens (padrão "C6"). */
@@ -64,14 +68,20 @@ const EXEMPLOS: [string, string][] = [
   ["", "mercantil/mercadinho/mercearia/atacadão = Alimentação › Supermercado (no Ceará \"mercantil\" é o mercado)"],
   ["Saídas", "bar/boteco/barzinho, espetinho ou restaurante numa saída à noite = Saídas › Bar (ou Restaurante/Espetinho); festa, show, balada, ingresso = Saídas › Festa/Show"],
   ["Besteira", "cerveja/bebida alcoólica comprada no mercado ou na adega para beber em casa = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete comprados à parte = Besteira › Salgadinho/Doces; se ele disser \"besteira\", use Besteira"],
-  ["", "refrigerante, Coca, guaraná, suco ou água comprados à parte = Alimentação › Padaria/Lanche (não é Besteira)"],
+  ["", "refrigerante, Coca, guaraná, suco ou água comprados à parte = Alimentação › Padaria/Lanche"],
   ["", "Amazon/Mercado Livre = Compras (Eletrônicos, Casa, Roupas ou Online, pelo produto)"],
 ];
 
-/** Categorias de despesa desta pessoa: a lista padrão sem as desligadas, mais as próprias. */
+/** Categorias que nasceram do jeito do Renato: numa instalação configurada, só entram se a pessoa marcar. */
+export const CATEGORIAS_PESSOAIS = ["Scooter", "Besteira", "Saídas"];
+
+/** Categorias de despesa desta pessoa: as que ela usa da lista, mais as próprias. */
 export function despesasDoPerfil(p: PerfilFinanceiro = {}): Record<string, string[]> {
-  const fora = new Set(p.categoriasDesligadas ?? []);
-  const base = Object.fromEntries(Object.entries(FINANCE_TAXONOMY_DATA.expense).filter(([c]) => !fora.has(c)));
+  const todas = FINANCE_TAXONOMY_DATA.expense;
+  const usar = new Set(p.versao ? (p.categorias ?? Object.keys(todas).filter((c) => !CATEGORIAS_PESSOAIS.includes(c))) : Object.keys(todas));
+  for (const c of p.categoriasDesligadas ?? []) usar.delete(c);
+  usar.add("Outros"); // sempre existe: é o "nada da lista serve"
+  const base = Object.fromEntries(Object.entries(todas).filter(([c]) => usar.has(c)));
   return { ...base, ...(p.categoriasExtras ?? {}) };
 }
 
@@ -79,8 +89,9 @@ export function despesasDoPerfil(p: PerfilFinanceiro = {}): Record<string, strin
 export function taxonomyPrompt(p: PerfilFinanceiro = {}): string {
   const fmt = (m: Record<string, string[]>) =>
     Object.entries(m).map(([cat, subs]) => `${cat} (${subs.join(", ")})`).join("; ");
-  const fora = new Set(p.categoriasDesligadas ?? []);
-  const exemplos = [...EXEMPLOS.filter(([cat]) => !fora.has(cat)).map(([, t]) => t), ...(p.dicas ?? [])];
+  const tem = despesasDoPerfil(p);
+  const exemplos = [...EXEMPLOS.filter(([cat]) => !cat || cat in tem).map(([, t]) => t), ...(p.dicas ?? [])];
+  if ("Besteira" in tem) exemplos.push("refrigerante não é Besteira");
   return `Categorias de RECEITA (income): ${fmt(FINANCE_TAXONOMY_DATA.income)}.
 Categorias de DESPESA (expense): ${fmt(despesasDoPerfil(p))}.
 REGRAS:
@@ -96,6 +107,8 @@ REGRAS:
 export function normalizaPerfil(v: unknown): PerfilFinanceiro {
   const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   const out: PerfilFinanceiro = {};
+  if (o.versao === 1) out.versao = 1;
+  if (Array.isArray(o.categorias)) out.categorias = o.categorias.filter((x): x is string => typeof x === "string");
   if (typeof o.gastoAlto === "number" && o.gastoAlto > 0) out.gastoAlto = o.gastoAlto;
   if (typeof o.cartaoPrincipal === "string" && o.cartaoPrincipal.trim()) out.cartaoPrincipal = o.cartaoPrincipal.trim();
   if (Array.isArray(o.categoriasDesligadas)) out.categoriasDesligadas = o.categoriasDesligadas.filter((x): x is string => typeof x === "string");

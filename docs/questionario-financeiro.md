@@ -12,7 +12,13 @@ Cada pessoa tem a própria instalação da secretária. As respostas abaixo troc
 6. **Metas:** nome, valor, quanto já tem e prazo.
 7. **Jeito de escrever:** 5 exemplos reais de como anota um gasto (viram casos em `src/lib/ai-lab.ts`).
 
-## Como aplicar
+## Jeito fácil: tela "Meu financeiro"
+
+No painel, **Mais → Meu financeiro**: marcar as categorias que usa, escrever as próprias ("Pets: Ração, Veterinário"), as palavras do seu jeito, o valor de gasto alto e o nome do cartão. Salvar já vale na próxima mensagem. Dia da fatura, cartões e horários ficam em Mais → Configurações.
+
+Instalação configurada (tela ou script) começa da lista **genérica**: Scooter, Besteira e Saídas só entram se a pessoa marcar. Instalação que nunca salvou o perfil continua como era antes.
+
+## Jeito completo (instalação nova, com contas e metas)
 
 1. Passe as respostas para um JSON no formato de [questionario-exemplo.json](questionario-exemplo.json) (dados inventados).
 2. Simule: `DATABASE_URL=... npx tsx scripts/aplicar-questionario.ts respostas.json`
@@ -23,7 +29,7 @@ O que cada resposta vira:
 | Resposta | Onde fica |
 |---|---|
 | Nome, WhatsApp, horários, cartões, aviso da fatura | `AgentConfig` |
-| Gasto alto, cartão principal, categorias desligadas/próprias, dicas | `AgentConfig.perfilFinanceiro` (tipo `PerfilFinanceiro` em `finance-taxonomy.ts`) |
+| Gasto alto, cartão principal, categorias usadas/próprias, dicas | `AgentConfig.perfilFinanceiro` (tipo `PerfilFinanceiro` em `finance-taxonomy.ts`) |
 | Salário, vale e contas fixas | Lançamentos "(recorrente)", projetados 12 meses à frente |
 | Tetos | `Budget` (mês "default") |
 | Metas | `SavingsGoal` |
