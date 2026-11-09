@@ -100,7 +100,7 @@ export const ITEM_CATEGORIES = ["Carnes", "Frios e laticínios", "Hortifruti", "
 function categoriaPeloNome(name: string): string | null {
   const n = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (/coxinha|congelad|\bcong\b|lasanha|hamburguer|empanad|nuggets|pizza|pao de queijo|batata (palito|frita)|sorvet/.test(n) && !/costela|file|frango inteiro/.test(n)) return "Congelados";
-  if (/costela|\bfile\b|filez|frango|\bcarne|bovin|suin|\bpeito\b|coxa|sobrecoxa|alcatra|picanha|patinho|acem|musculo|linguica|bacon|calabresa|peixe|tilapia|sardinha fresca|\bbife/.test(n)) return "Carnes";
+  if (/costela|\bfile\b|filez|frango|\bcarne|bovin|suin|\bpeito\b|coxa|sobrecoxa|alcatra|\balca\b|\bbov\b|maminha|\bmamin\b|picanha|patinho|acem|musculo|linguica|bacon|calabresa|peixe|tilapia|sardinha fresca|\bbife/.test(n)) return "Carnes";
   if (/\bpao\b|paes|bisnaguinha|torrada|bolo\b/.test(n)) return "Padaria";
   if (/queijo|mussarela|muçarela|presunto|mortadela|requeij|iogurte|\bleite\b|manteiga|margarina|creme de leite|nata/.test(n)) return "Frios e laticínios";
   if (/limao|banana|maca\b|laranja|tomate|cebola|alho|batata|cenoura|alface|couve|abacate|mamao|melancia|uva|pepino|pimentao|chuchu|abobrinha|batata doce|hortifruti|\bkg\b.*(fruta|legume)/.test(n)) return "Hortifruti";
@@ -118,6 +118,8 @@ export function normalizeItemCategory(i: { name: string; category: string; amoun
     const pelo = categoriaPeloNome(i.name);
     if (pelo) return pelo;
   }
+  // Carne vendida no peso ("MAMIN ALCA BOV … kg") vem às vezes como Mercearia: o nome manda.
+  if (/\bkg\b/i.test(i.name) && categoriaPeloNome(i.name) === "Carnes") return "Carnes";
   if (/desconto|ajuste|acrescimo/.test(c) || (i.amount ?? 0) < 0) return "Descontos";
   if (/carne|acougue|frango|peixe|bovin|suin/.test(c)) return "Carnes";
   if (/latic|frio|queijo|iogurte|leite/.test(c)) return "Frios e laticínios";

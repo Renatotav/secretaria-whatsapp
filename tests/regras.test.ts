@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseLocalDate, creditCardBillDate } from "../src/lib/dates";
-import { merchantKey, isBesteiraItem, productKey, corrigeBebida } from "../src/lib/finance-taxonomy";
+import { merchantKey, isBesteiraItem, productKey, corrigeBebida, normalizeItemCategory } from "../src/lib/finance-taxonomy";
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { looksLikeSecret, parseSplit } from "../src/lib/message-handlers";
@@ -258,4 +258,10 @@ test("corrigeBebida: refrigerante sai de Besteira, cerveja fica", () => {
   assert.deepEqual(corrigeBebida("Cerveja Brahma", "Besteira", "Bebida alcoólica"), { category: "Besteira", subcategory: "Bebida alcoólica" });
   assert.deepEqual(corrigeBebida("Vodka com Coca", "Besteira", "Bebida alcoólica"), { category: "Besteira", subcategory: "Bebida alcoólica" });
   assert.deepEqual(corrigeBebida("Coca-Cola", "Alimentação", "Delivery"), { category: "Alimentação", subcategory: "Delivery" });
+});
+
+test("item de nota: carne no peso vira Carnes mesmo vindo como Mercearia", () => {
+  assert.equal(normalizeItemCategory({ name: "MAMIN ALCA BOV RESERVA PDC kg", category: "Mercearia" }), "Carnes");
+  assert.equal(normalizeItemCategory({ name: "CALDO DE CARNE 57G", category: "Mercearia" }), "Mercearia");
+  assert.equal(normalizeItemCategory({ name: "CERV HEINEKEN LN 330ML", category: "Bebidas" }), "Besteira");
 });
