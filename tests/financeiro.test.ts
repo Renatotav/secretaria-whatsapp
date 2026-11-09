@@ -9,7 +9,7 @@ import { parseQuotedChange } from "../src/lib/quoted-reply";
 import { splitMethod, parseSplit } from "../src/lib/finance-split";
 import { histValue } from "../src/lib/finance-history";
 import { idadeDoDinheiro } from "../src/lib/idade-dinheiro";
-import { lerCsvNubank, lerOfx, movimentoParaLancamento, jaNoApp } from "../src/lib/extrato-banco";
+import { lerCsvNubank, lerOfx, movimentoParaLancamento, jaNoApp, pagaFatura } from "../src/lib/extrato-banco";
 
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -174,4 +174,12 @@ test("extrato do Nubank (CSV) e OFX: só gasto e entrada de verdade, sem repetir
   assert.equal(jaNoApp(ls[1], [anotado]), 0); // anotou "pix" 3 dias depois: mesmo gasto
   assert.equal(jaNoApp(ls[1], [{ ...anotado, paymentMethod: "cartão" }]), -1); // cartão vem pela fatura
   assert.equal(jaNoApp(ls[1], [{ ...anotado, amount: 19.9 }]), -1);
+});
+
+test("Pix para o titular do cartão com o valor da fatura é pagamento da fatura, não gasto", () => {
+  const pix = movimentoParaLancamento({ date: "2026-11-07", amount: -1234.56, description: "Transferência enviada pelo Pix - FULANO FICTICIO - •••.111.222-••" }, "Maria Ficticia")!;
+  const fatura = { due: new Date("2026-11-10T12:00:00Z"), total: 1234.56 };
+  assert.equal(pagaFatura(pix, [fatura]), true);
+  assert.equal(pagaFatura(pix, [{ ...fatura, total: 1200 }]), false); // outro valor: gasto de verdade
+  assert.equal(pagaFatura(pix, [{ ...fatura, due: new Date("2026-12-10T12:00:00Z") }]), false); // fatura longe
 });

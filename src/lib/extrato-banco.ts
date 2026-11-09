@@ -94,3 +94,13 @@ export function jaNoApp(
       Math.abs((e.purchaseDate ?? e.date).getTime() - dia) <= 5 * 86_400_000,
   );
 }
+
+/**
+ * Pagamento de fatura sem esse nome (ex.: Pix para o titular do cartão):
+ * saída com o mesmo valor (até R$ 0,10) de uma fatura do app que vence até
+ * 10 dias de distância. As compras já estão no cartão; lançar contaria duas vezes.
+ */
+export function pagaFatura(l: StatementEntry, faturas: { due: Date; total: number }[]): boolean {
+  const dia = new Date(`${l.date}T12:00:00Z`).getTime();
+  return l.type === "expense" && faturas.some((f) => Math.abs(f.total - l.amount) <= 0.1 && Math.abs(f.due.getTime() - dia) <= 10 * 86_400_000);
+}

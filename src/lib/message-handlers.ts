@@ -23,7 +23,7 @@ import { applyCreditCommand, creditWarning } from "./ai-credit";
 import { applyUsageCommand } from "./work-usage";
 import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
 import { fetchNfce, repairNfeKey } from "./nfce";
-import { jaNoApp, lerCsvNubank, lerOfx, movimentoParaLancamento } from "./extrato-banco";
+import { jaNoApp, lerCsvNubank, lerOfx, movimentoParaLancamento, pagaFatura } from "./extrato-banco";
 import { budgetStatus, dayRange, formatDayMonth, isoDay, MESES_FALA, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
 import { applyInvoiceDates, applyMerchantMemory, avisosFatura, budgetAlertsAfterImport, contaPeloNome, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
 import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseChart, sendMonthChart } from "./finance-charts";
@@ -1460,16 +1460,27 @@ export async function handleBankFile(text: string): Promise<boolean> {
   const existentes = lancs.length
     ? await prisma.financeEntry.findMany({
         where: { date: { gte: new Date(Math.min(...dias) - 40 * 86_400_000), lte: new Date(Math.max(...dias) + 40 * 86_400_000) } },
-        select: { type: true, amount: true, date: true, purchaseDate: true, paymentMethod: true },
+        select: { type: true, amount: true, date: true, purchaseDate: true, paymentMethod: true, card: true },
       })
     : [];
+  // Total de cada fatura do app (por vencimento e cartão) para reconhecer o pagamento dela.
+  const faturasMap = new Map<string, { due: Date; total: number }>();
+  for (const e of existentes.filter((x) => x.paymentMethod === "cartão")) {
+    const k = `${e.date.toISOString().slice(0, 10)}|${e.card}`;
+    const f = faturasMap.get(k) ?? { due: e.date, total: 0 };
+    f.total += e.type === "expense" ? e.amount : -e.amount;
+    faturasMap.set(k, f);
+  }
+  const faturas = [...faturasMap.values()];
   const novos: StatementEntry[] = [];
+  let fatura = 0;
   for (const l of lancs) {
+    if (pagaFatura(l, faturas)) { fatura++; continue; }
     const i = jaNoApp(l, existentes);
     if (i >= 0) existentes.splice(i, 1); // cada anotação casa com um movimento só
     else novos.push(l);
   }
-  const fora = movs.length - lancs.length;
+  const fora = movs.length - lancs.length + fatura;
   if (!novos.length) {
     await notifyOwner(config, `🏦 Li ${movs.length} movimento(s) do extrato: tudo já estava no app${fora ? ` (${fora} eram fatura, dinheiro guardado ou Pix entre suas contas)` : ""}. Nada para anotar.`);
     return true;
@@ -1479,7 +1490,7 @@ export async function handleBankFile(text: string): Promise<boolean> {
   const linhas = comCategoria.slice(0, 25).map((l) => `• ${l.date!.slice(8, 10)}/${l.date!.slice(5, 7)} ${l.type === "income" ? "➕" : "➖"} ${l.description} — ${brl(l.amount)} (${l.paymentMethod}, ${l.category})`);
   await notifyOwner(
     config,
-    `🏦 *Extrato do banco:* ${novos.length} lançamento(s) que não estão no app${lancs.length > novos.length ? ` (${lancs.length - novos.length} você já tinha anotado)` : ""}${fora ? `; deixei de fora ${fora} (fatura, dinheiro guardado ou Pix entre suas contas)` : ""}:\n${linhas.join("\n")}${novos.length > 25 ? `\n… e mais ${novos.length - 25}` : ""}\n\nAnoto? Responda *sim* ou *cancelar*. Categoria errada dá para corrigir depois citando o lançamento.`,
+    `🏦 *Extrato do banco:* ${novos.length} lançamento(s) que não estão no app${lancs.length - fatura > novos.length ? ` (${lancs.length - fatura - novos.length} você já tinha anotado)` : ""}${fora ? `; deixei de fora ${fora} (fatura, dinheiro guardado ou Pix entre suas contas)` : ""}:\n${linhas.join("\n")}${novos.length > 25 ? `\n… e mais ${novos.length - 25}` : ""}\n\nAnoto? Responda *sim* ou *cancelar*. Categoria errada dá para corrigir depois citando o lançamento.`,
   );
   return true;
 }
