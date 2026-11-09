@@ -152,13 +152,3 @@ test("questionário: monta config, recorrentes e acusa resposta faltando", () =>
   assert.deepEqual(plano.tetos, [{ category: "Alimentação", amount: 700 }]);
   assert.equal(planoDoQuestionario({ nome: "", whatsapp: "123" }, hoje).erros.length, 2);
 });
-
-test("perfil configurado começa genérico; sem perfil fica como era", () => {
-  assert.equal("Besteira" in despesasDoPerfil({}), true); // instalação antiga: igual a antes
-  const nova = despesasDoPerfil({ versao: 1 });
-  assert.equal("Besteira" in nova || "Scooter" in nova || "Saídas" in nova, false);
-  assert.equal("Outros" in nova && "Moradia" in nova, true);
-  const marcada = despesasDoPerfil({ versao: 1, categorias: ["Moradia", "Besteira"] });
-  assert.deepEqual(Object.keys(marcada).sort(), ["Besteira", "Moradia", "Outros"]);
-  assert.equal(taxonomyPrompt({ versao: 1 }).includes("Besteira"), false);
-});

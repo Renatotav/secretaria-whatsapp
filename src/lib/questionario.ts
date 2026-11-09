@@ -43,8 +43,7 @@ export function planoDoQuestionario(r: Respostas, hoje: Date) {
   if (r.salario && (!(r.salario.valor > 0) || !dia(r.salario.dia))) erros.push("salário: valor e dia");
   if (r.vale && (!(r.vale.valor > 0) || !dia(r.vale.dia))) erros.push("vale: valor e dia");
 
-  // versao 1: instalação nova começa da lista genérica, não do jeito do Renato.
-  const perfil = normalizaPerfil({ ...(r.perfil ?? {}), versao: 1, ...(r.cartao?.nome ? { cartaoPrincipal: r.cartao.nome } : {}) });
+  const perfil = normalizaPerfil({ ...(r.perfil ?? {}), ...(r.cartao?.nome ? { cartaoPrincipal: r.cartao.nome } : {}) });
   const config = {
     ownerName: r.nome?.trim() ?? "",
     ownerPhone: r.whatsapp ?? "",
