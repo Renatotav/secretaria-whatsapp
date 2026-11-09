@@ -28,6 +28,7 @@ Arquivos-chave:
 | `src/lib/finance-reports.ts` | Relatórios e consultas sem IA (resumo do dia/semana, fechamento, contas a pagar, limite do cartão, orçamento, VR) |
 | `src/lib/finance-common.ts` | Peças comuns: meses, totais e previsão do mês, tetos, séries (parcela/recorrente), períodos |
 | `src/lib/statement-import.ts` | Importação de fatura/extrato (parcelas, repetidos, memória de categoria, datas) |
+| `src/lib/extrato-banco.ts` | Extrato da conta em arquivo (CSV do Nubank, OFX): o que é gasto de verdade e o que já está no app; lança só depois do "sim" |
 | `src/lib/finance-*.ts` | text (cartão do lançamento, valores), charts, goals, wishes, simulator, split, history |
 | `src/lib/quoted-reply.ts`, `assistant-chat.ts`, `group-messages.ts`, `incoming-media.ts`, `owner-notify.ts` | Resposta citada, conversa com a IA, grupos, áudio/mídia, avisar o dono |
 | `src/lib/personal-router.ts` | Prompt + parsing que classifica a mensagem (finance, agenda_add, agenda_query, diary, savings_add, finance_simulation…) |

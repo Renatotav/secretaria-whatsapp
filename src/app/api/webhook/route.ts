@@ -11,6 +11,7 @@ import {
   handleGroupMessage,
   handleOwnerReply,
   handleStatementDocument,
+  handleBankFile,
   askPdfPassword,
   handleStatementImage,
   handleSmartImage,
@@ -114,6 +115,23 @@ export async function POST(request: Request) {
     // de uma vez em vez de passar pela classificação normal de texto.
     const documentMessage = rawMessage.documentMessage as Record<string, unknown> | undefined;
     const documentMimetype = (documentMessage?.mimetype as string) || "";
+    // Extrato da conta em CSV (Nubank) ou OFX: mostra o que é novo e espera o "sim".
+    const documentName = String(documentMessage?.fileName ?? "").toLowerCase();
+    if (isSelfChat && documentMessage && (/\.(csv|ofx)$/.test(documentName) || /csv|ofx/.test(documentMimetype))) {
+      try {
+        const { base64 } = await downloadIncomingMedia(evo, key.id ?? "", rawMessage, "documentMessage", "text/csv");
+        const bytes = Buffer.from(base64 ?? "", "base64");
+        // OFX antigo vem em Windows-1252 (acentos); CSV do Nubank é UTF-8.
+        const text = new TextDecoder(/CHARSET:\s*1252/i.test(bytes.toString("latin1", 0, 400)) ? "windows-1252" : "utf-8").decode(bytes);
+        if (!(await handleBankFile(text))) {
+          await notifyOwner(config, "⚠️ Não reconheci esse arquivo. Mande o extrato da conta do Nubank em CSV ou o OFX do banco.");
+        }
+      } catch (err) {
+        console.error("[webhook] falha ao ler extrato do banco", err);
+        await notifyOwner(config, `⚠️ Falha ao ler o extrato: ${err instanceof Error ? err.message : "erro desconhecido"}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
     if (isSelfChat && documentMessage && documentMimetype.includes("pdf")) {
       console.log("[webhook] PDF recebido no canal pessoal, processando extrato");
       try {

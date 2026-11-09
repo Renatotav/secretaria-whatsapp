@@ -9,6 +9,7 @@ import { parseQuotedChange } from "../src/lib/quoted-reply";
 import { splitMethod, parseSplit } from "../src/lib/finance-split";
 import { histValue } from "../src/lib/finance-history";
 import { idadeDoDinheiro } from "../src/lib/idade-dinheiro";
+import { lerCsvNubank, lerOfx, movimentoParaLancamento, jaNoApp } from "../src/lib/extrato-banco";
 
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -142,4 +143,35 @@ test("sobra do teto: só o que sobrou passa; estouro não desconta", () => {
   const gasto = { Alimentação: 800, Transporte: 190 }; // Lazer sem gasto
   assert.deepEqual([...sobraDoMes(lim, gasto)], [["Alimentação", 100], ["Lazer", 200]]);
   assert.equal(sobraDoMes(lim, { Alimentação: 900.004, Transporte: 150, Lazer: 200 }).size, 0);
+});
+
+test("extrato do Nubank (CSV) e OFX: só gasto e entrada de verdade, sem repetir o que já foi anotado", () => {
+  const csv = [
+    "Data,Valor,Identificador,Descrição",
+    "01/11/2026,-32.50,a1,Transferência enviada pelo Pix - PADARIA EXEMPLO - 12.345.678/0001-90 - BANCO X",
+    "02/11/2026,-18.90,a2,Compra no débito - MERCADO TESTE",
+    "03/11/2026,-900.00,a3,Pagamento de fatura",
+    "04/11/2026,-100.00,a4,Aplicação RDB",
+    "05/11/2026,250.00,a5,Transferência recebida pelo Pix - JOSE FICTICIO SILVA - •••.111.222-•• - BANCO Y",
+    "06/11/2026,-50.00,a6,Transferência enviada pelo Pix - MARIA FICTICIA SOUZA - •••.333.444-•• - BANCO Z",
+    '07/11/2026,-80.10,a7,"Pagamento de boleto efetuado - LUZ, AGUA E CIA"',
+  ].join("\n");
+  const movs = lerCsvNubank(csv)!;
+  assert.equal(movs.length, 7);
+  const ls = movs.map((m) => movimentoParaLancamento(m, "Maria Ficticia")).filter((l) => l !== null);
+  assert.deepEqual(ls.map((l) => [l.description, l.amount, l.type, l.paymentMethod]), [
+    ["Pix enviado - PADARIA EXEMPLO", 32.5, "expense", "pix"],
+    ["MERCADO TESTE", 18.9, "expense", "débito"],
+    ["Pix recebido - JOSE FICTICIO SILVA", 250, "income", "pix"],
+    ["LUZ, AGUA E CIA", 80.1, "expense", "boleto"], // fatura, RDB e Pix para a própria conta ficam de fora
+  ]);
+  assert.equal(lerCsvNubank("date,title,amount\n2026-11-01,Loja,10"), null); // fatura do cartão não é extrato da conta
+
+  const ofx = "OFXHEADER:100\n<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261102000000[-3:BRT]<TRNAMT>-18.90<FITID>x<MEMO>Compra no débito - MERCADO TESTE</STMTTRN></BANKTRANLIST></OFX>";
+  assert.deepEqual(lerOfx(ofx), [{ date: "2026-11-02", amount: -18.9, description: "Compra no débito - MERCADO TESTE" }]);
+
+  const anotado = { type: "expense", amount: 18.9, date: new Date("2026-11-05T12:00:00Z"), purchaseDate: null, paymentMethod: "pix" };
+  assert.equal(jaNoApp(ls[1], [anotado]), 0); // anotou "pix" 3 dias depois: mesmo gasto
+  assert.equal(jaNoApp(ls[1], [{ ...anotado, paymentMethod: "cartão" }]), -1); // cartão vem pela fatura
+  assert.equal(jaNoApp(ls[1], [{ ...anotado, amount: 19.9 }]), -1);
 });

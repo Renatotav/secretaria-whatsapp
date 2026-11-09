@@ -23,8 +23,9 @@ import { applyCreditCommand, creditWarning } from "./ai-credit";
 import { applyUsageCommand } from "./work-usage";
 import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
 import { fetchNfce, repairNfeKey } from "./nfce";
+import { jaNoApp, lerCsvNubank, lerOfx, movimentoParaLancamento } from "./extrato-banco";
 import { budgetStatus, dayRange, formatDayMonth, isoDay, MESES_FALA, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
-import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, contaPeloNome, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
+import { applyInvoiceDates, applyMerchantMemory, avisosFatura, budgetAlertsAfterImport, contaPeloNome, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
 import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseChart, sendMonthChart } from "./finance-charts";
 import { checkWish, levelIcon, wishLabel } from "./finance-wishes";
 import type { WishVerdict } from "./finance-wishes";
@@ -232,6 +233,7 @@ export async function applyAttentionCommand(text: string): Promise<string | null
   if (pendingInvoiceDraft && fresh(pendingInvoiceDraft.at, 60)) waiting.push(`nota fiscal de ${brl(pendingInvoiceDraft.invoice.total)} esperando "soma" ou o total certo`);
   if (pendingImageDraft && fresh(pendingImageDraft.at, 60)) waiting.push(`print esperando "sim" para lançar`);
   if (pendingStatement && fresh(pendingStatement.at, 60)) waiting.push("fatura esperando você escolher o cartão");
+  if (pendingBankImport && fresh(pendingBankImport.at, 60)) waiting.push(`extrato do banco esperando "sim" (${pendingBankImport.entries.length} lançamentos)`);
   if (pendingAmount && fresh(pendingAmount.at, 30)) waiting.push(`faltou o valor de: ${pendingAmount.text}`);
   if (pendingCommitment && fresh(pendingCommitment.at, 24 * 60)) waiting.push(`compromisso para pôr na agenda: ${pendingCommitment.title}`);
   if (waiting.length) parts.push(`❓ *Esperando sua resposta*\n${waiting.map((w) => `• ${w}`).join("\n")}`);
@@ -654,7 +656,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     return;
   }
   // Vários pedidos numa mensagem: um por um (sem nada esperando resposta).
-  if (!pendingHighValue && !pendingImageDraft && !pendingInvoiceDraft && !pendingAmount && !pendingStatement && !pendingCommitment) {
+  if (!pendingHighValue && !pendingImageDraft && !pendingInvoiceDraft && !pendingAmount && !pendingStatement && !pendingCommitment && !pendingBankImport) {
     const pedidos = splitRequests(joinedText);
     if (pedidos.length) {
       await notifyOwner(config, `📦 Entendi ${pedidos.length} pedidos — vou fazer um por um:\n${pedidos.map((p, i) => `${i + 1}. ${p}`).join("\n")}`);
@@ -705,6 +707,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   // Senha de PDF não passa pela IA nem é gravada no histórico.
   if (await applyPdfPassword(joinedText, config)) return;
   if (await applyStatementChoice(joinedText, config)) return;
+  if (await applyBankImportReply(joinedText, config)) return;
 
   // Comandos do trabalho ("chamado 1234567 resolvido"): regra fixa, sem IA e
   // fora do histórico da conversa (dado do Tribunal não passa pela IA).
@@ -1441,6 +1444,63 @@ function invoiceDueDate(text: string): Date | null {
   const today = todayBRT();
   const options = [-1, 0, 1].map((dy) => parseLocalDate(isoDay(today.getFullYear() + dy, month, day)));
   return options.reduce((best, d) => (Math.abs(d.getTime() - today.getTime()) < Math.abs(best.getTime() - today.getTime()) ? d : best));
+}
+
+// Extrato da conta (CSV do Nubank ou OFX) esperando o "sim": só o que é novo.
+let pendingBankImport: { entries: StatementEntry[]; at: number } | null = null;
+
+/** Arquivo de extrato da conta: mostra o que ainda não está no app e espera o "sim". Devolve false se não reconheceu o formato. */
+export async function handleBankFile(text: string): Promise<boolean> {
+  const movs = lerCsvNubank(text) ?? lerOfx(text);
+  if (!movs) return false;
+  const config = await prisma.agentConfig.findFirst();
+  if (!config?.ownerPhone) return true;
+  const lancs = movs.map((m) => movimentoParaLancamento(m, config.ownerName)).filter((l): l is StatementEntry => l !== null);
+  const dias = lancs.map((l) => new Date(`${l.date}T12:00:00Z`).getTime());
+  const existentes = lancs.length
+    ? await prisma.financeEntry.findMany({
+        where: { date: { gte: new Date(Math.min(...dias) - 40 * 86_400_000), lte: new Date(Math.max(...dias) + 40 * 86_400_000) } },
+        select: { type: true, amount: true, date: true, purchaseDate: true, paymentMethod: true },
+      })
+    : [];
+  const novos: StatementEntry[] = [];
+  for (const l of lancs) {
+    const i = jaNoApp(l, existentes);
+    if (i >= 0) existentes.splice(i, 1); // cada anotação casa com um movimento só
+    else novos.push(l);
+  }
+  const fora = movs.length - lancs.length;
+  if (!novos.length) {
+    await notifyOwner(config, `🏦 Li ${movs.length} movimento(s) do extrato: tudo já estava no app${fora ? ` (${fora} eram fatura, dinheiro guardado ou Pix entre suas contas)` : ""}. Nada para anotar.`);
+    return true;
+  }
+  const comCategoria = await applyMerchantMemory(novos); // regra dele e memória por loja
+  pendingBankImport = { entries: comCategoria, at: Date.now() };
+  const linhas = comCategoria.slice(0, 25).map((l) => `• ${l.date!.slice(8, 10)}/${l.date!.slice(5, 7)} ${l.type === "income" ? "➕" : "➖"} ${l.description} — ${brl(l.amount)} (${l.paymentMethod}, ${l.category})`);
+  await notifyOwner(
+    config,
+    `🏦 *Extrato do banco:* ${novos.length} lançamento(s) que não estão no app${lancs.length > novos.length ? ` (${lancs.length - novos.length} você já tinha anotado)` : ""}${fora ? `; deixei de fora ${fora} (fatura, dinheiro guardado ou Pix entre suas contas)` : ""}:\n${linhas.join("\n")}${novos.length > 25 ? `\n… e mais ${novos.length - 25}` : ""}\n\nAnoto? Responda *sim* ou *cancelar*. Categoria errada dá para corrigir depois citando o lançamento.`,
+  );
+  return true;
+}
+
+async function applyBankImportReply(text: string, config: AgentConfig): Promise<boolean> {
+  if (!pendingBankImport) return false;
+  if (Date.now() - pendingBankImport.at > STATEMENT_CHOICE_WINDOW_MS) {
+    pendingBankImport = null;
+    return false;
+  }
+  const answer = text.trim().toLowerCase();
+  if (/^(cancela|n[aã]o\b)/.test(answer)) {
+    pendingBankImport = null;
+    await notifyOwner(config, "👍 Ok, não anotei nada do extrato.");
+    return true;
+  }
+  if (!/^(sim|s|pode|anota|ok)\b/.test(answer) || answer.length > 20) return false;
+  const { entries } = pendingBankImport;
+  pendingBankImport = null;
+  await withReason("extrato do banco", () => saveStatementEntries(config, entries, "o extrato do banco"));
+  return true;
 }
 
 /** Resposta à pergunta "quais cartões importo?". Devolve true se tratou a mensagem. */
@@ -2265,7 +2325,7 @@ export async function handleOwnerReply(joinedText: string, meta: OwnerReplyMeta)
 function flowSnapshot(): Record<string, unknown> {
   return {
     lastSaved, pendingAmount, lastInvoicePayment, pendingHighValue, confirmedHighValueText,
-    pendingStatement, pendingImageDraft, imageDraftQueue, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
+    pendingStatement, pendingBankImport, pendingImageDraft, imageDraftQueue, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
     pendingQuotedEdit, pendingSplit, lastNotaEntry,
   };
 }
@@ -2284,6 +2344,7 @@ export function restoreFlowStates(): Promise<void> {
       if (g.pendingHighValue) pendingHighValue = g.pendingHighValue;
       if (g.confirmedHighValueText) confirmedHighValueText = g.confirmedHighValueText;
       if (g.pendingStatement) pendingStatement = g.pendingStatement;
+      if (g.pendingBankImport) pendingBankImport = g.pendingBankImport;
       if (g.pendingImageDraft) pendingImageDraft = g.pendingImageDraft;
       if (Array.isArray(g.imageDraftQueue)) imageDraftQueue = g.imageDraftQueue;
       if (g.imageNote) imageNote = g.imageNote;
