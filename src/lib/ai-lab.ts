@@ -17,6 +17,7 @@ const ROUTER_CASES: RouterCase[] = [
   { text: "uber 18 no débito", type: "finance", amount: 18, paymentMethod: "débito" },
   { text: "recebi 500 de um freela", type: "finance", amount: 500, financeType: "income" },
   { text: "padaria 9,90 no dinheiro", type: "finance", amount: 9.9, paymentMethod: "dinheiro" },
+  { text: "15 reais no Pix compra de uma Coca cola", type: "finance", amount: 15, paymentMethod: "pix" },
   { text: "me lembra de pagar a internet amanhã às 9h", type: "agenda_add" },
   { text: "o que eu tenho amanhã?", type: "agenda_query" },
   { text: "hoje foi um dia cansativo, fiquei meio triste", type: "diary" },

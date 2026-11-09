@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseLocalDate, creditCardBillDate } from "../src/lib/dates";
-import { merchantKey, isBesteiraItem, productKey } from "../src/lib/finance-taxonomy";
+import { merchantKey, isBesteiraItem, productKey, corrigeBebida } from "../src/lib/finance-taxonomy";
 import { maskPersonalData, normalizeTicketId } from "../src/lib/work-privacy";
 import { parseIcs, meetingsOn } from "../src/lib/outlook-calendar";
 import { looksLikeSecret, parseSplit } from "../src/lib/message-handlers";
@@ -250,4 +250,12 @@ test("calibrarParada: separa o gasto de rodar do gasto parada", () => {
   }
   assert.equal(calibrarParada(seis)!.pronto, true);
   assert.equal(calibrarParada(cargas.slice(0, 3)), null); // 2 ciclos: pouco
+});
+
+test("corrigeBebida: refrigerante sai de Besteira, cerveja fica", () => {
+  assert.deepEqual(corrigeBebida("Coca-Cola", "Besteira", "Bebida alcoólica"), { category: "Alimentação", subcategory: "Padaria/Lanche" });
+  assert.deepEqual(corrigeBebida("Guaraná 2L", "Besteira", "Bebida alcoólica"), { category: "Alimentação", subcategory: "Padaria/Lanche" });
+  assert.deepEqual(corrigeBebida("Cerveja Brahma", "Besteira", "Bebida alcoólica"), { category: "Besteira", subcategory: "Bebida alcoólica" });
+  assert.deepEqual(corrigeBebida("Vodka com Coca", "Besteira", "Bebida alcoólica"), { category: "Besteira", subcategory: "Bebida alcoólica" });
+  assert.deepEqual(corrigeBebida("Coca-Cola", "Alimentação", "Delivery"), { category: "Alimentação", subcategory: "Delivery" });
 });

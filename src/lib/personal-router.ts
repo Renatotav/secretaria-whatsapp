@@ -1,5 +1,5 @@
 import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
-import { taxonomyPrompt } from "./finance-taxonomy";
+import { corrigeBebida, taxonomyPrompt } from "./finance-taxonomy";
 
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
 const FINANCE_TAXONOMY = taxonomyPrompt();
@@ -286,12 +286,13 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
       const status = parsed.status === "pending" ? "pending" : "paid";
       const paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
 
+      const bebida = corrigeBebida(String(parsed.financeDescription || message), (parsed.financeCategory as string) || "Outros", (parsed.financeSubcategory as string) || "");
       return {
         type: "finance",
         financeType: parsed.financeType === "income" ? "income" : "expense",
         amount: Number(parsed.amount) || 0,
-        category: (parsed.financeCategory as string) || "Outros",
-        subcategory: (parsed.financeSubcategory as string) || "",
+        category: bebida.category,
+        subcategory: bebida.subcategory,
         description: (parsed.financeDescription as string) || message.slice(0, 120),
         installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
         date: (parsed.date as string) || (parsed.financeDate as string) || null,

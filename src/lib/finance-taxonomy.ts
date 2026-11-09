@@ -59,6 +59,7 @@ REGRAS:
   festa, show, balada, ingresso = Saídas › Festa/Show; cerveja/bebida alcoólica comprada no mercado ou na
   adega para beber em casa = Besteira › Bebida alcoólica; salgadinho, chocolate, doce, sorvete
   comprados à parte = Besteira › Salgadinho/Doces; se ele disser "besteira", use Besteira;
+  refrigerante, Coca, guaraná, suco ou água comprados à parte = Alimentação › Padaria/Lanche (não é Besteira);
   Amazon/Mercado Livre = Compras (Eletrônicos, Casa, Roupas ou Online, pelo produto).
 - Só use "Outros › Imprevistos" se nada da lista servir.`;
 }
@@ -166,4 +167,17 @@ export function productKey(name: string): string {
     .filter(Boolean)
     .map((w) => ABREV[w] ?? w)
     .join(" ");
+}
+
+/**
+ * Refrigerante não é Besteira (regra dele, 22/10): a IA às vezes põe "Coca-Cola"
+ * em Besteira › Bebida alcoólica. Sem palavra de álcool, vira Alimentação › Padaria/Lanche.
+ */
+export function corrigeBebida(descricao: string, category: string, subcategory: string): { category: string; subcategory: string } {
+  const d = descricao.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const refri = /refri|\bcoca\b|coca-cola|guarana|pepsi|fanta|sprite|\bsuco|\bagua\b/.test(d);
+  const alcool = /cervej|chopp|vinho|vodka|cachaca|whisk|\bgin\b|skol|brahma|heineken|amstel|itaipava|budweiser|alcool|drink|caipirinha/.test(d);
+  return category === "Besteira" && subcategory === "Bebida alcoólica" && refri && !alcool
+    ? { category: "Alimentação", subcategory: "Padaria/Lanche" }
+    : { category, subcategory };
 }
