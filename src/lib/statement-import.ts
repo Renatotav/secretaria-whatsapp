@@ -97,6 +97,14 @@ export function primeiraPalavra(d: string): string {
   return w.length >= 4 ? w : "";
 }
 
+// Palavras que não identificam a loja ("Pizzaria Suprema" casa por "suprema", não por "pizzaria").
+const GENERICAS = new Set(["pizzaria", "mercado", "supermercado", "supermercados", "restaurante", "lanchonete", "farmacia", "padaria", "posto", "loja", "lojas", "pedido", "compra", "delivery", "pagamento", "comercio", "marketplace"]);
+/** Palavras da loja (antes do " — "), com 5+ letras e sem as genéricas, para achar compras anteriores nela. */
+export function palavrasDaLoja(d: string): string[] {
+  const loja = semAcento(d.split(/\s[—-]\s/)[0]);
+  return [...new Set(loja.match(/[a-z0-9]{5,}/g) ?? [])].filter((w) => !GENERICAS.has(w));
+}
+
 type LinhaFatura = { id: string; type: string; amount: number; description: string; purchaseDate: Date | null };
 /**
  * Avisos depois de importar a fatura (não apaga nada), dos erros reais em

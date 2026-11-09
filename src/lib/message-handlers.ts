@@ -24,7 +24,7 @@ import { applyUsageCommand } from "./work-usage";
 import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
 import { fetchNfce, repairNfeKey } from "./nfce";
 import { budgetStatus, dayRange, formatDayMonth, isoDay, MESES_FALA, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
-import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, projectAndInsertFinanceEntries } from "./statement-import";
+import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
 import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseChart, sendMonthChart } from "./finance-charts";
 import { checkWish, levelIcon, wishLabel } from "./finance-wishes";
 import type { WishVerdict } from "./finance-wishes";
@@ -1526,12 +1526,31 @@ async function handleSmartImageInner(base64: string, mimetype: string, caption: 
   }
 }
 
+/** Meio de pagamento da última compra na mesma loja (pelas palavras do nome, sem as genéricas). */
+async function meioDaLoja(description: string): Promise<string | null> {
+  for (const w of palavrasDaLoja(description)) {
+    const e = await prisma.financeEntry.findFirst({
+      where: { type: "expense", description: { contains: w, mode: "insensitive" } },
+      orderBy: { createdAt: "desc" },
+      select: { paymentMethod: true },
+    });
+    if (e?.paymentMethod) return e.paymentMethod;
+  }
+  return null;
+}
+
 async function readSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
   const reading = await readImage(base64, mimetype, getProviderOpts(config), caption, todayBRT().toISOString().slice(0, 10));
   console.log(`[image] print classificado como ${reading.kind}`);
   if (reading.kind === "compra" || reading.kind === "estorno") applyNoteToReading(reading);
+  // Print sem o meio de pagamento (pedido de app): usa o da última compra nessa loja em vez de chutar Pix.
+  if (reading.kind === "compra" && reading.paymentSeen === false) {
+    const meio = await meioDaLoja(reading.description);
+    if (meio) reading.paymentMethod = meio as typeof reading.paymentMethod;
+    reading.summary = `${reading.summary} (O print não mostra como pagou: ${meio ? `usei ${meio}, como na última compra nessa loja` : "usei Pix"}. Se foi outro, depois do *sim* mande o meio, ex.: *cartão*.)`.trim();
+  }
 
   if (reading.kind === "nota_fiscal") return handleInvoiceImage(base64, mimetype, caption);
   if (reading.kind === "fatura") return handleStatementImage(base64, mimetype);

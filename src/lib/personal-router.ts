@@ -740,6 +740,8 @@ export interface ImageReading {
   amount: number;
   date: string | null;
   paymentMethod: "cartão" | "pix" | "débito" | "boleto" | "dinheiro" | "ticket";
+  /** false = o print não mostra o meio de pagamento (o "pix" é só o padrão). */
+  paymentSeen?: boolean;
   installments: number | null;
   category: string;
   subcategory: string;
@@ -768,7 +770,7 @@ Classifique a imagem em "kind":
   Se o pedido tiver reembolso/cancelamento parcial, a compra é o TOTAL PAGO (o reembolso é outro lançamento).
 - "estorno": a imagem é principalmente sobre um reembolso/estorno/devolução de dinheiro.
 - "outro": qualquer outra coisa (saldo de app, tela de banco sem transação, conversa, propaganda...).
-Para "compra"/"estorno", extraia: description (curta: loja + o que foi, ex: "Mercado Livre — baú traseiro"), amount (valor TOTAL efetivamente pago, ou o valor do reembolso), date (YYYY-MM-DD do pagamento; null se não aparecer), paymentMethod ("cartão" = crédito, "pix", "débito", "boleto", "dinheiro", "ticket" = VR/vale), installments (nº de parcelas se parcelado no cartão, senão null), category e subcategory desta lista:
+Para "compra"/"estorno", extraia: description (curta: loja + o que foi, ex: "Mercado Livre — baú traseiro"), amount (valor TOTAL efetivamente pago, ou o valor do reembolso), date (YYYY-MM-DD do pagamento; null se não aparecer), paymentMethod ("cartão" = crédito, "pix", "débito", "boleto", "dinheiro", "ticket" = VR/vale; null se o meio de pagamento não aparecer na imagem nem na legenda — não chute), installments (nº de parcelas se parcelado no cartão, senão null), category e subcategory desta lista:
 ${taxonomyPrompt()}
 (Estorno: category "Outros", subcategory "Reembolso".)
 "summary": uma frase em português simples dizendo o que você viu, com o valor.
@@ -789,6 +791,7 @@ Retorne APENAS JSON: { "kind": "...", "summary": "...", "description": "...", "a
       amount: Math.abs(Number(json.amount)) || 0,
       date: typeof json.date === "string" && /^\d{4}-\d{2}-\d{2}/.test(json.date) ? json.date.slice(0, 10) : null,
       paymentMethod: methods.includes(json.paymentMethod as string) ? (json.paymentMethod as ImageReading["paymentMethod"]) : "pix",
+      paymentSeen: methods.includes(json.paymentMethod as string),
       installments: Number.isFinite(installments) && installments > 1 ? installments : null,
       category: typeof json.category === "string" && json.category ? json.category : "Outros",
       subcategory: typeof json.subcategory === "string" ? json.subcategory : "",

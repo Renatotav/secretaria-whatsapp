@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { parseLocalDate } from "../src/lib/dates";
 import { addMonths, budgetIcon, isInstallment, isRecurring, vrDisponivel } from "../src/lib/finance-common";
 import { parseBrNumber, paymentLabel, formatFullDate } from "../src/lib/finance-text";
-import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, primeiraPalavra } from "../src/lib/statement-import";
+import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, palavrasDaLoja, primeiraPalavra } from "../src/lib/statement-import";
 import { parseQuotedChange } from "../src/lib/quoted-reply";
 import { splitMethod, parseSplit } from "../src/lib/finance-split";
 import { histValue } from "../src/lib/finance-history";
@@ -100,4 +100,10 @@ test("avisosFatura: parcelado que veio à vista e data lida como parcela", () =>
   assert.match(avisos[0], /veio à vista/);
   assert.match(avisos[1], /lida como parcela/);
   assert.equal(avisosFatura(linhas, new Set(["e"])).length, 0); // nada da fatura parecido: sem aviso
+});
+
+test("palavrasDaLoja: acha a loja pelo nome, sem palavras genéricas", () => {
+  assert.deepEqual(palavrasDaLoja("Pizzaria Suprema — pizza grande 8 pedaços"), ["suprema"]);
+  assert.deepEqual(palavrasDaLoja("Supermercado Guará — compras"), ["guara"]);
+  assert.deepEqual(palavrasDaLoja("Uber — ida ao trabalho"), []); // curta demais: sem palpite
 });
