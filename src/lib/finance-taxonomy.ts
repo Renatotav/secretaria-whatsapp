@@ -113,6 +113,10 @@ function categoriaPeloNome(name: string): string | null {
 export function normalizeItemCategory(i: { name: string; category: string; amount?: number }): string {
   if (isBesteiraItem(i)) return "Besteira";
   const c = i.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // O nome manda (09/11): a IA mandou batata palha para Hortifruti e peito de peru (kg) para Carnes.
+  const nome = i.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/batata palha/.test(nome)) return "Mercearia";
+  if (/\bperu\b|blanquet/.test(nome)) return "Frios e laticínios";
   // Categoria genérica (a da nota inteira): decide pelo nome do produto.
   if (!c || /^(aliment|supermercado|mercado|outros|geral|compras|essenciais|basico)/.test(c)) {
     const pelo = categoriaPeloNome(i.name);
