@@ -8,6 +8,8 @@ import { parseInstallmentInfo, applyInvoiceDates, avisosFatura, contaPeloNome, p
 import { parseQuotedChange } from "../src/lib/quoted-reply";
 import { splitMethod, parseSplit } from "../src/lib/finance-split";
 import { histValue } from "../src/lib/finance-history";
+import { planoDoQuestionario, proximoDia } from "../src/lib/questionario";
+import { normalizaPerfil, taxonomyPrompt, despesasDoPerfil } from "../src/lib/finance-taxonomy";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -118,4 +120,35 @@ test("contaPeloNome: 'paguei o seguro' acha a conta prevista pelo nome", () => {
   assert.equal(contaPeloNome("paguei o aluguel", contas), "a");
   assert.equal(contaPeloNome("paguei o seguro", contas), null); // empate entre dois seguros: pergunta o valor
   assert.equal(contaPeloNome("paguei a luz", contas), null);
+});
+
+test("perfil: sem respostas fica igual ao original; categorias desligadas saem do prompt", () => {
+  assert.equal(taxonomyPrompt({}).includes("Besteira"), true);
+  const p = normalizaPerfil({ categoriasDesligadas: ["Besteira", "Scooter"], categoriasExtras: { Pets: ["Ração"] }, gastoAlto: "x" });
+  assert.equal(p.gastoAlto, undefined); // tipo errado é ignorado
+  assert.equal("Besteira" in despesasDoPerfil(p), false);
+  assert.deepEqual(despesasDoPerfil(p).Pets, ["Ração"]);
+  const prompt = taxonomyPrompt(p);
+  assert.equal(/Besteira|Scooter/.test(prompt.replace("(não é Besteira)", "")), false);
+  assert.equal(prompt.includes("Pets (Ração)"), true);
+});
+
+test("questionário: monta config, recorrentes e acusa resposta faltando", () => {
+  const hoje = new Date(2026, 10, 20, 12);
+  assert.equal(proximoDia(25, hoje), "2026-11-25");
+  assert.equal(proximoDia(5, hoje), "2026-12-05");
+  assert.equal(proximoDia(31, new Date(2026, 1, 1, 12)), "2026-02-28");
+  const plano = planoDoQuestionario({
+    nome: "Fulano", whatsapp: "5585999990000",
+    cartao: { nome: "Nubank", vencimento: 10, melhorDia: 3 },
+    salario: { valor: 2500, dia: 5 },
+    contasFixas: [{ nome: "Aluguel", valor: 900, dia: 5, categoria: "Moradia", subcategoria: "Aluguel" }],
+    tetos: { Alimentação: 700, Lixo: 0 },
+  }, hoje);
+  assert.deepEqual(plano.erros, []);
+  assert.equal(plano.config.creditCardBestDay, 3);
+  assert.equal(plano.config.perfilFinanceiro.cartaoPrincipal, "Nubank");
+  assert.deepEqual(plano.lancamentos.map((l) => l.description), ["Salário (recorrente)", "Aluguel (recorrente)"]);
+  assert.deepEqual(plano.tetos, [{ category: "Alimentação", amount: 700 }]);
+  assert.equal(planoDoQuestionario({ nome: "", whatsapp: "123" }, hoje).erros.length, 2);
 });

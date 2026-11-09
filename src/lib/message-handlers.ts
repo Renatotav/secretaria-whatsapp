@@ -24,6 +24,7 @@ import { applyUsageCommand } from "./work-usage";
 import { extractPdfText, holderMatches, pdfPasswordError, splitCardSections } from "./pdf";
 import { fetchNfce, repairNfeKey } from "./nfce";
 import { budgetStatus, dayRange, formatDayMonth, isoDay, MESES_FALA, SO_SALARIO, spentBetween, WEEKDAYS } from "./finance-common";
+import { carregarPerfil, perfil } from "./perfil";
 import { applyInvoiceDates, avisosFatura, budgetAlertsAfterImport, contaPeloNome, palavrasDaLoja, projectAndInsertFinanceEntries } from "./statement-import";
 import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseChart, sendMonthChart } from "./finance-charts";
 import { checkWish, levelIcon, wishLabel } from "./finance-wishes";
@@ -607,6 +608,7 @@ async function recordExchange(phone: string, text: string, reply: string): Promi
 }
 
 async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta): Promise<void> {
+  await carregarPerfil();
   await restoreFlowStates();
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
@@ -853,7 +855,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       const totalValue = route.amount * (route.installments || 1);
       if (
         route.financeType === "expense" &&
-        totalValue >= HIGH_VALUE &&
+        totalValue >= (perfil().gastoAlto ?? HIGH_VALUE) &&
         confirmedHighValueText !== joinedText &&
         !/\b(paguei|quitei|recebi|caiu|entrou)\b/i.test(joinedText)
       ) {

@@ -1,0 +1,23 @@
+{
+  "nome": "Fulano de Tal",
+  "whatsapp": "5585999990000",
+  "resumoDiario": "21:00",
+  "resumoSemanal": "20:00",
+  "cartao": { "nome": "Nubank", "vencimento": 10, "melhorDia": 3 },
+  "outrosCartoes": [],
+  "avisoFatura": null,
+  "perfil": {
+    "gastoAlto": 300,
+    "categoriasDesligadas": ["Scooter", "Besteira", "Saídas"],
+    "categoriasExtras": { "Pets": ["Ração", "Veterinário"] },
+    "dicas": ["petshop = Pets › Ração"]
+  },
+  "salario": { "valor": 2500, "dia": 5 },
+  "vale": null,
+  "contasFixas": [
+    { "nome": "Aluguel", "valor": 900, "dia": 5, "meio": "pix", "categoria": "Moradia", "subcategoria": "Aluguel" },
+    { "nome": "Internet", "valor": 99.9, "dia": 15, "meio": "boleto", "categoria": "Moradia", "subcategoria": "Internet" }
+  ],
+  "tetos": { "Alimentação": 700, "Transporte": 200, "Pets": 150 },
+  "metas": [{ "nome": "Reserva", "valor": 5000, "atual": 0 }]
+}

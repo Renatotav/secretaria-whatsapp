@@ -51,6 +51,8 @@ Arquivos-chave:
 `AgentConfig`: uma linha só, com chaves das IAs, Evolution, telefone do dono, `creditCardDueDay`, `creditCardBestDay`.
 `SavingsGoal`: metas (meta concluída quando `currentAmount >= targetAmount`).
 
+Instalação para outra pessoa: [docs/questionario-financeiro.md](docs/questionario-financeiro.md) (perfil por pessoa em `AgentConfig.perfilFinanceiro`; sem perfil, tudo funciona como hoje).
+
 Importou fatura ou vai conciliar à mão? Leia antes [docs/financeiro-erros-conhecidos.md](docs/financeiro-erros-conhecidos.md): erros que já aconteceram e a regra de bater no centavo com o PDF. Erro novo entra lá.
 
 ## 4. Regras de ouro (guardrails)

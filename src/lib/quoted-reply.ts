@@ -8,7 +8,8 @@ import type { Prisma } from "@prisma/client";
 import { brlMsg as brl } from "./format";
 import { NUMBER_PART, PAYMENT_OPTIONS, entryCard, parseBrNumber } from "./finance-text";
 import type { QuotedChange } from "./finance-history";
-import { FINANCE_TAXONOMY_DATA } from "./finance-taxonomy";
+import { despesasDoPerfil } from "./finance-taxonomy";
+import { perfil } from "./perfil";
 
 /** Acha o lançamento da mensagem citada: o cartão "📝 … 💰 R$ …", a nota salva, ou a mensagem original dele. */
 export async function entryFromQuoted(quoted: string) {
@@ -39,7 +40,7 @@ function categoryInText(t: string): QuotedChange | null {
   const m = t.match(/^(?:era|é|e|foi|categoria|muda(?:r)? (?:para|pra)|passa(?:r)? (?:para|pra)|coloca(?:r)? em)\s+(?:(?:de|em|na|no|pra|para)\s+)?(.+?)[.!]?$/);
   if (!m) return null;
   const want = fold(m[1]);
-  for (const [category, subs] of Object.entries(FINANCE_TAXONOMY_DATA.expense)) {
+  for (const [category, subs] of Object.entries(despesasDoPerfil(perfil()))) {
     if (fold(category) === want) return { category, subcategory: subs.length === 1 ? subs[0] : "" };
     const sub = subs.find((s) => fold(s) === want || fold(s).split("/").includes(want));
     if (sub) return { category, subcategory: sub };
