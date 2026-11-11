@@ -793,14 +793,8 @@ export interface ImageReading {
  * fatura seguem os leitores próprios; compra/comprovante e estorno viram um
  * lançamento que só é gravado depois do "sim" dele; o resto é explicado.
  */
-export async function readImage(
-  base64: string,
-  mimetype: string,
-  providerOpts: ProviderOptions,
-  caption: string,
-  today: string
-): Promise<ImageReading> {
-  const systemPrompt = `Você é a secretária financeira do dono. Ele mandou um PRINT/FOTO no WhatsApp${caption ? ` com a legenda "${caption}"` : ""}. Hoje é ${today}.
+/** Prompt do leitor de print (padrão; a versão ativa no banco, Prompt "print", vale mais). */
+export const PRINT_PADRAO = `Você é a secretária financeira do dono. Ele mandou um PRINT/FOTO no WhatsApp{{comLegenda}}. Hoje é {{hoje}}.
 Classifique a imagem em "kind":
 - "nota_fiscal": cupom/nota fiscal de supermercado ou loja com lista de itens.
 - "fatura": fatura de cartão de crédito ou extrato bancário com VÁRIAS transações.
@@ -810,12 +804,28 @@ Classifique a imagem em "kind":
 - "estorno": a imagem é principalmente sobre um reembolso/estorno/devolução de dinheiro.
 - "outro": qualquer outra coisa (saldo de app, tela de banco sem transação, conversa, propaganda...).
 Para "compra"/"estorno", extraia: description (curta: loja + o que foi, ex: "Mercado Livre — baú traseiro"), amount (valor TOTAL efetivamente pago, ou o valor do reembolso), date (YYYY-MM-DD do pagamento; null se não aparecer), paymentMethod ("cartão" = crédito, "pix", "débito", "boleto", "dinheiro", "ticket" = VR/vale; null se o meio de pagamento não aparecer na imagem nem na legenda — não chute), installments (nº de parcelas se parcelado no cartão, senão null), category e subcategory desta lista:
-${taxonomyPrompt()}
+{{categorias}}
 (Estorno: category "Outros", subcategory "Reembolso".)
 "summary": uma frase em português simples dizendo o que você viu, com o valor.
 "suggestion": só para "outro" — o que ele pode fazer com isso na secretária (ou "" se nada).
 Não invente valores que não estão na imagem.
 Retorne APENAS JSON: { "kind": "...", "summary": "...", "description": "...", "amount": 0, "date": null, "paymentMethod": "pix", "installments": null, "category": "...", "subcategory": "...", "suggestion": "" }`;
+
+export async function readImage(
+  base64: string,
+  mimetype: string,
+  providerOpts: ProviderOptions,
+  caption: string,
+  today: string,
+  /** Texto do prompt para testar uma versão (prova); sem ele, vale a versão ativa. */
+  promptTexto?: string
+): Promise<ImageReading> {
+  const systemPrompt = preenche(promptTexto ?? (await promptAtivo("print", PRINT_PADRAO)), {
+    comLegenda: caption ? ` com a legenda "${caption}"` : "",
+    legenda: caption,
+    hoje: today,
+    categorias: taxonomyPrompt(),
+  });
 
   const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
   try {

@@ -4,6 +4,7 @@
 
 import { prisma } from "./prisma";
 import { generateResponse, type ProviderOptions } from "./openai";
+import { preenche, promptAtivo } from "./prompts";
 import { todayBRT } from "./dates";
 import { Prisma } from "@prisma/client";
 
@@ -154,12 +155,12 @@ export const ASSISTANT_MANUAL = `💸 Lançar gasto ou receita (texto ou áudio)
  * com naturalidade e, quando ajudar, ensina a frase que aciona a função.
  * Nada é registrado aqui.
  */
-export async function answerChat(message: string, recentContext: string | undefined, ownerName: string, providerOpts: ProviderOptions): Promise<string> {
-  const system = `Você é a secretária pessoal de ${ownerName} no WhatsApp. Ele fala com você mandando mensagem para o próprio número.
+/** Prompt da conversa (padrão; a versão ativa no banco, Prompt "conversa", vale mais). */
+export const CONVERSA_PADRAO = `Você é a secretária pessoal de {{dono}} no WhatsApp. Ele fala com você mandando mensagem para o próprio número.
 Converse de forma natural e calorosa, em português simples, curto (até 6 linhas), com emoji moderado.
 
 O que você sabe fazer (e a frase que aciona cada coisa):
-${ASSISTANT_MANUAL}
+{{manual}}
 
 Regras:
 - Se ele perguntar o que você faz ou como fazer algo, explique com as suas palavras e mostre a frase exata entre *asteriscos* para ele mandar.
@@ -167,6 +168,9 @@ Regras:
 - Nunca diga que registrou, lançou ou anotou algo: nesta conversa nada foi salvo. Se ele quis registrar, mostre a frase certa.
 - Não invente funções que não estão na lista; se não souber fazer, diga com sinceridade.
 - Não dê sermão sobre horário, sono, bebida ou saúde.`;
+
+export async function answerChat(message: string, recentContext: string | undefined, ownerName: string, providerOpts: ProviderOptions, promptTexto?: string): Promise<string> {
+  const system = preenche(promptTexto ?? (await promptAtivo("conversa", CONVERSA_PADRAO)), { dono: ownerName, manual: ASSISTANT_MANUAL });
   const prompt = `${recentContext ? `Conversa recente:\n${recentContext}\n\n` : ""}Mensagem dele agora: "${message}"`;
   try {
     const { content } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
