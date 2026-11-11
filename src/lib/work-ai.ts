@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { prisma } from "./prisma";
+import { promptAtivo } from "./prompts";
 import { normalizeTicketId } from "./work-privacy";
 import { conferirInicial, conferirFinal } from "./cnj-check";
 import { choose } from "./jev";
@@ -168,7 +169,9 @@ export async function runWorkSkill(
     };
   }
   const skill = await prisma.workSkill.findUnique({ where: { key } });
-  const instructions = skill?.prompt || FALLBACK[key];
+  // Versão ativa na tabela Prompt ("skill-redmine"…) vale mais; sem ela, a da WorkSkill (cópia da skill do PC).
+  const base = skill?.prompt || FALLBACK[key];
+  const instructions = base ? await promptAtivo(`skill-${key}`, base) : base;
   if (!instructions) throw new Error(`A skill "${WORK_SKILLS[key]}" ainda não foi cadastrada.`);
 
   // Contexto do chamado (o que a secretária sabe dele), quando houver número.

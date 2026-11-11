@@ -166,7 +166,7 @@ export async function runAiLab(candidate?: string): Promise<string> {
 
 /** "testa a ia" / "laboratório da ia" / "testa a ia com google/gemini-3.1-flash-lite". */
 export async function applyAiLabCommand(text: string, notify: (t: string) => Promise<void>): Promise<string | null> {
-  const p = text.trim().match(/^(testa(?:r)?|ativa(?:r)?)\s+o\s+prompt\s+(?:([a-z]+)\s+)?(\d+)\s*[.!?]?$/i);
+  const p = text.trim().match(/^(testa(?:r)?|ativa(?:r)?)\s+o\s+prompt\s+(?:([a-z-]+)\s+)?(\d+)\s*[.!?]?$/i);
   if (p) {
     const nome = (p[2] || "classificador").toLowerCase();
     if (/^ativa/i.test(p[1])) return ativaPrompt(nome, Number(p[3]));
