@@ -13,7 +13,7 @@ import { brl } from "../src/lib/format";
 import { analisarPadroes } from "../src/lib/padroes";
 import { sqlSeguro } from "../src/lib/assistant-chat";
 import { kwhPorDia, spentSince } from "../src/lib/aircon";
-import { calibrarParada, linhaCalibracao } from "../src/lib/scooter";
+import { calibrarParada, corrigeOdo, linhaCalibracao } from "../src/lib/scooter";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -277,4 +277,13 @@ test("prompt do banco: marcadores {{nome}} são preenchidos uma vez só", async 
   const { preenche } = await import("../src/lib/prompts");
   assert.equal(preenche("Oi {{dono}}, hoje é {{hoje}}.{{falta}}", { dono: "Fulano", hoje: "2026-11-11" }), "Oi Fulano, hoje é 2026-11-11.");
   assert.equal(preenche("{{a}}", { a: "{{b}}", b: "x" }), "{{b}}"); // valor não é preenchido de novo
+});
+
+test("ODO lido no vídeo: primeiro dígito perdido e o P grudado", () => {
+  assert.equal(corrigeOdo(43, 138).odo, 143); // 143 lido como 43 (11/11)
+  assert.equal(corrigeOdo(902, 88).odo, 90); // "00090" + P (23/10)
+  assert.equal(corrigeOdo(145, 138).odo, 145); // leitura normal fica igual
+  assert.equal(corrigeOdo(43, 300).odo, 343); // só 343 cabe até +100 do último
+  assert.equal(corrigeOdo(43, 2000).odo, 43); // nenhum dígito cabe: não inventa (a leitura é recusada)
+  assert.equal(corrigeOdo(5, 138).odo, 5); // 15..95, todos abaixo do último: não inventa
 });

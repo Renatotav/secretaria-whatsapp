@@ -404,7 +404,7 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
   if (!config?.openrouterApiKey) return "⚠️ Sem chave do OpenRouter para ler o vídeo. Manda em texto: *scooter 50 km 79v 6 barras*.";
   const prompt =
     "Vídeo do painel de uma scooter elétrica ANGIE (sistema 72 V, bateria LiFePO4) sendo ligada. Na sequência de inicialização aparece primeiro \"72V\" " +
-    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos, ex: 00043 — o caractere GRANDE no meio é a marcha \"P\" (estacionado; parece um 2) ou a velocidade: NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
+    "(nominal, IGNORE), depois o ODO (km total, número inteiro de 5 dígitos com zeros à esquerda; leia todos os dígitos, um por um, inclusive o primeiro diferente de zero — o caractere GRANDE no meio é a marcha \"P\" (estacionado; parece um 2) ou a velocidade: NÃO junte com o ODO) por alguns segundos, e então a tela normal com a tensão real (ex: 79.5V), a velocidade e o " +
     "indicador de bateria com até 6 barras. Leia: o ODO, a tensão real (nunca 72) e quantas barras estão acesas. Se não for o painel de uma scooter, " +
     'diga painel=false. Responda SÓ JSON: {"painel":true|false,"odo":number|null,"volts":number|null,"barras":number|null,"trip":number|null}';
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -436,13 +436,11 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
     return `🎥 Não consegui ver o ODO no vídeo.${extra} Me manda o km em texto: *scooter 50 km*.`;
   }
   const last = await lastOdo();
-  // A leitura às vezes gruda o caractere grande do painel (o "P" de estacionado,
-  // que parece um 2) no ODO: "00090" + "P" virou 902 (23/10/2026). Se tirar o último dígito cabe
-  // entre o último ODO e +400 km, é isso (o ODO do painel é inteiro).
+  const ajuste = corrigeOdo(odo, last);
   let virgula = "";
-  if (last !== null && odo > last + 400 && Math.floor(odo / 10) >= last && Math.floor(odo / 10) <= last + 400) {
-    virgula = `\n(Li "${fmt(odo, 0)}" — entendi ${fmt(Math.floor(odo / 10), 0)} km; o último número era do outro mostrador. Se não for, mande *scooter corrigir X km*.)`;
-    odo = Math.floor(odo / 10);
+  if (ajuste.odo !== odo) {
+    virgula = `\n(Li "${fmt(odo, 0)}" — entendi ${fmt(ajuste.odo, 0)} km; ${ajuste.motivo}. Se não for, mande *scooter corrigir X km*.)`;
+    odo = ajuste.odo;
   }
   if (last !== null && (odo < last || odo > last + 400)) {
     return `🎥 Li ODO ${fmt(odo, 1)} km, mas o último registrado é ${fmt(last, 1)} km. Parece leitura errada — confere e manda em texto: *scooter X km*.`;
@@ -450,6 +448,25 @@ export async function readScooterVideo(base64: string, mimetype: string, caption
   const partes = [`scooter ${odo} km`, volts > 50 && volts < 95 ? `${volts}v` : "", barras >= 0 && barras <= 6 ? `${barras} barras` : ""].filter(Boolean).join(" ");
   const out = await applyScooterCommand(partes);
   return `🎥 Li no vídeo: ${partes.replace("scooter ", "")}${caption.trim() ? ` (${caption.trim().slice(0, 60)})` : ""}.${virgula}\n\n${out ?? ""}`.trim();
+}
+
+/**
+ * Leitura do ODO no vídeo que não cabe depois do último registro, com o erro de sempre:
+ * - grudou o caractere grande do painel (o "P" de estacionado, que parece um 2): "00090" + "P" virou 902 (23/10/2026)
+ *   → tirar o último dígito cabe entre o último ODO e +400 km;
+ * - perdeu o primeiro dígito: 143 lido como 43 (11/11/2026) → só um dígito na frente cabe até +100 km do último.
+ * Fora disso, devolve o mesmo número (e quem chama recusa a leitura).
+ */
+export function corrigeOdo(odo: number, last: number | null): { odo: number; motivo: string } {
+  if (last === null) return { odo, motivo: "" };
+  const semUltimo = Math.floor(odo / 10);
+  if (odo > last + 400 && semUltimo >= last && semUltimo <= last + 400) return { odo: semUltimo, motivo: "o último número era do outro mostrador" };
+  if (odo < last) {
+    const casa = 10 ** String(Math.trunc(odo)).length;
+    const cabem = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => d * casa + odo).filter((v) => v >= last && v <= last + 100);
+    if (cabem.length === 1) return { odo: cabem[0], motivo: "o primeiro dígito não apareceu no vídeo" };
+  }
+  return { odo, motivo: "" };
 }
 
 /** Teve carga nas últimas 30 h e nenhuma leitura de ODO desde a carga anterior: pede o ODO (uma vez por carga). */
