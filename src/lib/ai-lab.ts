@@ -103,15 +103,16 @@ async function provaPrompt(versao: number): Promise<string> {
   ].join("\n");
 }
 
-/** "ativa o prompt 2": passa a usar a versão 2 do classificador (as outras ficam guardadas). */
-async function ativaPrompt(versao: number): Promise<string> {
-  const alvo = await prisma.prompt.findUnique({ where: { name_version: { name: "classificador", version: versao } } });
-  if (!alvo) return `Não achei a versão ${versao} do classificador.`;
+/** "ativa o prompt 2" / "ativa o prompt fatura 1": passa a usar essa versão (as outras ficam guardadas). */
+async function ativaPrompt(nome: string, versao: number): Promise<string> {
+  const alvo = await prisma.prompt.findUnique({ where: { name_version: { name: nome, version: versao } } });
+  if (!alvo) return `Não achei a versão ${versao} do prompt ${nome}.`;
   await prisma.$transaction([
-    prisma.prompt.updateMany({ where: { name: "classificador" }, data: { active: false } }),
+    prisma.prompt.updateMany({ where: { name: nome }, data: { active: false } }),
     prisma.prompt.update({ where: { id: alvo.id }, data: { active: true } }),
   ]);
-  return `✅ Classificador na versão ${versao} (vale em até 1 minuto). Para voltar: *ativa o prompt <outra versão>*.`;
+  const cmd = nome === "classificador" ? "ativa o prompt" : `ativa o prompt ${nome}`;
+  return `✅ Prompt ${nome} na versão ${versao} (vale em até 1 minuto). Para voltar: *${cmd} <outra versão>*.`;
 }
 
 export async function runAiLab(candidate?: string): Promise<string> {
@@ -165,11 +166,13 @@ export async function runAiLab(candidate?: string): Promise<string> {
 
 /** "testa a ia" / "laboratório da ia" / "testa a ia com google/gemini-3.1-flash-lite". */
 export async function applyAiLabCommand(text: string, notify: (t: string) => Promise<void>): Promise<string | null> {
-  const p = text.trim().match(/^(testa(?:r)?|ativa(?:r)?)\s+o\s+prompt\s+(\d+)\s*[.!?]?$/i);
+  const p = text.trim().match(/^(testa(?:r)?|ativa(?:r)?)\s+o\s+prompt\s+(?:([a-z]+)\s+)?(\d+)\s*[.!?]?$/i);
   if (p) {
-    if (/^ativa/i.test(p[1])) return ativaPrompt(Number(p[2]));
-    await notify(`🧪 Rodando a prova: versão atual × versão ${p[2]}… (uns 30 s, centavos)`);
-    return provaPrompt(Number(p[2]));
+    const nome = (p[2] || "classificador").toLowerCase();
+    if (/^ativa/i.test(p[1])) return ativaPrompt(nome, Number(p[3]));
+    if (nome !== "classificador") return `🧪 A prova pelo WhatsApp é só do classificador; a do prompt ${nome} eu rodo pelo servidor.`;
+    await notify(`🧪 Rodando a prova: versão atual × versão ${p[3]}… (uns 30 s, centavos)`);
+    return provaPrompt(Number(p[3]));
   }
   const m = text.trim().match(/^(?:testa(?:r)?\s+a\s+ia|laborat[oó]rio\s+da\s+ia)(?:\s+com\s+([\w./:-]+))?\s*[.!?]?$/i);
   if (!m) return null;

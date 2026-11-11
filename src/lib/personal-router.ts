@@ -449,24 +449,15 @@ export interface StatementEntry {
   card?: string;
 }
 
-function buildStatementInstructions(ownerName: string): string {
-  const cardFilter = ownerName
-    ? `\nATENÇÃO — fatura com mais de um cartão/titular: se a página mostrar um
-cabeçalho de titular de cartão (ex: "Cartão Final XXXX - NOME DA PESSOA") cujo
-nome NÃO seja "${ownerName}" (ou variação óbvia dele), NÃO extraia as
-transações listadas sob esse cabeçalho — pertencem a outra pessoa. Páginas
-sem nenhum cabeçalho de titular visível são continuação da lista do cartão
-do titular mostrado na página anterior da mesma leva de fotos; nesse caso,
-trate como sendo do titular "${ownerName}" normalmente (não deixe de
-extrair só por falta de cabeçalho repetido).\n`
-    : "";
-  return `Extraia TODAS as transações, sem exceção — cada linha de
+/** Prompt do leitor de fatura/extrato (padrão; a versão ativa no banco, Prompt "fatura", vale mais). */
+export const FATURA_PADRAO = `Você recebeu {{origem}} de um extrato de cartão de crédito ou conta
+bancária. Extraia TODAS as transações, sem exceção — cada linha de
 gasto ou recebimento vira um item. Extratos de cartão costumam ter entre 10 e 40
 linhas de transação; se você encontrar poucas, provavelmente pulou linhas — releia
 com atenção, de cima pra baixo, linha por linha, até o fim da tabela. Não pare
 depois das primeiras linhas nem resuma: cada transação individual precisa
 aparecer como um item separado no resultado.
-${cardFilter}
+{{filtroTitular}}
 Para cada transação, identifique:
 - date: data no formato ISO 8601 (YYYY-MM-DD).
   - Se for FATURA DE CARTÃO DE CRÉDITO: use a DATA DE VENCIMENTO da fatura para
@@ -490,7 +481,7 @@ Para cada transação, identifique:
   Compra internacional mostra o valor em dólar e a cotação (ex: "USD 21,36 | Cotação USD: R$5,42  115,82"):
   use SEMPRE o valor em REAIS cobrado na fatura (115,82), nunca o valor em dólar.
 - type: "expense" para compras/débitos, "income" para estornos/créditos/pagamentos recebidos.
-- category e subcategory: ${FINANCE_TAXONOMY}
+- category e subcategory: {{categorias}}
   Se não der pra inferir a subcategoria, deixe vazio.
 - paymentMethod: OBRIGATÓRIO. Se for extrato/fatura de cartão de crédito, retorne "cartão" para todas as linhas. Se for extrato de conta corrente, tente inferir ("pix", "boleto", "dinheiro" ou "cartão" se for compra no débito). Se não souber, retorne "pix".
 - account: OBRIGATÓRIO. Tente inferir a conta ("Principal" ou "VR"). Faturas de cartão e extratos bancários normais são "Principal". Ticket, Vale, Sodexo, VR, VA são "VR".
@@ -501,6 +492,29 @@ uma lista vazia.
 
 Retorne APENAS um JSON válido no formato:
 { "entries": [ { "date": "2026-08-05", "purchaseDate": "2026-02-14", "description": "...", "amount": 45.90, "type": "expense", "category": "Alimentação", "subcategory": "Supermercado", "paymentMethod": "cartão", "account": "Principal" } ] }`;
+
+export async function promptFatura(origem: string, ownerName: string, promptTexto?: string): Promise<string> {
+  return preenche(promptTexto ?? (await promptAtivo("fatura", FATURA_PADRAO)), {
+    origem,
+    dono: ownerName,
+    filtroTitular: buildStatementInstructions(ownerName),
+    categorias: FINANCE_TAXONOMY,
+  });
+}
+
+/** Aviso de fatura com vários titulares (vira {{filtroTitular}} no prompt da fatura). */
+function buildStatementInstructions(ownerName: string): string {
+  const cardFilter = ownerName
+    ? `\nATENÇÃO — fatura com mais de um cartão/titular: se a página mostrar um
+cabeçalho de titular de cartão (ex: "Cartão Final XXXX - NOME DA PESSOA") cujo
+nome NÃO seja "${ownerName}" (ou variação óbvia dele), NÃO extraia as
+transações listadas sob esse cabeçalho — pertencem a outra pessoa. Páginas
+sem nenhum cabeçalho de titular visível são continuação da lista do cartão
+do titular mostrado na página anterior da mesma leva de fotos; nesse caso,
+trate como sendo do titular "${ownerName}" normalmente (não deixe de
+extrair só por falta de cabeçalho repetido).\n`
+    : "";
+  return cardFilter;
 }
 
 /**
@@ -597,10 +611,11 @@ function parseStatementResponse(content: string, source: string): StatementEntry
 export async function parseStatementEntries(
   statementText: string,
   providerOpts: ProviderOptions,
-  ownerName = ""
+  ownerName = "",
+  /** Texto do prompt para testar uma versão (prova); sem ele, vale a versão ativa. */
+  promptTexto?: string
 ): Promise<StatementEntry[]> {
-  const systemPrompt = `Você recebeu o texto extraído de um extrato de cartão de crédito ou conta
-bancária. ${buildStatementInstructions(ownerName)}`;
+  const systemPrompt = await promptFatura("o texto extraído", ownerName, promptTexto);
 
   const { content } = await generateResponse(
     [{ role: "user", content: statementText.slice(0, 12000) }],
@@ -624,8 +639,7 @@ export async function parseStatementImage(
   providerOpts: ProviderOptions,
   ownerName = ""
 ): Promise<StatementEntry[]> {
-  const systemPrompt = `Você recebeu a foto/print de um extrato de cartão de crédito ou conta
-bancária. ${buildStatementInstructions(ownerName)}`;
+  const systemPrompt = await promptFatura("a foto/print", ownerName);
 
   const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts);
   return parseStatementResponse(content, "imagem");
