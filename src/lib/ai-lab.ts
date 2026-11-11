@@ -61,7 +61,7 @@ const ms = (t: number) => `${(t / 1000).toFixed(1).replace(".", ",")} s`;
 const reais = (usd: number) => `R$ ${(usd * DOLAR).toFixed(4).replace(".", ",")}`;
 
 /** Prova do classificador: quantos casos acerta. promptTexto testa uma versão; sem ele, a ativa. */
-async function provaClassificador(apiKey: string, model: string, extras: string, promptTexto?: string): Promise<{ ok: number; erradas: string[] }> {
+export async function provaClassificador(apiKey: string, model: string, extras: string, promptTexto?: string): Promise<{ ok: number; erradas: string[] }> {
   let ok = 0;
   const erradas: string[] = [];
   for (const c of ROUTER_CASES) {

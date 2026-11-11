@@ -286,7 +286,7 @@ export async function routePersonalMessage(
   const { content } = await generateResponse(
     [{ role: "user", content: ajustaFrase(message) }],
     systemPrompt,
-    0.3,
+    0, // classificar pede a mesma resposta para a mesma frase (prova de 11/11: v2 17/17 em t0)
     512,
     providerOpts
   );
