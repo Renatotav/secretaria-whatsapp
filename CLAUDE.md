@@ -32,7 +32,7 @@ Arquivos-chave:
 | `src/lib/finance-*.ts` | text (cartão do lançamento, valores), charts, goals, wishes, simulator, split, history |
 | `src/lib/quoted-reply.ts`, `assistant-chat.ts`, `group-messages.ts`, `incoming-media.ts`, `owner-notify.ts` | Resposta citada, conversa com a IA, grupos, áudio/mídia, avisar o dono |
 | `src/lib/personal-router.ts` | Prompt + parsing que classifica a mensagem (finance, agenda_add, agenda_query, diary, savings_add, finance_simulation…) |
-| `src/lib/prompts.ts` | Prompts da IA no banco (tabela `Prompt`, com versão): `promptAtivo(nome, padrão)` + marcadores `{{nome}}`; sem versão ativa vale o padrão do código. Hoje: `classificador` |
+| `src/lib/prompts.ts` | Prompts da IA no banco (tabela `Prompt`, com versão): `promptAtivo(nome, padrão)` + marcadores `{{nome}}`; sem versão ativa vale o padrão do código. Hoje: `classificador`, `fatura`, `nota`, `print`, `conversa`; voltar = "ativa o prompt <nome> <versão>" no WhatsApp. Antes de ativar versão nova: prova com casos inventados (o texto de cada versão fica fora do repo) |
 | `src/lib/dates.ts` | `parseLocalDate`, `todayBRT`, `creditCardBillDate` |
 | `src/lib/session-token.ts`, `src/lib/auth.ts`, `src/proxy.ts` | Login do painel (token assinado com HMAC) |
 | `src/lib/auto-pay.ts` | Baixa automática só de compras no cartão com fatura vencida |
