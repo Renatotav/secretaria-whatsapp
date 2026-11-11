@@ -674,16 +674,9 @@ export interface InvoiceEntry {
   items: InvoiceItemEntry[];
 }
 
-export async function parseInvoiceImage(
-  base64: string,
-  mimetype: string,
-  providerOpts: ProviderOptions,
-  ownerName = "",
-  caption = "",
-  model?: string
-): Promise<InvoiceEntry | null> {
-  const systemPrompt = `Você recebeu a foto de uma nota fiscal, cupom fiscal ou fatura.
-A legenda/texto do usuário enviada junto foi: "${caption}"
+/** Prompt do leitor de nota fiscal (padrão; a versão ativa no banco, Prompt "nota", vale mais). */
+export const NOTA_PADRAO = `Você recebeu a foto de uma nota fiscal, cupom fiscal ou fatura.
+A legenda/texto do usuário enviada junto foi: "{{legenda}}"
 
 Sua tarefa é extrair os metadados principais e a lista DETALHADA de cada produto/serviço cobrado.
 
@@ -691,7 +684,7 @@ Metadados:
 - date: data da COMPRA que aparece no topo/cabeçalho do cupom (formato ISO YYYY-MM-DD). NÃO use datas da seção "Forma de Pagamento" ou vencimento. Se não conseguir ler a data claramente, use a data de hoje.
 - total: o VALOR A PAGAR final da nota (após descontos, número, sem cifrão). Ex: "VALOR A PAGAR R$ 65,39" -> total: 65.39.
 - category e subcategory: Classifique a despesa global usando a taxonomia padrão:
-${FINANCE_TAXONOMY}
+{{categorias}}
 - paymentMethod: descubra a forma de pagamento ("cartão", "débito", "pix", "boleto", "dinheiro", ou "ticket"). IMPORTANTE: "CARTAO CREDITO", "Credito Rotativo", "TEF Rotativo", "TEF Crédito" são TODOS cartão de crédito → use "cartão". "DEBITO", "Cartão de Débito", "TEF Débito" → use "débito". Se for vale alimentação, Ticket, VR, Sodexo, TEF benefício/alimentação, use "ticket". Se a nota NÃO mostrar a forma de pagamento, retorne "" (vazio) — não chute.
 - account: a conta de onde saiu o dinheiro. Use SEMPRE "Principal" — mesmo quando o pagamento for cartão de crédito, débito, pix ou dinheiro. Use "VR" SOMENTE se o pagamento for ticket/vale alimentação, VR, Sodexo, VA. Nunca retorne "Cartão de Crédito" como account.
 - status: REGRA ABSOLUTA: cartão de crédito ("cartão", TEF Rotativo, Credito Rotativo) = SEMPRE "pending" (nunca paid). pix, dinheiro, débito, ticket = "paid".
@@ -734,6 +727,23 @@ Formato esperado:
     { "name": "Cerveja", "category": "Besteira", "quantity": 2, "unitPrice": 10.0, "amount": 20.0 }
   ]
 }`;
+
+/** Hoje em Brasília, YYYY-MM-DD. */
+function todayIso(): string {
+  return new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+}
+
+export async function parseInvoiceImage(
+  base64: string,
+  mimetype: string,
+  providerOpts: ProviderOptions,
+  ownerName = "",
+  caption = "",
+  model?: string,
+  /** Texto do prompt para testar uma versão (prova); sem ele, vale a versão ativa. */
+  promptTexto?: string
+): Promise<InvoiceEntry | null> {
+  const systemPrompt = preenche(promptTexto ?? (await promptAtivo("nota", NOTA_PADRAO)), { legenda: caption, categorias: FINANCE_TAXONOMY, hoje: todayIso() });
 
   try {
     const content = await generateVisionResponse(base64, mimetype, systemPrompt, providerOpts, model);
