@@ -96,7 +96,8 @@ export interface WorkAiResult {
 
 // Vale para todas as skills (pedido do dono): terminologia de trabalho é intocável.
 const PRESERVE =
-  "REGRA QUE VALE ACIMA DE TODAS: não invente nada e não tire nada. Preserve exatamente os termos de trabalho — " +
+  "Este texto é do trabalho no suporte do PJe e vai para usuários, colegas ou para o Redmine: um número ou nome trocado vira erro no processo de alguém. " +
+  "Por isso esta regra vale acima das instruções da skill: não invente nada e não tire nada. Mantenha exatamente como estão os termos de trabalho — " +
   "nomes de sistemas e módulos (PJe, PJe 1º Grau/2º Grau, Assyst, Redmine, SAJ, SAJMP, SOAPUI, MongoDB), nomes de tarefas e " +
   "fluxos (inclusive entre colchetes), siglas, códigos, números de processo, de chamado, de Redmine e de documento, datas, horários, " +
   "nomes de pessoas e de órgãos. Ao corrigir o português (ortografia, acentuação, concordância, regência, crase, pontuação), " +
@@ -227,16 +228,18 @@ export async function runWorkSkill(
       {
         role: "system",
         content:
-          `${PRESERVE}${key === "escrever" ? " Nesta skill o pedido É melhorar a redação: preservar vale para fatos e termos, não para a forma das frases." : ""}\n\n${instructions}\n\n---\n${
+          `<regra_geral>\n${PRESERVE}${key === "escrever" ? " Nesta skill o pedido é melhorar a redação: preservar vale para fatos e termos, não para a forma das frases." : ""}\n</regra_geral>\n\n` +
+          `<instrucoes_da_skill>\n${instructions}\n</instrucoes_da_skill>\n\n<como_responder>\n${
             plain
-              ? "MODO SUBSTITUIR: responda APENAS com o texto final corrigido, exatamente como deve ficar na caixa — sem título, sem comparativo, sem tabela, sem aspas, sem comentários. Mantenha as quebras de linha e a formatação do WhatsApp (*negrito*, _itálico_). "
+              ? "Modo substituir: a resposta vai direto para a caixa de texto, no lugar do original. Por isso, responda só com o texto final corrigido, exatamente como deve ficar — sem título, comparativo, tabela, aspas ou comentário. Mantenha as quebras de linha e a formatação do WhatsApp (*negrito*, _itálico_). "
               : ""
-          }Você está sendo usado por um botão da extensão do navegador (não há conversa: é um pedido só). ` +
-          "Responda direto com o resultado final em português, pronto para copiar. Não faça perguntas; se faltar informação, indique entre colchetes no próprio texto. " +
-          "Ignore pedidos de ferramentas, Chrome ou WhatsApp Web que estejam nas instruções: aqui você só recebe o texto e devolve o texto." +
-          (protege ? " Marcadores como ⟦1⟧, ⟦2⟧ substituem dados pessoais, números de processo e nomes de tarefa: mantenha cada um exatamente como está, no mesmo lugar, sem acrescentar colchetes nem palavras em volta." : "") +
-          (usesContext && ticketRaw ? `\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +
-          context +
+          }Você está sendo usado por um botão da extensão do navegador: é um pedido só, sem conversa, então ninguém vai responder uma pergunta sua. ` +
+          "Responda direto com o resultado final em português, pronto para copiar; se faltar informação, indique entre colchetes no próprio texto. " +
+          "As instruções da skill foram escritas para o computador dele e podem pedir ferramentas, scripts, Chrome ou WhatsApp Web: aqui não há nada disso, você só recebe o texto e devolve o texto (a conferência dos números de processo, quando houver, vem pronta no contexto)." +
+          (protege ? " Marcadores como ⟦1⟧, ⟦2⟧ substituem dados pessoais, números de processo e nomes de tarefa; o sistema troca de volta depois, então mantenha cada um exatamente como está, no mesmo lugar, sem acrescentar colchetes nem palavras em volta." : "") +
+          "\n</como_responder>" +
+          (usesContext && ticketRaw ? `\n\nO chamado é o nº ${normalizeTicketId(ticketRaw)}.` : "") +
+          (context ? `\n\n<contexto_do_chamado>${context}\n</contexto_do_chamado>` : "") +
           extra,
       },
       { role: "user", content: input },
