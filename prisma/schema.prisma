@@ -549,3 +549,17 @@ model WorkUsage {
 
   @@id([day, feature])
 }
+
+/// Prompts da IA guardados no banco, com versão: o código usa a versão ativa
+/// e, sem nenhuma, o texto padrão que está no código. Voltar atrás = ativar outra versão.
+model Prompt {
+  id        String   @id @default(cuid())
+  name      String
+  version   Int
+  text      String
+  active    Boolean  @default(false)
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@unique([name, version])
+}

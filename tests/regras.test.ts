@@ -272,3 +272,9 @@ test("item de nota: batata palha é Mercearia e peito de peru é frios", () => {
   assert.equal(normalizeItemCategory({ name: "BATATA INGLESA kg", category: "Hortifruti" }), "Hortifruti");
   assert.equal(normalizeItemCategory({ name: "PEITO FRANGO kg", category: "Mercearia" }), "Carnes");
 });
+
+test("prompt do banco: marcadores {{nome}} são preenchidos uma vez só", async () => {
+  const { preenche } = await import("../src/lib/prompts");
+  assert.equal(preenche("Oi {{dono}}, hoje é {{hoje}}.{{falta}}", { dono: "Fulano", hoje: "2026-11-11" }), "Oi Fulano, hoje é 2026-11-11.");
+  assert.equal(preenche("{{a}}", { a: "{{b}}", b: "x" }), "{{b}}"); // valor não é preenchido de novo
+});

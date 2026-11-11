@@ -1,5 +1,6 @@
 import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
 import { corrigeBebida, taxonomyPrompt } from "./finance-taxonomy";
+import { preenche, promptAtivo } from "./prompts";
 
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
 const FINANCE_TAXONOMY = taxonomyPrompt();
@@ -103,29 +104,17 @@ export function ajustaFrase(text: string): string {
     .replace(/^\s*(?:minha\s+)?agenda\s*[?.!]*\s*$/i, "o que tenho na agenda?");
 }
 
-export async function routePersonalMessage(
-  message: string,
-  ownerName: string,
-  providerOpts: ProviderOptions,
-  recentContext?: string,
-  customPrompt?: string,
-  creditCardDueDay: number = 10,
-  creditCardBestDay: number = 5
-): Promise<PersonalRouteResult> {
-  const now = new Date();
-  const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  const todayBRT = `${brtTime.getFullYear()}-${String(brtTime.getMonth() + 1).padStart(2, "0")}-${String(brtTime.getDate()).padStart(2, "0")}`;
-
-  const systemPrompt = `Você é a secretária pessoal de ${ownerName}. Ele mandou uma
+/** Prompt do classificador (padrão; a versão ativa no banco, tabela Prompt "classificador", vale mais). */
+export const CLASSIFICADOR_PADRAO = `Você é a secretária pessoal de {{dono}}. Ele mandou uma
 mensagem para o próprio número do WhatsApp — é assim que ele te alimenta com
 tarefas, gastos/receitas e anotações pessoais. Classifique a intenção em um
 dos tipos abaixo e extraia os dados. Você nunca redige respostas para terceiros,
 só confirma o que foi registrado.
 
-DATA DE HOJE: ${todayBRT}
+DATA DE HOJE: {{hoje}}
 
-${customPrompt ? `Instruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : ""}
-${recentContext ? `Contexto recente da conversa:\n${recentContext}\n` : ""}
+{{extras}}
+{{contexto}}
 
 Tipos:
 1. agenda_add — tarefa, evento ou lembrete com título/data
@@ -158,7 +147,7 @@ Tipos:
        "gráfico das metas" → "goals"
 
 3. finance — menciona valor gasto ou recebido. Extraia categoria e subcategoria.
-   ${FINANCE_TAXONOMY}
+   {{categorias}}
    Ex: "Gastei 45 no mercado" → expense, 45, categoria "Alimentação", subcategoria "Supermercado"
    Ex: "Recebi 3000 de salário" → income, 3000, categoria "Salário", subcategoria "Salário fixo"
    Ex: "Paguei 120 de internet" → expense, 120, categoria "Moradia", subcategoria "Internet"
@@ -180,13 +169,13 @@ Tipos:
      4b) Cartão de débito / "no débito" = "débito" (sai na hora, status "paid", NÃO é cartão de crédito).
      4c) Pago no VR / vale / vale-refeição / vale-alimentação / ticket / "Multi" = paymentMethod "ticket",
          account "VR", status "paid" (é o cartão de benefício, NÃO é cartão de crédito).
-     5) DATA DE COMPRA NO CARTÃO: a fatura vence todo dia ${creditCardDueDay}. Compra feita
-        ANTES do dia ${creditCardBestDay} cai na fatura que vence no dia ${creditCardDueDay} do
-        mesmo mês; compra a partir do dia ${creditCardBestDay} cai na fatura do mês seguinte.
+     5) DATA DE COMPRA NO CARTÃO: a fatura vence todo dia {{vencimento}}. Compra feita
+        ANTES do dia {{melhorDia}} cai na fatura que vence no dia {{vencimento}} do
+        mesmo mês; compra a partir do dia {{melhorDia}} cai na fatura do mês seguinte.
         Em "date" coloque esse vencimento e em "purchaseDate" o dia real da compra.
      6) FATURA DITA PELO DONO: se ele disser EXPLICITAMENTE a fatura ou o dia do pagamento
         ("pagamento para dia 10/11", "vai na fatura de novembro", "cai em 10/12"), coloque essa
-        data em "billDate" (YYYY-MM-DD; "fatura de novembro" = dia ${creditCardDueDay} de novembro).
+        data em "billDate" (YYYY-MM-DD; "fatura de novembro" = dia {{vencimento}} de novembro).
         Ela vale mais que a regra acima. Se ele não disser, "billDate" = null.
 
 4. diary — RELATO pessoal: como foi o dia, o que sentiu, uma reflexão ou desabafo.
@@ -268,6 +257,29 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "question": "<pergunta do usuário, para finance_question>",
   "confirmation": "Sua resposta curta"
 }`;
+
+export async function routePersonalMessage(
+  message: string,
+  ownerName: string,
+  providerOpts: ProviderOptions,
+  recentContext?: string,
+  customPrompt?: string,
+  creditCardDueDay: number = 10,
+  creditCardBestDay: number = 5
+): Promise<PersonalRouteResult> {
+  const now = new Date();
+  const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const todayBRT = `${brtTime.getFullYear()}-${String(brtTime.getMonth() + 1).padStart(2, "0")}-${String(brtTime.getDate()).padStart(2, "0")}`;
+
+  const systemPrompt = preenche(await promptAtivo("classificador", CLASSIFICADOR_PADRAO), {
+    dono: ownerName,
+    hoje: todayBRT,
+    extras: customPrompt ? `Instruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : "",
+    contexto: recentContext ? `Contexto recente da conversa:\n${recentContext}\n` : "",
+    categorias: FINANCE_TAXONOMY,
+    vencimento: creditCardDueDay,
+    melhorDia: creditCardBestDay,
+  });
 
   const { content } = await generateResponse(
     [{ role: "user", content: ajustaFrase(message) }],
