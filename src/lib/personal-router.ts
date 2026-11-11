@@ -265,13 +265,15 @@ export async function routePersonalMessage(
   recentContext?: string,
   customPrompt?: string,
   creditCardDueDay: number = 10,
-  creditCardBestDay: number = 5
+  creditCardBestDay: number = 5,
+  /** Texto do prompt para testar uma versão (laboratório); sem ele, vale a versão ativa. */
+  promptTexto?: string
 ): Promise<PersonalRouteResult> {
   const now = new Date();
   const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
   const todayBRT = `${brtTime.getFullYear()}-${String(brtTime.getMonth() + 1).padStart(2, "0")}-${String(brtTime.getDate()).padStart(2, "0")}`;
 
-  const systemPrompt = preenche(await promptAtivo("classificador", CLASSIFICADOR_PADRAO), {
+  const systemPrompt = preenche(promptTexto ?? (await promptAtivo("classificador", CLASSIFICADOR_PADRAO)), {
     dono: ownerName,
     hoje: todayBRT,
     extras: customPrompt ? `Instruções extras do usuário sobre como você deve se comportar/priorizar (siga-as, mas sempre retorne o JSON no formato pedido abaixo):\n${customPrompt}\n` : "",

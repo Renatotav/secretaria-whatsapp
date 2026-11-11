@@ -1,6 +1,7 @@
 import { DOLAR } from "./ai-credit";
 import { prisma } from "./prisma";
-import { routePersonalMessage } from "./personal-router";
+import { CLASSIFICADOR_PADRAO, routePersonalMessage } from "./personal-router";
+import { promptAtivo } from "./prompts";
 import { runWorkSkill } from "./work-ai";
 
 // Laboratório da IA: casos INVENTADOS (nada de dado real) com a resposta
@@ -59,6 +60,60 @@ async function precos(): Promise<Map<string, { in: number; out: number }>> {
 const ms = (t: number) => `${(t / 1000).toFixed(1).replace(".", ",")} s`;
 const reais = (usd: number) => `R$ ${(usd * DOLAR).toFixed(4).replace(".", ",")}`;
 
+/** Prova do classificador: quantos casos acerta. promptTexto testa uma versão; sem ele, a ativa. */
+async function provaClassificador(apiKey: string, model: string, extras: string, promptTexto?: string): Promise<{ ok: number; erradas: string[] }> {
+  let ok = 0;
+  const erradas: string[] = [];
+  for (const c of ROUTER_CASES) {
+    try {
+      const r = (await routePersonalMessage(c.text, "Renato", { aiProvider: "openrouter", openrouterApiKey: apiKey, openrouterModel: model }, c.ctx ?? "", extras, 10, 4, promptTexto)) as Record<string, unknown>;
+      const certo =
+        (c.type === undefined || r.type === c.type) &&
+        (c.notType === undefined || r.type !== c.notType) &&
+        (c.amount === undefined || Math.abs(Number(r.amount) - c.amount) < 0.01) &&
+        (c.paymentMethod === undefined || r.paymentMethod === c.paymentMethod) &&
+        (c.financeType === undefined || r.financeType === c.financeType);
+      if (certo) ok++;
+      else erradas.push(`"${c.text}" → ${String(r.type)}${r.amount != null ? ` ${r.amount}` : ""}${r.paymentMethod ? ` ${r.paymentMethod}` : ""}`);
+    } catch (e) {
+      erradas.push(`"${c.text}" → erro: ${e instanceof Error ? e.message.slice(0, 60) : "?"}`);
+    }
+  }
+  return { ok, erradas };
+}
+
+/** "testa o prompt 2": a versão 2 do classificador (ativa ou não) contra a ativa, nos mesmos casos. */
+async function provaPrompt(versao: number): Promise<string> {
+  const config = await prisma.agentConfig.findFirst();
+  if (!config?.openrouterApiKey) return "🧪 Sem chave da OpenRouter configurada.";
+  const candidata = await prisma.prompt.findUnique({ where: { name_version: { name: "classificador", version: versao } } });
+  if (!candidata) return `🧪 Não achei a versão ${versao} do classificador.`;
+  const atual = await promptAtivo("classificador", CLASSIFICADOR_PADRAO);
+  const [a, b] = await Promise.all([
+    provaClassificador(config.openrouterApiKey, config.openrouterModel, config.systemPrompt, atual),
+    provaClassificador(config.openrouterApiKey, config.openrouterModel, config.systemPrompt, candidata.text),
+  ]);
+  const n = ROUTER_CASES.length;
+  const veredito = b.ok > a.ok ? "🟢 a nova acertou mais" : b.ok === a.ok ? "🟡 empate" : "🔴 a nova acertou menos: não ative";
+  return [
+    `🧪 *Prova do classificador* (${config.openrouterModel})`,
+    `Atual: ${a.ok}/${n} · Versão ${versao}: ${b.ok}/${n} → ${veredito}`,
+    ...(b.erradas.length ? ["", `Erros da versão ${versao}:`, ...b.erradas.slice(0, 6).map((e) => `  ✗ ${e}`)] : []),
+    ...(candidata.active ? [] : ["", `Para usar: *ativa o prompt ${versao}*. Para voltar depois: *ativa o prompt <outra versão>*.`]),
+  ].join("\n");
+}
+
+/** "ativa o prompt 2": passa a usar a versão 2 do classificador (as outras ficam guardadas). */
+async function ativaPrompt(versao: number): Promise<string> {
+  const alvo = await prisma.prompt.findUnique({ where: { name_version: { name: "classificador", version: versao } } });
+  if (!alvo) return `Não achei a versão ${versao} do classificador.`;
+  await prisma.$transaction([
+    prisma.prompt.updateMany({ where: { name: "classificador" }, data: { active: false } }),
+    prisma.prompt.update({ where: { id: alvo.id }, data: { active: true } }),
+  ]);
+  return `✅ Classificador na versão ${versao} (vale em até 1 minuto). Para voltar: *ativa o prompt <outra versão>*.`;
+}
+
 export async function runAiLab(candidate?: string): Promise<string> {
   const config = await prisma.agentConfig.findFirst();
   if (!config?.openrouterApiKey) return "🧪 Sem chave da OpenRouter configurada.";
@@ -68,24 +123,8 @@ export async function runAiLab(candidate?: string): Promise<string> {
   const semZdr = (m: string) => (zdr && !zdr.has(m) ? " ⚠️ pode guardar seus dados (sem provedor ZDR)" : "");
 
   // 1) Entender mensagens (o roteador).
-  let okRouter = 0;
-  const erradas: string[] = [];
   const t0 = Date.now();
-  for (const c of ROUTER_CASES) {
-    try {
-      const r = (await routePersonalMessage(c.text, "Renato", { aiProvider: "openrouter", openrouterApiKey: config.openrouterApiKey, openrouterModel: routerModel }, c.ctx ?? "", config.systemPrompt, 10, 4)) as Record<string, unknown>;
-      const certo =
-        (c.type === undefined || r.type === c.type) &&
-        (c.notType === undefined || r.type !== c.notType) &&
-        (c.amount === undefined || Math.abs(Number(r.amount) - c.amount) < 0.01) &&
-        (c.paymentMethod === undefined || r.paymentMethod === c.paymentMethod) &&
-        (c.financeType === undefined || r.financeType === c.financeType);
-      if (certo) okRouter++;
-      else erradas.push(`"${c.text}" → ${String(r.type)}${r.amount != null ? ` ${r.amount}` : ""}${r.paymentMethod ? ` ${r.paymentMethod}` : ""}`);
-    } catch (e) {
-      erradas.push(`"${c.text}" → erro: ${e instanceof Error ? e.message.slice(0, 60) : "?"}`);
-    }
-  }
+  const { ok: okRouter, erradas } = await provaClassificador(config.openrouterApiKey, routerModel, config.systemPrompt);
   const tRouter = Date.now() - t0;
 
   // 2) Corretor do trabalho (termos intocáveis + correção feita).
@@ -126,6 +165,12 @@ export async function runAiLab(candidate?: string): Promise<string> {
 
 /** "testa a ia" / "laboratório da ia" / "testa a ia com google/gemini-3.1-flash-lite". */
 export async function applyAiLabCommand(text: string, notify: (t: string) => Promise<void>): Promise<string | null> {
+  const p = text.trim().match(/^(testa(?:r)?|ativa(?:r)?)\s+o\s+prompt\s+(\d+)\s*[.!?]?$/i);
+  if (p) {
+    if (/^ativa/i.test(p[1])) return ativaPrompt(Number(p[2]));
+    await notify(`🧪 Rodando a prova: versão atual × versão ${p[2]}… (uns 30 s, centavos)`);
+    return provaPrompt(Number(p[2]));
+  }
   const m = text.trim().match(/^(?:testa(?:r)?\s+a\s+ia|laborat[oó]rio\s+da\s+ia)(?:\s+com\s+([\w./:-]+))?\s*[.!?]?$/i);
   if (!m) return null;
   await notify(`🧪 Rodando o laboratório${m[1] ? ` com ${m[1]}` : ""}… (uns 30 s, custo de centavos)`);
