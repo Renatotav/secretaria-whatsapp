@@ -183,3 +183,16 @@ test("Pix para o titular do cartão com o valor da fatura é pagamento da fatura
   assert.equal(pagaFatura(pix, [{ ...fatura, total: 1200 }]), false); // outro valor: gasto de verdade
   assert.equal(pagaFatura(pix, [{ ...fatura, due: new Date("2026-12-10T12:00:00Z") }]), false); // fatura longe
 });
+
+test("'paguei a fatura' sem cartão: a que vence primeiro, de qualquer cartão (13/11)", async () => {
+  const { escolherFatura } = await import("../src/lib/invoices");
+  const open = [
+    { card: "", dueDate: "2026-12-10", total: 2059.46, count: 26 },
+    { card: "Santander do Bruno", dueDate: "2026-11-15", total: 308.18, count: 2 },
+    { card: "Santander do Bruno", dueDate: "2026-12-15", total: 291, count: 1 },
+  ];
+  assert.equal((escolherFatura(open, null) as { card: string }).card, "Santander do Bruno"); // o lembrete era dela
+  assert.equal((escolherFatura(open, "") as { dueDate: string }).dueDate, "2026-12-10"); // "paguei a fatura do C6"
+  assert.equal(escolherFatura([open[0], { card: "X", dueDate: "2026-12-10", total: 1, count: 1 }], null), "ambigua");
+  assert.equal(escolherFatura([], null), null);
+});

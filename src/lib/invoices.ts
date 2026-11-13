@@ -67,3 +67,17 @@ export async function payInvoice(card: string, dueDate: string): Promise<{ ids: 
   if (ids.length) await prisma.financeEntry.updateMany({ where: { id: { in: ids } }, data: { status: "paid" } });
   return { ids, total: entries.reduce((s, e) => s + (e.type === "income" ? -e.amount : e.amount), 0) };
 }
+
+/**
+ * Qual fatura o "paguei a fatura" quer dizer. Cartão citado → a mais próxima dele. Sem cartão
+ * citado → a que vence primeiro, de qualquer cartão (13/11: o lembrete era do Santander de 15/11
+ * e a baixa caiu no C6 de 10/12). Duas vencendo no mesmo dia, de cartões diferentes → null (perguntar).
+ */
+export function escolherFatura(open: OpenInvoice[], card: string | null): OpenInvoice | null | "ambigua" {
+  const lista = [...open].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  if (card !== null) return lista.find((i) => i.card === card) ?? null;
+  const [primeira, segunda] = lista;
+  if (!primeira) return null;
+  if (segunda && segunda.dueDate === primeira.dueDate && segunda.card !== primeira.card) return "ambigua";
+  return primeira;
+}

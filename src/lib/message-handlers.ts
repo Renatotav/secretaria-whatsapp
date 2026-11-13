@@ -15,7 +15,7 @@ import { brlMsg as brl } from "./format";
 import { applyAlertRuleCommand } from "./work-alert-rules";
 import { applyAiLabCommand } from "./ai-lab";
 import { applyWorkCommand } from "./work-commands";
-import { invoiceLabel, listOpenInvoices, payInvoice } from "./invoices";
+import { escolherFatura, invoiceLabel, listOpenInvoices, payInvoice } from "./invoices";
 import { applyExtrasCommand, categoryRuleFor } from "./personal-extras";
 import { TIRE_PSI, applyScooterCommand, scooterNumbers } from "./scooter";
 import { applyYoutube } from "./youtube";
@@ -448,7 +448,7 @@ async function applyInvoicePayment(text: string): Promise<string | null> {
   const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const words = new Set(norm(text).split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !["fatura", "paguei", "cartao", "transferi", "quitei", "mandei", "para", "pro", "pra", "dia"].includes(w)));
   const otherCards = [...new Set(open.map((i) => i.card).filter(Boolean))];
-  let card = "";
+  let card: string | null = /\bc6\b|meu cart[aã]o|seu cart[aã]o/.test(norm(text)) ? "" : null;
   // "C6" = o cartão do dono (a fatura do C6 também é paga ao irmão, então
   // "fatura do Bruno" sozinho apontaria para o cartão "Santander do Bruno").
   for (const c of /\bc6\b/.test(norm(text)) ? [] : otherCards) {
@@ -456,8 +456,11 @@ async function applyInvoicePayment(text: string): Promise<string | null> {
     const vocab = new Set(norm(`${c} ${sample.map((x) => x.description).join(" ")}`).split(/[^a-z0-9]+/));
     if ([...words].some((w) => vocab.has(w))) card = c;
   }
-  const target = open.find((i) => i.card === card);
-  if (!target) return `🤔 Não achei fatura em aberto de ${invoiceLabel(card)}.`;
+  const escolhida = escolherFatura(open, card);
+  if (escolhida === "ambigua") return `🤔 Vencem duas faturas no mesmo dia. Qual você pagou? Mande *paguei a fatura do C6* ou com o nome do outro cartão.`;
+  if (!escolhida) return `🤔 Não achei fatura em aberto de ${invoiceLabel(card ?? "")}.`;
+  const target = escolhida;
+  card = target.card;
   // Valor informado ("3880,57") tem que bater com a fatura (tolerância de R$ 1).
   // Só valor de verdade: "3880,57", "3.880,57" ou 3+ dígitos — nunca "s25" nem "dia 10".
   const said = text.match(/(?<![\w.,])(\d{1,3}(?:\.\d{3})*,\d{2}|\d{3,}(?:[.,]\d{2})?)(?![\w])/);
