@@ -329,3 +329,16 @@ test("item de nota: bala e drops são Besteira, como o chocolate (13/11)", () =>
   assert.equal(normalizeItemCategory({ name: "MENTOS STI", category: "Mercearia" }), "Besteira");
   assert.equal(normalizeItemCategory({ name: "BALANCA DE COZINHA", category: "Mercearia" }), "Mercearia"); // "bala" só palavra inteira
 });
+
+test("manual: divergência do manual sobre página que veio na busca vai junto", async () => {
+  const { buscarManuais } = await import("../src/lib/busca-manuais");
+  const t = (id: string, tipo: string, paginas: number[], texto: string) => ({ id, nota: "n", manual: "M", arquivo: "a.pdf", tipo, paginas, titulo: id, texto }) as never;
+  const base = [
+    t("p4", "pagina", [4], "tabela de horario do plantao civel sabado domingo"),
+    t("p9", "pagina", [9], "horario do plantao criminal"),
+    t("inc4", "incerto", [4], "a tabela mostra dois horarios para o sabado"),
+    t("inc9", "incerto", [20], "remessa a instancia superior sabado"),
+  ];
+  const ids = buscarManuais("horario do plantao civel no sabado", base, 1).map((a) => a.trecho.id);
+  assert.deepEqual(ids, ["p4", "inc4"]);
+});

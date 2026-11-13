@@ -80,6 +80,8 @@ const SINONIMOS: [RegExp, string][] = [
   [/\bdelegado\b|\bdelegacia\b|\bpolicia\b/, " autoridade policial delegacia policia civil "],
   [/\bperfil\b|\bpapel\b/, " perfil perfis papel "],
   [/\boficial de justica\b/, " mandado ceman central mandados "],
+  // O manual escreve "MP"; o usuário, "ministério público" ou "promotor" (13/11).
+  [/\bministerio publico\b|\bpromotor/, " mp "],
 ];
 
 export function termos(s: string, expandir = false): string[] {
@@ -155,7 +157,11 @@ export function buscarManuais(pergunta: string, trechos: Trecho[], k = 6): Achad
     if (s > 0) res.push({ trecho: d.trecho, pontos: s * PESO_TIPO[d.trecho.tipo] });
   }
   res.sort((x, y) => y.pontos - x.pontos);
-  return res.slice(0, k);
+  const top = res.slice(0, k);
+  // Divergência do manual sobre uma página que veio na busca vai junto, senão a IA afirma as duas versões como certas (13/11).
+  const mesmaPagina = (t: Trecho) => top.some((a) => a.trecho.arquivo === t.arquivo && a.trecho.paginas.some((p) => t.paginas.includes(p)));
+  const incertos = res.filter((a) => a.trecho.tipo === "incerto" && !top.includes(a) && mesmaPagina(a.trecho)).slice(0, 2);
+  return [...top, ...incertos];
 }
 
 /** Monta o bloco de contexto para a IA: cada trecho com manual, arquivo e páginas. */
