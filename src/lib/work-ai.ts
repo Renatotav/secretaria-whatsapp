@@ -268,7 +268,9 @@ export async function runWorkSkill(
   const model = teste?.model || (inteligente ? config.workAiModelSmart : config.workAiModel) || "anthropic/claude-sonnet-5.5";
   // Os rápidos sem "pensar" (o raciocínio é cobrado como resposta e não mudou o resultado no teste).
   const raciocinio = teste?.reasoning ?? (inteligente ? 4000 : 0);
-  const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1" });
+  // Tempo limite (13/11): sem ele, um provedor travado deixava o botão da extensão girando por minutos.
+  // Redmine/registro "pensam" antes de responder, por isso têm mais tempo.
+  const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1", timeout: inteligente ? 180_000 : 60_000, maxRetries: 1 });
   let raciocinioForcado = 0;
   const pedir = (extra = "") => client.chat.completions.create({
     model,

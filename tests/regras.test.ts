@@ -429,3 +429,10 @@ test("manual: mapa de tarefas vai para a IA sem página própria; 'escala' sai d
   assert.doesNotMatch(r, /escala/);
   assert.match(r, /1\. Confira a classe\./);
 });
+
+test("busca nos manuais: jeito do usuário falar (vários de uma vez, defensoria, dois lugares) (13/11)", async () => {
+  const { termos } = await import("../src/lib/busca-manuais");
+  assert.ok(termos("como fazer varias minutas de uma vez", true).includes("lote"));
+  assert.ok(termos("intimar defensoria no plantão", true).includes("dp"));
+  assert.ok(termos("pq o processo ta em 2 lugares?", true).some((w) => w.startsWith("aguar")));
+});

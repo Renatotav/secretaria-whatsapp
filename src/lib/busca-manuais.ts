@@ -87,6 +87,10 @@ const SINONIMOS: [RegExp, string][] = [
   [/\bnao (consigo|consegue|conseguem|da para|deixa) (movimentar|mexer|tramitar|andar)\b/, " preso aguardar retorno plantao movimentar "],
   // "mandar para o plantão do 2º grau" = remessa por declínio de competência (13/11).
   [/\bplantao do (2|segundo)\s*(o\s*)?grau\b|\bdeclin/, " remeter plantao 2 grau declinio competencia "],
+  // Revisão de sábado (13/11): jeito do usuário falar.
+  [/\b(dois|2) lugares\b|\bao mesmo tempo\b|\bduas tarefas\b|\bduplicad/, " mesmo tempo aguardar retorno plantao triagem inicial copia "],
+  [/\bvarias\b|\bvarios\b|\bde uma vez\b|\bem massa\b|\bem bloco\b/, " lote "],
+  [/\bdefensoria\b|\bdefensor\b/, " dp intimar a dp "],
 ];
 
 export function termos(s: string, expandir = false): string[] {
