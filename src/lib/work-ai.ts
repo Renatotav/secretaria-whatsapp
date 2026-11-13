@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { prisma } from "./prisma";
 import { promptAtivo } from "./prompts";
+import { prepararPerguntaManual } from "./manuais-plantao";
 import { normalizeTicketId } from "./work-privacy";
 import { conferirInicial, conferirFinal } from "./cnj-check";
 import { choose } from "./jev";
@@ -28,6 +29,7 @@ export const WORK_SKILLS: Record<string, string> = {
   corrigir: "Corrigir texto",
   "corrigir-whatsapp": "Corrigir mensagem",
   escrever: "Melhorar a escrita",
+  manual: "📘 Manual do plantão",
   // Sem botão próprio: usada pelo "📋 Linha p/ planilha"/"✅ Encerrar" quando a resolução está vazia.
   planilha: "Preencher planilha",
 };
@@ -78,6 +80,34 @@ const FALLBACK: Record<string, string> = {
 
 const MAX_TEXT = 20_000;
 
+/**
+ * Skill "manual": dúvida de atendimento do plantão respondida só com os trechos dos manuais
+ * (busca no servidor, sem IA; a IA só redige). O texto chega mascarado e não é guardado.
+ */
+async function manualDoPlantao(pergunta: string, modelo?: string): Promise<WorkAiResult> {
+  if (!pergunta) throw new Error("Selecione ou cole a pergunta do usuário primeiro.");
+  const p = await prepararPerguntaManual(pergunta);
+  if (!p.temBase) return { skill: "manual", text: "📘 Não achei nada sobre isso nos manuais de plantão.", model: "busca", tokens: { input: 0, output: 0 } };
+  const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true } });
+  if (!config?.openrouterApiKey) throw new Error("A secretária está sem chave do OpenRouter (Configurações).");
+  const model = modelo || config.workAiModel || "anthropic/claude-sonnet-5.5";
+  const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1" });
+  const pedir = (raciocinio: number) =>
+    client.chat.completions.create({
+      model,
+      max_tokens: 900 + raciocinio,
+      ...({ reasoning: raciocinio ? { max_tokens: raciocinio } : { enabled: false } } as object),
+      ...(SO_ZDR as object),
+      messages: [{ role: "system", content: p.system }, { role: "user", content: p.user }],
+    });
+  // Modelo que exige raciocínio: tenta de novo com um pouco (igual às outras skills).
+  const r = await pedir(0).catch((err) => (/reasoning is mandatory/i.test(String(err?.message)) ? pedir(1024) : Promise.reject(err)));
+  const text = r.choices[0]?.message?.content?.trim() || "";
+  if (!text) throw new Error("A IA não devolveu texto. Tente de novo.");
+  console.log(`[trabalho] manual: ${p.fontes.length} trechos, ${r.usage?.prompt_tokens ?? 0}+${r.usage?.completion_tokens ?? 0} tokens`);
+  return { skill: "manual", text, model, tokens: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 } };
+}
+
 // Para o "✨ Automático": o Jev escolhe a skill pelo tipo de texto.
 const SKILL_CRITERIA: Record<string, string> = {
   redmine: "um CHAMADO técnico para formalizar e abrir no Redmine (relato de erro com processos, testes realizados, itens 1/2/3)",
@@ -85,6 +115,7 @@ const SKILL_CRITERIA: Record<string, string> = {
   resumo: "a descrição de um chamado para entender qual é o erro e o próximo passo",
   corrigir: "um texto solto do tribunal (e-mail, resposta ao usuário, despacho, nota) que só precisa de correção de português",
   "corrigir-whatsapp": "uma mensagem curta e informal que ele vai mandar no WhatsApp e só precisa de correção de português",
+  manual: "uma DÚVIDA de usuário sobre o Plantão Judiciário do PJe (tarefa, transição, processo preso, remessa, órgão de origem, declínio, mandado, audiência, petição no plantão) para responder com os manuais",
 };
 
 export interface WorkAiResult {
@@ -128,6 +159,7 @@ export async function runWorkSkill(
     // Para a planilha a IA não precisa de CPF/telefone/e-mail.
     input = maskPersonalData(input);
   }
+  if (key === "manual") return manualDoPlantao(maskPersonalData(input), teste?.model);
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
   // Corretores e "melhorar a escrita": a IA não vê CPF/telefone/e-mail
   // (viram ⟦1⟧…) e eles voltam idênticos no texto final.

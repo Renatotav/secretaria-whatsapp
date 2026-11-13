@@ -288,3 +288,16 @@ test("ODO lido no vídeo: primeiro dígito perdido e o P grudado", () => {
   assert.equal(corrigeOdo(43, 2000).odo, 43); // nenhum dígito cabe: não inventa (a leitura é recusada)
   assert.equal(corrigeOdo(5, 138).odo, 5); // 15..95, todos abaixo do último: não inventa
 });
+
+test("busca nos manuais: acha o trecho certo, sem acento e com sinônimo do atendimento", async () => {
+  const { buscarManuais } = await import("../src/lib/busca-manuais");
+  const t = (id: string, titulo: string, texto: string) => ({ id, nota: "n", manual: "Manual X – 1º Grau", arquivo: "x.pdf", tipo: "pagina" as const, paginas: [1], titulo, texto });
+  const trechos = [
+    t("a", "Remessa ao órgão de origem", "Para devolver o processo use Remeter ao órgão de origem."),
+    t("b", "Horário do plantão", "O plantão funciona nos fins de semana e feriados."),
+    t("c", "Auto de prisão em flagrante", "O APF começa em certificar antecedentes."),
+  ];
+  assert.equal(buscarManuais("como devolver o processo pra vara de origem?", trechos)[0].trecho.id, "a");
+  assert.equal(buscarManuais("o flagrante foi pra onde", trechos)[0].trecho.id, "c");
+  assert.equal(buscarManuais("xyz qwerty", trechos).length, 0);
+});

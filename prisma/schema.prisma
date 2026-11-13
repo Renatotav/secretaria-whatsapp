@@ -563,3 +563,19 @@ model Prompt {
 
   @@unique([name, version])
 }
+
+/// Trechos dos manuais do trabalho (ex.: plantão do PJe) para a skill "manual". Ficam só no
+/// banco, nunca no repositório público; carregados do pacote privado do servidor.
+model ManualTrecho {
+  id      String @id
+  base    String @default("plantao")
+  nota    String
+  manual  String
+  arquivo String
+  tipo    String
+  paginas Int[]
+  titulo  String
+  texto   String
+
+  @@index([base])
+}
