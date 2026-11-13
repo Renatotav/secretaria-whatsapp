@@ -322,3 +322,10 @@ test("print do PJe: só tarefa, erro e perfil; nome, login e processo nunca entr
   assert.ok(!/Token/.test(r));
   assert.equal(resumoPrintPJe("continua no erro: 12:51"), ""); // legenda do WhatsApp não é mensagem da tela
 });
+
+test("item de nota: bala e drops são Besteira, como o chocolate (13/11)", () => {
+  assert.equal(normalizeItemCategory({ name: "DC HERBISS", category: "Mercearia" }), "Besteira");
+  assert.equal(normalizeItemCategory({ name: "BALA FINI 90G", category: "Mercearia" }), "Besteira");
+  assert.equal(normalizeItemCategory({ name: "MENTOS STI", category: "Mercearia" }), "Besteira");
+  assert.equal(normalizeItemCategory({ name: "BALANCA DE COZINHA", category: "Mercearia" }), "Mercearia"); // "bala" só palavra inteira
+});

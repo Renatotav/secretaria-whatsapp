@@ -86,7 +86,7 @@ export function merchantKey(description: string): string {
 export function isBesteiraItem(i: { name: string; category: string }): boolean {
   const n = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (/besteira|(?<!nao )alcoolic|cervej|destilad|vinho|salgadinh|petisco|biscoito|bolacha|chocolate|\bdoces?\b|sorvete|snack/.test(n(i.category))) return true;
-  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|pippos|salgadinho|\bbisc\b|biscoito|bolacha|cookie|wafer|piraque|club social|chocolate|bombom|sorvete|picole/.test(n(i.name));
+  return /\b(cerv|cerveja|heineken|brahma|skol|budweiser|amstel|stella|corona|spaten|eisenbahn|vinho|vodka|whisky|whiskey|cachaca|gin|licor|espumante)\b|chips|doritos|ruffles|pringles|cheetos|fandangos|pippos|salgadinho|\bbisc\b|biscoito|bolacha|cookie|wafer|piraque|club social|chocolate|bombom|sorvete|picole|\bbalas?\b|drops|mentos|halls|herbiss|trident|chiclete|goma de mascar|jujuba|pirulito/.test(n(i.name)); // bala entrou em 13/11 (DC HERBISS foi para Mercearia)
 }
 
 /**
