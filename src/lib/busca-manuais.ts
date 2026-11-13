@@ -169,7 +169,10 @@ export function contextoParaIA(achados: Achado[]): string {
   return achados
     .map((a, i) => {
       const t = a.trecho;
-      const pags = t.paginas.length ? `pág. ${t.paginas.join(", ")}` : "sem página";
+      // O manual externo do 1º grau imprime "20 pág" no rodapé das págs. 20 a 23 do PDF (conferido nos PDFs em 13/11).
+      const pag = (p: number) =>
+        t.nota === "Plantao-1G-Usuarios-Externos_2026-08" && p >= 21 && p <= 23 ? `${p} do PDF (no rodapé impresso aparece "20")` : String(p);
+      const pags = t.paginas.length ? `pág. ${t.paginas.map(pag).join(", ")}` : "sem página";
       return `[${i + 1}] ${t.manual} — arquivo ${t.arquivo} — ${pags} — ${t.tipo}: ${t.titulo}\n${t.texto}`;
     })
     .join("\n\n---\n\n");

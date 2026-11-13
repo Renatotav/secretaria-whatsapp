@@ -342,3 +342,11 @@ test("manual: divergência do manual sobre página que veio na busca vai junto",
   const ids = buscarManuais("horario do plantao civel no sabado", base, 1).map((a) => a.trecho.id);
   assert.deepEqual(ids, ["p4", "inc4"]);
 });
+
+test("manual: págs. 21 a 23 do manual externo 1G avisam que o rodapé impresso diz 20", async () => {
+  const { contextoParaIA } = await import("../src/lib/busca-manuais");
+  const t = (nota: string, paginas: number[]) => ({ trecho: { id: "x", nota, manual: "M", arquivo: "a.pdf", tipo: "pagina", paginas, titulo: "T", texto: "..." }, pontos: 1 }) as never;
+  const ctx = contextoParaIA([t("Plantao-1G-Usuarios-Externos_2026-08", [20, 21]), t("Plantao-2G-Usuarios-Externos_2026-08", [21])]);
+  assert.match(ctx, /pág\. 20, 21 do PDF \(no rodapé impresso aparece "20"\)/);
+  assert.match(ctx, /pág\. 21 —/);
+});
