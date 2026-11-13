@@ -177,7 +177,11 @@ export function contextoParaIA(achados: Achado[]): string {
       // O manual externo do 1º grau imprime "20 pág" no rodapé das págs. 20 a 23 do PDF (conferido nos PDFs em 13/11).
       const pag = (p: number) =>
         t.nota === "Plantao-1G-Usuarios-Externos_2026-08" && p >= 21 && p <= 23 ? `${p} do PDF (no rodapé impresso aparece "20")` : String(p);
-      const pags = t.paginas.length ? `pág. ${t.paginas.map(pag).join(", ")}` : "sem página";
+      // Mapa de tarefas é resumo dos 5 manuais: as páginas dele são de manuais diferentes (ver "Onde ver" no texto) (13/11).
+      const pags =
+        t.tipo === "tarefa"
+          ? "resumo sem página própria (cite os manuais e páginas do 'Onde ver')"
+          : t.paginas.length ? `pág. ${t.paginas.map(pag).join(", ")}` : "sem página";
       return `[${i + 1}] ${t.manual} — arquivo ${t.arquivo} — ${pags} — ${t.tipo}: ${t.titulo}\n${t.texto}`;
     })
     .join("\n\n---\n\n");

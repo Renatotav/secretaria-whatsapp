@@ -37,7 +37,7 @@ Formato (texto para WhatsApp: *negrito* com asterisco, sem # e sem tabelas), no 
 ✅ *O que fazer*
 Passos numerados, com o nome exato da tarefa e da opção da seta de transição entre aspas. Se os manuais não falam disso: diga o que eles trazem de mais próximo ou, se couber, o canal dos links úteis (ex.: CAJ); nunca "vou verificar" aqui. Nunca indique o Suporte Operacional do PJe, o balcão virtual de suporte do PJe, a CATI/Catinet ou abrir chamado, mesmo que estejam nos links úteis: é o próprio atendente.
 📘 *Onde está no manual*
-Manual, página e elemento (texto, tela, quadro ou fluxograma). Ex.: Manual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 34, quadro "ATENÇÃO!". Cite também a página da regra ou da lista que mandou conferir (ex.: mandou conferir a classe → manual e página da lista de classes atendidas no plantão). Se o trecho traz a página como "pág. N do PDF (no rodapé impresso aparece "20")", repita esse aviso ao citar a página.
+Manual, página e elemento (texto, tela, quadro ou fluxograma). Ex.: Manual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 34, quadro "ATENÇÃO!". Cite também a página da regra ou da lista que mandou conferir (ex.: mandou conferir a classe → manual e página da lista de classes atendidas no plantão). O "Mapa de tarefas do Plantão" é um resumo, não um manual: nunca o cite em "Onde está no manual"; cite o manual e a página que aparecem no "Onde ver" do trecho. Se o trecho traz a página como "pág. N do PDF (no rodapé impresso aparece "20")", repita esse aviso ao citar a página.
 ⚠️ Só entra se um trecho for "ponto incerto" do mesmo assunto e do mesmo grau da pergunta (se a pergunta não diz o grau, divergência de um grau só não entra): uma linha dizendo que o próprio manual se contradiz ali (as duas versões). As duas versões não viram regra: nem no "O que fazer" nem na resposta pronta (ex.: dois horários para o mesmo dia não são "dois turnos").
 💬 *Resposta pronta para o usuário*
 2 a 4 linhas educadas, em português simples, para colar no WhatsApp do usuário: sempre em primeira pessoa (eu), como se fosse o próprio atendente falando; nunca citar "Renato" nem falar do atendente em terceira pessoa; sem citar "trecho" nem "IA". Numa divergência do manual, diz que vai confirmar e retorna. Se os manuais respondem a pergunta, mesmo em parte, a resposta pronta diz a conclusão em primeira pessoa (ex.: "Às 19h de sexta o aviso deveria aparecer. Pode me confirmar a classe que você escolheu?"). Só quando os manuais não falam do assunto ela é apenas "Vou verificar, um momento, por favor.", sem canal, link ou telefone.
@@ -123,7 +123,7 @@ export function limparRespostaManual(texto: string, pergunta?: string): string {
   // 3) "O que fazer" sem "vou verificar", instabilidade, cache ou navegador.
   const [fi, fj] = secao(linhas, "✅");
   if (fi >= 0) {
-    const proibida = /vou verificar|instabilidade|cache|navegador/i;
+    const proibida = /vou verificar|instabilidade|cache|navegador|escala/i;
     let n = 0;
     const corpo = linhas.slice(fi + 1, fj).flatMap((l) => {
       const item = l.match(/^(\s*)(\d+)\.\s+/);

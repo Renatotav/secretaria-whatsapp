@@ -417,3 +417,15 @@ test("manual: linha fixa de Fortaleza × interior só em pergunta de alerta, pro
   assert.match(limparRespostaManual(resp, "o usuário protocolou sexta às 19h e o aviso não apareceu"), /todas as comarcas/);
   assert.match(limparRespostaManual(resp), /todas as comarcas/); // sem pergunta: não mexe
 });
+
+test("manual: mapa de tarefas vai para a IA sem página própria; 'escala' sai do 'O que fazer' (13/11)", async () => {
+  const { contextoParaIA } = await import("../src/lib/busca-manuais");
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const mapa = { trecho: { id: "m", nota: "Plantao-Mapa-de-Tarefas_2026-08", manual: "Mapa de tarefas do Plantão", arquivo: "", tipo: "tarefa", paginas: [5, 20, 34], titulo: "T", texto: "..." }, pontos: 1 } as never;
+  const ctx = contextoParaIA([mapa]);
+  assert.match(ctx, /resumo sem página própria/);
+  assert.doesNotMatch(ctx, /pág\. 5, 20, 34/);
+  const r = limparRespostaManual("✅ *O que fazer*\n1. Confira a classe.\n2. Veja a escala disponível no sistema.\n\n💬 *Resposta pronta para o usuário*\nOk.");
+  assert.doesNotMatch(r, /escala/);
+  assert.match(r, /1\. Confira a classe\./);
+});
