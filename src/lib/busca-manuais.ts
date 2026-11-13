@@ -70,6 +70,7 @@ const SINONIMOS: [RegExp, string][] = [
   [/\bmpu\b|maria da penha/, " medidas protetivas urgencia "],
   [/\bpeticao inicial\b|\bprocesso novo\b|\bnovo processo\b|\bprotocol(ar|ei|ou|o)\b/, " protocolar inicial novo processo atendimento plantao judiciario flag "],
   [/\bpeticion(ar|ei|ou|ando)\b|\bpeticao\b/, " peticao protocolo "],
+  [/\bprocesso (ja )?existente\b|\bpeticao intermediaria\b|\bpeticionou\b/, " peticao intermediaria analisar peticao "],
   [/\badvogad|\bpeticionante\b|\busuario externo\b/, " usuarios externos peticionante "],
   [/\bmarcar\b|\bmarquei\b|\bselecionar\b|\bopcao\b/, " flag opcao selecionar "],
   [/\bvara de origem\b|\bunidade de origem\b|\bjuizo de origem\b/, " orgao origem orgao julgador "],
