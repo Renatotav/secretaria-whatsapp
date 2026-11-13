@@ -136,7 +136,8 @@ export function limparRespostaManual(texto: string, pergunta?: string, temIncert
   // 3) "O que fazer" sem "vou verificar", instabilidade, cache ou navegador.
   const [fi, fj] = secao(linhas, "✅");
   if (fi >= 0) {
-    const proibida = /vou verificar|instabilidade|cache|navegador|escala/i;
+    // Conselho genérico que não está nos manuais (visto nas respostas de 13/11): sai do "O que fazer".
+    const proibida = /vou verificar|instabilidade|cache|navegador|escala|entre em contato|contato com a unidade|normas (de procedimento )?intern[oa]s?|legisla[cç][aã]o vigente/i;
     let n = 0;
     const corpo = linhas.slice(fi + 1, fj).flatMap((l) => {
       const item = l.match(/^(\s*)(\d+)\.\s+/);

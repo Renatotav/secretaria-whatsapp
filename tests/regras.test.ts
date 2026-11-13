@@ -449,3 +449,17 @@ test("manual: sem ponto incerto nos trechos, ⚠️ de divergência sai; título
   const fixa = "🧭 *O que aconteceu*\nX.\n\n⚠️ O alerta de sexta vale para todas as comarcas. Fortaleza: a.\n\n💬 *Resposta pronta para o usuário*\nOk.";
   assert.match(limparRespostaManual(fixa, "protocolei sexta às 19h", false), /todas as comarcas/);
 });
+
+test("busca nos manuais: 'plantão do 2º grau' só vira declínio quando é mandar para lá (13/11)", async () => {
+  const { termos } = await import("../src/lib/busca-manuais");
+  assert.ok(termos("juiz quer mandar o processo para o plantão do segundo grau", true).includes("decli"));
+  assert.ok(!termos("remeti por engano no plantão do 2º grau, como desfaço?", true).includes("decli"));
+  assert.ok(!termos("o processo no plantão do 2º grau foi para o gabinete de origem mas ninguém recebeu", true).includes("decli"));
+});
+
+test("manual: 'O que fazer' sem conselho genérico de fora dos manuais (13/11)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const r = limparRespostaManual("✅ *O que fazer*\n1. Confira a classe na pág. 3.\n2. Se for urgente, entre em contato com a unidade judiciária responsável.\n3. Consulte as normas de procedimento interno da secretaria.\n4. Veja a legislação vigente.\n\n💬 *Resposta pronta para o usuário*\nOk.");
+  assert.match(r, /✅ \*O que fazer\*\n1\. Confira a classe na pág\. 3\.\n\n💬/);
+});
+

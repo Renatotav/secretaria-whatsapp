@@ -86,7 +86,8 @@ const SINONIMOS: [RegExp, string][] = [
   // "a vara não consegue movimentar" = processo esperando o plantão devolver (13/11).
   [/\bnao (consigo|consegue|conseguem|da para|deixa) (movimentar|mexer|tramitar|andar)\b/, " preso aguardar retorno plantao movimentar "],
   // "mandar para o plantão do 2º grau" = remessa por declínio de competência (13/11).
-  [/\bplantao do (2|segundo)\s*(o\s*)?grau\b|\bdeclin/, " remeter plantao 2 grau declinio competencia "],
+  // Só quando é MANDAR para o plantão do 2º grau: "remeti por engano no plantão do 2º grau" não é declínio (13/11).
+  [/\b(mandar|manda|remeter|remeto|enviar|envio|encaminhar|subir)\b[^.?!]{0,40}\bplantao do (2|segundo)\s*(o\s*)?grau\b|\bdeclin/, " remeter plantao 2 grau declinio competencia "],
   // Revisão de sábado (13/11): jeito do usuário falar.
   [/\b(dois|2) lugares\b|\bao mesmo tempo\b|\bduas tarefas\b|\bduplicad/, " mesmo tempo aguardar retorno plantao triagem inicial copia "],
   [/\bvarias\b|\bvarios\b|\bde uma vez\b|\bem massa\b|\bem bloco\b/, " lote "],
