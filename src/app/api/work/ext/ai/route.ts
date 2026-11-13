@@ -9,7 +9,10 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const key = String(body?.skill || "");
   try {
-    const r = await runWorkSkill(key, String(body?.text || ""), body?.ticketId ? String(body.ticketId) : undefined, body?.plain === true);
+    // Print da tela (data URL) só para o Manual do plantão; até ~6 MB.
+    const m = typeof body?.imagem === "string" ? body.imagem.match(/^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)$/) : null;
+    const imagem = m && m[1].length < 8_000_000 ? Buffer.from(m[1], "base64") : undefined;
+    const r = await runWorkSkill(key, String(body?.text || ""), body?.ticketId ? String(body.ticketId) : undefined, body?.plain === true, undefined, key === "manual" ? imagem : undefined);
     // Conta qual botão de IA foi usado (só o nome da skill).
     import("@/lib/work-usage").then(({ addUsage }) => addUsage({ [`ia:${key}${r.skill !== key ? `→${r.skill}` : ""}`]: 1 })).catch(() => {});
     console.log(`[trabalho] IA ${key}: ${r.model} · ${r.tokens.input}+${r.tokens.output} tokens`);

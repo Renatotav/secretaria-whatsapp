@@ -301,3 +301,24 @@ test("busca nos manuais: acha o trecho certo, sem acento e com sinônimo do aten
   assert.equal(buscarManuais("o flagrante foi pra onde", trechos)[0].trecho.id, "c");
   assert.equal(buscarManuais("xyz qwerty", trechos).length, 0);
 });
+
+test("print do PJe: só tarefa, erro e perfil; nome, login e processo nunca entram", async () => {
+  const { resumoPrintPJe } = await import("../src/lib/work-ocr");
+  const ocr = [
+    "Invent 1234567-89.2020.8.06.0001 - [Sec] - Certidão - ASSINAR CERTIDÃO DE DECURSO DE PRAZO",
+    "FULANA DE TAL X CICRANO DA SILVA",
+    "Data/Hora: 29-10-2026 | Login: 12345678909 | Nome do usuario: FULANA EXEMPLO",
+    "Perfil: Diretor de Secretaria | Falha na movimentação do processo, favor entrar em contato com o atendimento ao usuário!",
+    "[397] varupdate[${pje:fluxo:tarefa:validacao}=T] on Token(/)",
+    "[403] task-assign[12345678909, TaskInstance([Sec] - Certidão - ASSINAR CERTIDÃO DE DECURSO DE PRAZO)] on Token(/)",
+  ].join("\n");
+  const r = resumoPrintPJe(ocr);
+  assert.match(r, /ASSINAR CERTIDÃO DE DECURSO DE PRAZO/);
+  assert.match(r, /Falha na movimentação do processo/);
+  assert.match(r, /Perfil: Diretor de Secretaria/);
+  for (const proibido of ["FULANA", "CICRANO", "12345678909", "1234567-89"]) assert.ok(!r.includes(proibido), proibido);
+  assert.equal(resumoPrintPJe("foto de um gato no sofá"), "");
+  assert.equal((r.match(/ASSINAR CERTIDÃO DE DECURSO DE PRAZO/g) || []).length, 1); // sem repetir a mesma tarefa
+  assert.ok(!/Token/.test(r));
+  assert.equal(resumoPrintPJe("continua no erro: 12:51"), ""); // legenda do WhatsApp não é mensagem da tela
+});

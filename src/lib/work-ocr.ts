@@ -62,3 +62,27 @@ export function summarizeAssystPrint(text: string): string {
   const parts = [servico && `Serviço: ${servico}`, categoria && `Categoria: ${categoria}`, firstSentence && `Descrição: ${firstSentence}`].filter(Boolean);
   return maskPersonalData(parts.join("\n"));
 }
+
+/**
+ * Print de tela do PJe (o usuário manda junto da dúvida): só o que serve para entender o caso —
+ * tarefa(s) do fluxo, mensagem de erro e perfil. Nome, login, partes e nº de processo ficam de fora
+ * (nunca entram no resultado, nem mascarados). Vazio = o print não parece tela do PJe.
+ */
+export function resumoPrintPJe(text: string): string {
+  const t = text.replace(/[|]/g, "\n").replace(CNJ, " ").replace(/\b\d{11}\b/g, " ");
+  // Nome de tarefa "[Sec] - Certidão - ASSINAR …": o OCR às vezes come o "[" e cola ")] on Token(/)" no fim.
+  const tarefas = new Map<string, string>();
+  for (const m of t.matchAll(/\[?\b(Sec|SEC|Gab|GAB|Dir|DIR|Plant[aã]o|Ger|GER)\]\s*-\s*([^\n)\]]{4,120})/g)) {
+    const nome = `[${m[1]}] - ${m[2].replace(/\s+/g, " ").replace(/\s*(on Token.*)?$/, "").trim()}`;
+    tarefas.set(nome.toLowerCase(), nome);
+  }
+  const erros = [...new Set(t.split("\n").map((l) => l.trim()).filter((l) => /falha|erro (ao|na|no|de|inesperado)|n[aã]o foi poss[ií]vel|n[aã]o [eé] poss[ií]vel|exception|existem tarefas/i.test(l) && !/^\+?\s*\[\d+\]/.test(l)))]
+    .map((l) => l.replace(/^.*?(Falha|Erro|N[aã]o foi|N[aã]o [eé]|Existem|Exception)/i, "$1").slice(0, 200));
+  const perfil = t.match(/Perfil:?\s*([^\n]{4,160})/i)?.[1].trim();
+  const partes = [
+    tarefas.size ? `Tarefa(s) na tela: ${[...tarefas.values()].slice(0, 4).join("; ")}` : "",
+    erros.length ? `Mensagem na tela: ${erros.slice(0, 2).join(" / ")}` : "",
+    perfil ? `Perfil: ${perfil}` : "",
+  ].filter(Boolean);
+  return maskPersonalData(partes.join("\n"));
+}

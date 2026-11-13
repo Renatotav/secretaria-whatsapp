@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { prisma } from "./prisma";
 import { promptAtivo } from "./prompts";
 import { prepararPerguntaManual } from "./manuais-plantao";
+import { readImageText, resumoPrintPJe } from "./work-ocr";
 import { normalizeTicketId } from "./work-privacy";
 import { conferirInicial, conferirFinal } from "./cnj-check";
 import { choose } from "./jev";
@@ -84,8 +85,16 @@ const MAX_TEXT = 20_000;
  * Skill "manual": dúvida de atendimento do plantão respondida só com os trechos dos manuais
  * (busca no servidor, sem IA; a IA só redige). O texto chega mascarado e não é guardado.
  */
-async function manualDoPlantao(pergunta: string, modelo?: string): Promise<WorkAiResult> {
-  if (!pergunta) throw new Error("Selecione ou cole a pergunta do usuário primeiro.");
+async function manualDoPlantao(pergunta: string, modelo?: string, imagem?: Buffer): Promise<WorkAiResult> {
+  // Print da tela que o usuário mandou: lido AQUI (OCR local, a imagem não vai para a IA); entra só tarefa, erro e perfil.
+  let aviso = "";
+  if (imagem) {
+    const [lido] = await readImageText([imagem]).catch(() => [""]);
+    const tela = resumoPrintPJe(lido || "");
+    if (tela) pergunta = `${pergunta}\n\nO que aparece no print que o usuário mandou:\n${tela}`.trim();
+    else aviso = "\n\n⚠️ Não consegui ler o print (miniatura pequena?). Abra a imagem em tela cheia no WhatsApp Web e toque de novo.";
+  }
+  if (!pergunta) throw new Error(imagem ? "Não consegui ler o print. Abra a imagem em tela cheia e tente de novo, ou cole a pergunta." : "Selecione ou cole a pergunta do usuário primeiro.");
   const p = await prepararPerguntaManual(pergunta);
   if (!p.temBase) return { skill: "manual", text: "📘 Não achei nada sobre isso nos manuais de plantão.", model: "busca", tokens: { input: 0, output: 0 } };
   const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true } });
@@ -105,7 +114,7 @@ async function manualDoPlantao(pergunta: string, modelo?: string): Promise<WorkA
   const text = r.choices[0]?.message?.content?.trim() || "";
   if (!text) throw new Error("A IA não devolveu texto. Tente de novo.");
   console.log(`[trabalho] manual: ${p.fontes.length} trechos, ${r.usage?.prompt_tokens ?? 0}+${r.usage?.completion_tokens ?? 0} tokens`);
-  return { skill: "manual", text, model, tokens: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 } };
+  return { skill: "manual", text: text + aviso, model, tokens: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 } };
 }
 
 // Para o "✨ Automático": o Jev escolhe a skill pelo tipo de texto.
@@ -141,7 +150,9 @@ export async function runWorkSkill(
   ticketRaw?: string,
   plain = false,
   /** Só para testes de modelo: troca o modelo e o limite de raciocínio desta chamada. */
-  teste?: { model?: string; reasoning?: number }
+  teste?: { model?: string; reasoning?: number },
+  /** Print da tela mandado junto (só a skill "manual" usa; lido com OCR local). */
+  imagem?: Buffer
 ): Promise<WorkAiResult> {
   if (!WORK_SKILLS[key]) throw new Error("Skill desconhecida");
   let input = (text || "").trim();
@@ -159,7 +170,7 @@ export async function runWorkSkill(
     // Para a planilha a IA não precisa de CPF/telefone/e-mail.
     input = maskPersonalData(input);
   }
-  if (key === "manual") return manualDoPlantao(maskPersonalData(input), teste?.model);
+  if (key === "manual") return manualDoPlantao(maskPersonalData(input), teste?.model, imagem);
   if (!input) throw new Error("Selecione ou cole o texto primeiro.");
   // Corretores e "melhorar a escrita": a IA não vê CPF/telefone/e-mail
   // (viram ⟦1⟧…) e eles voltam idênticos no texto final.
