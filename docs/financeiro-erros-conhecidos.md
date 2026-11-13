@@ -15,6 +15,7 @@ Erros que já aconteceram de verdade ao importar a fatura do cartão (PDF ou pri
 | 7 | Boleto lançado como cartão | Parcelas que "deveriam" estar na fatura e não estão | Trocar o meio de pagamento para boleto. Isso não é falta na fatura |
 | 8 | Fechamento antes do melhor dia configurado | Compra do dia 2 entrou na fatura e a do dia 3 não | Antes de mexer em `creditCardBestDay`, conferir em mais de uma fatura |
 | 9 | Cobrança por uso projetada como assinatura fixa | Serviço cobrado por recarga (créditos de IA) vira "(previsto)" em todos os meses seguintes | Perguntar ao dono se é mensal. Se não for, tirar as projeções |
+| 10 | "Paguei a fatura" deu baixa no cartão errado | O lembrete era do Santander (vence 15/11) e a baixa caiu no C6 de 10/12 (26 compras), que nem tinha vencido | "desfazer" (vale 1 h) e mandar de novo. Desde 13/11 (`escolherFatura`), sem cartão citado vale a fatura que vence primeiro; mesmo dia em dois cartões, ela pergunta |
 
 ## O que o código já faz (desde 08/11/2026)
 
