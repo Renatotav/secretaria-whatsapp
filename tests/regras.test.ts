@@ -436,3 +436,16 @@ test("busca nos manuais: jeito do usuário falar (vários de uma vez, defensoria
   assert.ok(termos("intimar defensoria no plantão", true).includes("dp"));
   assert.ok(termos("pq o processo ta em 2 lugares?", true).some((w) => w.startsWith("aguar")));
 });
+
+test("manual: sem ponto incerto nos trechos, ⚠️ de divergência sai; título 📘 trocado volta (13/11)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const resp = "🧭 *O que aconteceu*\nX.\n\n⚠️ O manual diverge sobre a lista.\ncontinua o aviso\n\n⚠️ *Onde está no manual*\n- Manual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 3.\n\n💬 *Resposta pronta para o usuário*\nOk.";
+  const r = limparRespostaManual(resp, "quais classes cíveis o plantão atende", false);
+  assert.doesNotMatch(r, /diverge|continua o aviso/);
+  assert.match(r, /📘 \*Onde está no manual\*\n- Manual de Plantão 1º Grau/);
+  // Com ponto incerto nos trechos, o aviso fica.
+  assert.match(limparRespostaManual(resp, "quais classes cíveis o plantão atende", true), /diverge/);
+  // A linha fixa de Fortaleza × interior não depende de ponto incerto.
+  const fixa = "🧭 *O que aconteceu*\nX.\n\n⚠️ O alerta de sexta vale para todas as comarcas. Fortaleza: a.\n\n💬 *Resposta pronta para o usuário*\nOk.";
+  assert.match(limparRespostaManual(fixa, "protocolei sexta às 19h", false), /todas as comarcas/);
+});

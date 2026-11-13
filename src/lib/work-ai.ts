@@ -119,7 +119,7 @@ async function manualDoPlantao(pergunta: string, modelo?: string, imagem?: Buffe
     model = RESERVA;
     return tentar(RESERVA);
   });
-  const text = limparRespostaManual(r.choices[0]?.message?.content?.trim() || "", pergunta);
+  const text = limparRespostaManual(r.choices[0]?.message?.content?.trim() || "", pergunta, p.temIncerto);
   if (!text) throw new Error("A IA não devolveu texto. Tente de novo.");
   console.log(`[trabalho] manual: ${p.fontes.length} trechos, ${r.usage?.prompt_tokens ?? 0}+${r.usage?.completion_tokens ?? 0} tokens`);
   return { skill: "manual", text: text + aviso, model, tokens: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 } };
@@ -132,7 +132,7 @@ const SKILL_CRITERIA: Record<string, string> = {
   resumo: "a descrição de um chamado para entender qual é o erro e o próximo passo",
   corrigir: "um texto solto do tribunal (e-mail, resposta ao usuário, despacho, nota) que só precisa de correção de português",
   "corrigir-whatsapp": "uma mensagem curta e informal que ele vai mandar no WhatsApp e só precisa de correção de português",
-  manual: "uma DÚVIDA de usuário sobre o Plantão Judiciário do PJe (tarefa, transição, processo preso, remessa, órgão de origem, declínio, mandado, audiência, petição no plantão) para responder com os manuais",
+  manual: "uma DÚVIDA de usuário sobre o Plantão Judiciário do PJe (tarefa, transição, processo preso, remessa, órgão de origem, declínio, mandado, audiência, petição no plantão, aviso/alerta de plantão no protocolo, horário do plantão, flagrante, custódia, medida protetiva) para responder com os manuais",
 };
 
 export interface WorkAiResult {

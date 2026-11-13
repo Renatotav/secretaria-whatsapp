@@ -53,6 +53,7 @@ export async function prepararPerguntaManual(pergunta: string, k = 6) {
     temBase: achados.length > 0,
     system: SYSTEM_MANUAL,
     user,
+    temIncerto: achados.some((a) => a.trecho.tipo === "incerto"),
     fontes: achados.map((a) => ({ manual: a.trecho.manual, arquivo: a.trecho.arquivo, paginas: a.trecho.paginas, titulo: a.trecho.titulo })),
   };
 }
@@ -80,8 +81,19 @@ function secao(linhas: string[], emoji: string): [number, number] {
 // A linha fixa de Fortaleza × interior só faz sentido em pergunta de alerta, protocolo ou horário (13/11).
 const SOBRE_ALERTA = /alerta|aviso|pop.?up|protocol|sexta|v[ée]spera|interior|comarca|feriado|hor[áa]rio|\b\d{1,2}\s*h\b/i;
 
-export function limparRespostaManual(texto: string, pergunta?: string): string {
-  let linhas = texto.split("\n");
+export function limparRespostaManual(texto: string, pergunta?: string, temIncerto = true): string {
+  // O modelo às vezes troca o ícone do título: "⚠️ *Onde está no manual*" (13/11).
+  let linhas = texto.split("\n").map((l) => l.replace(/^\s*⚠️\s*(\*?Onde está no manual)/i, "📘 $1"));
+
+  // Sem nenhum "ponto incerto" entre os trechos enviados, um ⚠️ de divergência foi inventado: sai (fica só a linha fixa) (13/11).
+  if (!temIncerto)
+    linhas = linhas.filter((l, i, a) => {
+      const aviso = (k: number) => a[k].trim().startsWith("⚠️") && !/vale para todas as comarcas/i.test(a[k]);
+      if (aviso(i)) return false;
+      // continuação do aviso nas linhas de baixo, até a linha em branco
+      for (let k = i - 1; k >= 0 && a[k].trim() && !(ehSecao(a[k]) && !aviso(k)); k--) if (aviso(k)) return false;
+      return true;
+    });
 
   // 0) Linha fixa de Fortaleza × interior em pergunta que não é de alerta/protocolo/horário: sai.
   if (pergunta !== undefined && !SOBRE_ALERTA.test(pergunta)) {
