@@ -1039,13 +1039,14 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
         if (route.financeType === "expense" && response) {
           const mDate = route.date ? parseLocalDate(route.date) : todayBRT();
           const { items } = await budgetStatus(mDate.getFullYear(), mDate.getMonth());
+          const mesTeto = MONTHS_PT[mDate.getMonth()]; // no cartão é o mês da fatura: dito, para não parecer contradizer o "Seu dia"
           const b = items.find((x) => x.category === route.category);
           if (b) {
             const percent = (b.spent / b.limit) * 100;
             if (percent >= 100) {
-              response += `\n\n🔴 *Teto de ${b.category} estourado:* ${brl(b.spent)} de ${brl(b.limit)} (passou ${brl(b.spent - b.limit)}).`;
+              response += `\n\n🔴 *Teto de ${b.category} estourado em ${mesTeto}:* ${brl(b.spent)} de ${brl(b.limit)} (passou ${brl(b.spent - b.limit)}).`;
             } else if (percent >= 70) {
-              response += `\n\n🟡 *Atenção:* ${percent.toFixed(0)}% do teto de ${b.category} (${brl(b.spent)} de ${brl(b.limit)}). Restam ${brl(b.limit - b.spent)} até o fim do mês.`;
+              response += `\n\n🟡 *Atenção:* ${percent.toFixed(0)}% do teto de ${b.category} (${brl(b.spent)} de ${brl(b.limit)}). Restam ${brl(b.limit - b.spent)} em ${mesTeto}.`;
             }
             const isSensitive = ["delivery", "ifood", "lanche", "bebida", "cerveja", "besteira"]
               .some((kw) => route.category.toLowerCase().includes(kw) || route.subcategory.toLowerCase().includes(kw) || route.description.toLowerCase().includes(kw));
@@ -2102,13 +2103,16 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
   // Teto da categoria (aviso a partir de 70%) e previsão do mês — mesma regra
   // do gasto lançado por mensagem.
   const { items } = await budgetStatus(entry.date.getFullYear(), entry.date.getMonth());
+  // No cartão o teto é o do mês da fatura (12/11 no cartão conta em dezembro): diz o mês, senão parece
+  // contradizer o "Seu dia", que mostra o mês corrente.
+  const mesTeto = MONTHS_PT[entry.date.getMonth()];
   const b = items.find((x) => x.category === invoice.category);
   if (b) {
     const percent = (b.spent / b.limit) * 100;
     if (percent >= 100) {
-      response += `\n\n🔴 *Teto de ${b.category} estourado:* ${brl(b.spent)} de ${brl(b.limit)} (passou ${brl(b.spent - b.limit)}).`;
+      response += `\n\n🔴 *Teto de ${b.category} estourado em ${mesTeto}:* ${brl(b.spent)} de ${brl(b.limit)} (passou ${brl(b.spent - b.limit)}).`;
     } else if (percent >= 70) {
-      response += `\n\n🟡 *Atenção:* ${percent.toFixed(0)}% do teto de ${b.category} (${brl(b.spent)} de ${brl(b.limit)}). Restam ${brl(b.limit - b.spent)} até o fim do mês.`;
+      response += `\n\n🟡 *Atenção:* ${percent.toFixed(0)}% do teto de ${b.category} (${brl(b.spent)} de ${brl(b.limit)}). Restam ${brl(b.limit - b.spent)} em ${mesTeto}.`;
     }
     if (percent >= 70 && invoice.total >= 50) {
       try {
@@ -2130,7 +2134,7 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
   if (besteiraNaNota > 0 && invoice.category !== "Besteira") {
     const bs = items.find((x) => x.category === "Besteira");
     response += bs
-      ? `\n\n🍺 *Besteira:* ${brl(besteiraNaNota)} nesta nota · ${brl(bs.spent)} de ${brl(bs.limit)} no mês ${bs.spent >= bs.limit ? `🔴 passou ${brl(bs.spent - bs.limit)}` : bs.spent / bs.limit >= 0.7 ? `🟡 restam ${brl(bs.limit - bs.spent)}` : `🟢 restam ${brl(bs.limit - bs.spent)}`}.`
+      ? `\n\n🍺 *Besteira:* ${brl(besteiraNaNota)} nesta nota · ${brl(bs.spent)} de ${brl(bs.limit)} em ${mesTeto} ${bs.spent >= bs.limit ? `🔴 passou ${brl(bs.spent - bs.limit)}` : bs.spent / bs.limit >= 0.7 ? `🟡 restam ${brl(bs.limit - bs.spent)}` : `🟢 restam ${brl(bs.limit - bs.spent)}`}.`
       : `\n\n🍺 *Besteira nesta nota:* ${brl(besteiraNaNota)}.`;
   }
   response += await monthForecastLine(entry.date.getFullYear(), entry.date.getMonth());

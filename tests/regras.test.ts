@@ -269,6 +269,7 @@ test("item de nota: carne no peso vira Carnes mesmo vindo como Mercearia", () =>
 test("item de nota: batata palha é Mercearia e peito de peru é frios", () => {
   assert.equal(normalizeItemCategory({ name: "BATATA PALHA SCRUSCH 105G TEMPERADA", category: "Hortifruti" }), "Mercearia");
   assert.equal(normalizeItemCategory({ name: "PEITO PERU SEARA DEF kg", category: "Carnes" }), "Frios e laticínios");
+  assert.equal(normalizeItemCategory({ name: "LEVISSIMO SEARA kg", category: "Mercearia" }), "Frios e laticínios");
   assert.equal(normalizeItemCategory({ name: "BATATA INGLESA kg", category: "Hortifruti" }), "Hortifruti");
   assert.equal(normalizeItemCategory({ name: "PEITO FRANGO kg", category: "Mercearia" }), "Carnes");
 });
