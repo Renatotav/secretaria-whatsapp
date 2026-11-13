@@ -350,3 +350,46 @@ test("manual: págs. 21 a 23 do manual externo 1G avisam que o rodapé impresso 
   assert.match(ctx, /pág\. 20, 21 do PDF \(no rodapé impresso aparece "20"\)/);
   assert.match(ctx, /pág\. 21 —/);
 });
+
+test("manual: limpeza depois da resposta (um ⚠️ só, aviso do rodapé, 'O que fazer' sem promessa)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const resposta = [
+    "🧭 *O que aconteceu*",
+    "Explicação.",
+    "",
+    "⚠️ O alerta de sexta vale para todas as comarcas. Fortaleza: x. Interior: y.",
+    "",
+    "✅ *O que fazer*",
+    "1. Confira a classe. Vou verificar o sistema.",
+    "2. Verifique se houve instabilidade momentânea.",
+    "3. Limpe o cache do navegador.",
+    "4. Use a transição certa.",
+    "",
+    "📘 *Onde está no manual*",
+    "- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 21 e 22.",
+    "",
+    "⚠️ O Manual de Plantão 2º Grau – Usuários Internos diverge sobre outra coisa.",
+    "",
+    "💬 *Resposta pronta para o usuário*",
+    "Vou verificar, um momento, por favor.",
+  ].join("\n");
+  const r = limparRespostaManual(resposta);
+  assert.equal(r.match(/⚠️/g)?.length, 1);
+  assert.match(r, /vale para todas as comarcas/);
+  assert.match(r, /pág\. 21 e 22\. \(no rodapé impresso dessas páginas aparece "20"\)/);
+  assert.match(r, /1\. Confira a classe\.\n2\. Use a transição certa\./);
+  assert.doesNotMatch(r.split("💬")[0], /vou verificar|instabilidade|cache/i);
+  assert.match(r, /💬 \*Resposta pronta para o usuário\*\nVou verificar, um momento, por favor\./);
+
+  // Sem a linha fixa: fica o ⚠️ do manual citado; sai o de manual que não está no "Onde está".
+  const outra = "📘 *Onde está no manual*\n- Manual de Plantão – 1º Grau – Fluxo Cível – Usuários Internos, pág. 4.\n⚠️ O Manual Plantão PJe 2º Grau – Usuários Externos diverge.\n⚠️ O 1º Grau – Fluxo Cível se contradiz na pág. 4.\n💬 *Resposta pronta para o usuário*\nVou confirmar.";
+  const r2 = limparRespostaManual(outra);
+  assert.match(r2, /⚠️ O 1º Grau – Fluxo Cível se contradiz/);
+  assert.doesNotMatch(r2, /2º Grau – Usuários Externos diverge/);
+  assert.doesNotMatch(r2, /rodapé/);
+
+  // Aviso em duas linhas sai inteiro; página já marcada como "impresso" não ganha o aviso de novo.
+  const r3 = limparRespostaManual("📘 *Onde está no manual*\n- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 21 (pág. 20 do impresso).\n\n⚠️ O alerta de sexta vale para todas as comarcas.\n\n⚠️ *Nota:*\nHá divergência sobre outra coisa.\n\n💬 *Resposta pronta para o usuário*\nOk.");
+  assert.doesNotMatch(r3, /Há divergência|Nota:/);
+  assert.doesNotMatch(r3, /rodapé/);
+});

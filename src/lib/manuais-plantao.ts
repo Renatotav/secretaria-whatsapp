@@ -55,3 +55,71 @@ export async function prepararPerguntaManual(pergunta: string, k = 6) {
     fontes: achados.map((a) => ({ manual: a.trecho.manual, arquivo: a.trecho.arquivo, paginas: a.trecho.paginas, titulo: a.trecho.titulo })),
   };
 }
+
+// Limpeza depois da resposta: o modelo pequeno nem sempre cumpre as regras do prompt (13/11).
+const MANUAIS_RE: RegExp[] = [
+  /1[ºo°] grau\W{1,5}usu[aá]rios externos/i,
+  /2[ºo°] grau\W{1,5}usu[aá]rios externos/i,
+  /fluxo c[ií]vel/i,
+  /fluxo criminal/i,
+  /2[ºo°] grau\W{1,5}usu[aá]rios internos/i,
+];
+const manuaisCitados = (s: string) => MANUAIS_RE.filter((re) => re.test(s));
+const ehSecao = (l: string) => /^\s*(🧭|✅|📘|⚠️|💬)/.test(l);
+
+/** Linhas da seção que começa no cabeçalho com `emoji` (até o próximo cabeçalho). */
+function secao(linhas: string[], emoji: string): [number, number] {
+  const i = linhas.findIndex((l) => l.trim().startsWith(emoji));
+  if (i < 0) return [-1, -1];
+  let j = i + 1;
+  while (j < linhas.length && !ehSecao(linhas[j])) j++;
+  return [i, j];
+}
+
+export function limparRespostaManual(texto: string): string {
+  let linhas = texto.split("\n");
+
+  // 1) No máximo uma linha ⚠️: a fixa de Fortaleza × interior ganha; senão, sai a de manual que não foi citado.
+  const avisos = linhas.map((l, i) => (l.trim().startsWith("⚠️") ? i : -1)).filter((i) => i >= 0);
+  if (avisos.length) {
+    const [oi, oj] = secao(linhas, "📘");
+    const onde = oi < 0 ? "" : linhas.slice(oi, oj).join("\n");
+    const fixa = avisos.find((i) => /vale para todas as comarcas/i.test(linhas[i]));
+    const fica =
+      fixa ??
+      avisos.find((i) => {
+        const deles = manuaisCitados(linhas[i]);
+        return !deles.length || deles.some((re) => re.test(onde));
+      });
+    // O aviso pode continuar nas linhas de baixo ("⚠️ *Nota:*" e o texto embaixo): sai até a linha em branco.
+    const sai = new Set<number>();
+    for (const i of avisos.filter((i) => i !== fica))
+      for (let j = i; j < linhas.length && (j === i || (linhas[j].trim() && !ehSecao(linhas[j]))); j++) sai.add(j);
+    linhas = linhas.filter((_, i) => !sai.has(i));
+  }
+
+  // 2) Págs. 21 a 23 do manual externo de 1º grau: no rodapé impresso aparece "20".
+  const [oi, oj] = secao(linhas, "📘");
+  if (oi >= 0 && !/rodap|impress/i.test(linhas.slice(oi, oj).join("\n"))) {
+    const k = linhas.findIndex((l, i) => i > oi && i < oj && MANUAIS_RE[0].test(l) && /p[áa]g[^\n]*\b2[123]\b/i.test(l));
+    if (k >= 0) linhas[k] = `${linhas[k].trimEnd()} (no rodapé impresso dessas páginas aparece "20")`;
+  }
+
+  // 3) "O que fazer" sem "vou verificar", instabilidade, cache ou navegador.
+  const [fi, fj] = secao(linhas, "✅");
+  if (fi >= 0) {
+    const proibida = /vou verificar|instabilidade|cache|navegador/i;
+    let n = 0;
+    const corpo = linhas.slice(fi + 1, fj).flatMap((l) => {
+      const item = l.match(/^(\s*)(\d+)\.\s+/);
+      const resto = item ? l.slice(item[0].length) : l;
+      const frases = resto.split(/(?<=[.!?])\s+/).filter((f) => !proibida.test(f));
+      if (!frases.length) return [];
+      return [item ? `${item[1]}${++n}. ${frases.join(" ")}` : frases.join(" ")];
+    });
+    const sobrou = corpo.some((l) => l.trim());
+    linhas = [...linhas.slice(0, sobrou ? fi + 1 : fi), ...(sobrou ? corpo : []), ...linhas.slice(fj)];
+  }
+
+  return linhas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}

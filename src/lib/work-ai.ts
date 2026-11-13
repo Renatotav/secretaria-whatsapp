@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { prisma } from "./prisma";
 import { promptAtivo } from "./prompts";
-import { prepararPerguntaManual } from "./manuais-plantao";
+import { limparRespostaManual, prepararPerguntaManual } from "./manuais-plantao";
 import { readImageText, resumoPrintPJe } from "./work-ocr";
 import { normalizeTicketId } from "./work-privacy";
 import { conferirInicial, conferirFinal } from "./cnj-check";
@@ -111,7 +111,7 @@ async function manualDoPlantao(pergunta: string, modelo?: string, imagem?: Buffe
     });
   // Modelo que exige raciocínio: tenta de novo com um pouco (igual às outras skills).
   const r = await pedir(0).catch((err) => (/reasoning is mandatory/i.test(String(err?.message)) ? pedir(1024) : Promise.reject(err)));
-  const text = r.choices[0]?.message?.content?.trim() || "";
+  const text = limparRespostaManual(r.choices[0]?.message?.content?.trim() || "");
   if (!text) throw new Error("A IA não devolveu texto. Tente de novo.");
   console.log(`[trabalho] manual: ${p.fontes.length} trechos, ${r.usage?.prompt_tokens ?? 0}+${r.usage?.completion_tokens ?? 0} tokens`);
   return { skill: "manual", text: text + aviso, model, tokens: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 } };
