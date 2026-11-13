@@ -76,8 +76,17 @@ function secao(linhas: string[], emoji: string): [number, number] {
   return [i, j];
 }
 
-export function limparRespostaManual(texto: string): string {
+// A linha fixa de Fortaleza × interior só faz sentido em pergunta de alerta, protocolo ou horário (13/11).
+const SOBRE_ALERTA = /alerta|aviso|pop.?up|protocol|sexta|v[ée]spera|interior|comarca|feriado|hor[áa]rio|\b\d{1,2}\s*h\b/i;
+
+export function limparRespostaManual(texto: string, pergunta?: string): string {
   let linhas = texto.split("\n");
+
+  // 0) Linha fixa de Fortaleza × interior em pergunta que não é de alerta/protocolo/horário: sai.
+  if (pergunta !== undefined && !SOBRE_ALERTA.test(pergunta)) {
+    const i = linhas.findIndex((l) => l.trim().startsWith("⚠️") && /vale para todas as comarcas/i.test(l));
+    if (i >= 0) linhas.splice(i, 1);
+  }
 
   // 1) No máximo uma linha ⚠️: a fixa de Fortaleza × interior ganha; senão, sai a de manual que não foi citado.
   const avisos = linhas.map((l, i) => (l.trim().startsWith("⚠️") ? i : -1)).filter((i) => i >= 0);
@@ -105,8 +114,10 @@ export function limparRespostaManual(texto: string): string {
     if (!MANUAIS_RE[0].test(linhas[i])) continue;
     // O modelo às vezes troca: "21 (pág. 20 do PDF)" — o 20 é o rodapé impresso, não o PDF.
     linhas[i] = linhas[i].replace(/\((?:p[áa]g(?:ina|\.)?\s*)?20 do PDF\)/gi, '(no rodapé impresso aparece "20")');
+    // Só número de PÁGINA ("pág. 21", "págs. 3, 4, 21 e 22"): horário como "21h" ou "23h59" não é tocado (13/11).
     if (!/rodap|impress/i.test(linhas[i]))
-      linhas[i] = linhas[i].replace(/\b(2[123])((?:\s*(?:a|e|-|–|\/|,)\s*2[123]\b)*)(?!\s*\()/g, '$1$2 (no rodapé impresso: "20")');
+      linhas[i] = linhas[i].replace(/(p[áa]g(?:ina)?s?\.?\s*)(\d+(?:\s*(?:,|e|a|-|–|\/)\s*\d+)*)\b(?!\s*\()(?![hH:])/g, (m, pre: string, lista: string) =>
+        /\b2[123]\b/.test(lista) ? `${pre}${lista} (no rodapé impresso: "20")` : m);
   }
 
   // 3) "O que fazer" sem "vou verificar", instabilidade, cache ou navegador.

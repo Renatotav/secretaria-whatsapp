@@ -400,3 +400,20 @@ test("manual: limpeza depois da resposta (um ⚠️ só, aviso do rodapé, 'O qu
   assert.doesNotMatch(r4, /20 do PDF|Veja a pág\./);
   assert.match(r4, /✅ \*O que fazer\*\n1\. Confira a classe\./);
 });
+
+test("manual: aviso do rodapé só em número de página, nunca em horário (13/11)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const L = (s: string) => limparRespostaManual("📘 *Onde está no manual*\n" + s);
+  assert.doesNotMatch(L("- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 5, quadro de horários (dias úteis das 18h às 21h)."), /rodapé/);
+  assert.match(L("Manual Plantão PJe 1º Grau – Usuários Externos, pág. 21, Cenário 6 (até 23h59)."), /pág\. 21 \(no rodapé impresso: "20"\), Cenário 6 \(até 23h59\)/);
+  assert.match(L("- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 21 a 23, fluxograma."), /pág\. 21 a 23 \(no rodapé impresso: "20"\), fluxograma/);
+  assert.doesNotMatch(L("- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 5 e 14."), /rodapé/);
+});
+
+test("manual: linha fixa de Fortaleza × interior só em pergunta de alerta, protocolo ou horário (13/11)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const resp = "🧭 *O que aconteceu*\nX.\n\n⚠️ O alerta de sexta vale para todas as comarcas. Fortaleza: a. Interior: b.\n\n💬 *Resposta pronta para o usuário*\nOk.";
+  assert.doesNotMatch(limparRespostaManual(resp, "o flagrante não caiu na triagem inicial"), /todas as comarcas/);
+  assert.match(limparRespostaManual(resp, "o usuário protocolou sexta às 19h e o aviso não apareceu"), /todas as comarcas/);
+  assert.match(limparRespostaManual(resp), /todas as comarcas/); // sem pergunta: não mexe
+});

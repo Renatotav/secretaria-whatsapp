@@ -83,6 +83,10 @@ const SINONIMOS: [RegExp, string][] = [
   [/\boficial de justica\b/, " mandado ceman central mandados "],
   // O manual escreve "MP"; o usuário, "ministério público" ou "promotor" (13/11).
   [/\bministerio publico\b|\bpromotor/, " mp "],
+  // "a vara não consegue movimentar" = processo esperando o plantão devolver (13/11).
+  [/\bnao (consigo|consegue|conseguem|da para|deixa) (movimentar|mexer|tramitar|andar)\b/, " preso aguardar retorno plantao movimentar "],
+  // "mandar para o plantão do 2º grau" = remessa por declínio de competência (13/11).
+  [/\bplantao do (2|segundo)\s*(o\s*)?grau\b|\bdeclin/, " remeter plantao 2 grau declinio competencia "],
 ];
 
 export function termos(s: string, expandir = false): string[] {

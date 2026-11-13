@@ -99,19 +99,27 @@ async function manualDoPlantao(pergunta: string, modelo?: string, imagem?: Buffe
   if (!p.temBase) return { skill: "manual", text: "📘 Não achei nada sobre isso nos manuais de plantão.", model: "busca", tokens: { input: 0, output: 0 } };
   const config = await prisma.agentConfig.findFirst({ select: { openrouterApiKey: true, workAiModel: true } });
   if (!config?.openrouterApiKey) throw new Error("A secretária está sem chave do OpenRouter (Configurações).");
-  const model = modelo || config.workAiModel || "anthropic/claude-sonnet-5.5";
-  const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1" });
-  const pedir = (raciocinio: number) =>
+  let model = modelo || config.workAiModel || "anthropic/claude-sonnet-5.5";
+  // Plantão (13/11): no máximo 45 s por modelo, sem repetir; se o principal falhar, tenta uma vez a reserva (também ZDR). Pior caso: ~90 s.
+  const client = new OpenAI({ apiKey: config.openrouterApiKey, baseURL: "https://openrouter.ai/api/v1", timeout: 45_000, maxRetries: 0 });
+  const pedir = (m: string, raciocinio: number) =>
     client.chat.completions.create({
-      model,
+      model: m,
       max_tokens: 900 + raciocinio,
       ...({ reasoning: raciocinio ? { max_tokens: raciocinio } : { enabled: false } } as object),
       ...(SO_ZDR as object),
       messages: [{ role: "system", content: p.system }, { role: "user", content: p.user }],
     });
   // Modelo que exige raciocínio: tenta de novo com um pouco (igual às outras skills).
-  const r = await pedir(0).catch((err) => (/reasoning is mandatory/i.test(String(err?.message)) ? pedir(1024) : Promise.reject(err)));
-  const text = limparRespostaManual(r.choices[0]?.message?.content?.trim() || "");
+  const tentar = (m: string) => pedir(m, 0).catch((err) => (/reasoning is mandatory/i.test(String(err?.message)) ? pedir(m, 1024) : Promise.reject(err)));
+  const RESERVA = "anthropic/claude-haiku-5.5";
+  const r = await tentar(model).catch((err) => {
+    if (modelo || model === RESERVA) return Promise.reject(err);
+    console.error("[trabalho] manual: modelo principal falhou, usando a reserva:", err instanceof Error ? err.message.slice(0, 160) : err);
+    model = RESERVA;
+    return tentar(RESERVA);
+  });
+  const text = limparRespostaManual(r.choices[0]?.message?.content?.trim() || "", pergunta);
   if (!text) throw new Error("A IA não devolveu texto. Tente de novo.");
   console.log(`[trabalho] manual: ${p.fontes.length} trechos, ${r.usage?.prompt_tokens ?? 0}+${r.usage?.completion_tokens ?? 0} tokens`);
   return { skill: "manual", text: text + aviso, model, tokens: { input: r.usage?.prompt_tokens ?? 0, output: r.usage?.completion_tokens ?? 0 } };
