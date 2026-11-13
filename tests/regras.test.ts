@@ -376,7 +376,7 @@ test("manual: limpeza depois da resposta (um ⚠️ só, aviso do rodapé, 'O qu
   const r = limparRespostaManual(resposta);
   assert.equal(r.match(/⚠️/g)?.length, 1);
   assert.match(r, /vale para todas as comarcas/);
-  assert.match(r, /pág\. 21 e 22\. \(no rodapé impresso dessas páginas aparece "20"\)/);
+  assert.match(r, /pág\. 21 e 22 \(no rodapé impresso: "20"\)\./);
   assert.match(r, /1\. Confira a classe\.\n2\. Use a transição certa\./);
   assert.doesNotMatch(r.split("💬")[0], /vou verificar|instabilidade|cache/i);
   assert.match(r, /💬 \*Resposta pronta para o usuário\*\nVou verificar, um momento, por favor\./);
@@ -392,4 +392,11 @@ test("manual: limpeza depois da resposta (um ⚠️ só, aviso do rodapé, 'O qu
   const r3 = limparRespostaManual("📘 *Onde está no manual*\n- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 21 (pág. 20 do impresso).\n\n⚠️ O alerta de sexta vale para todas as comarcas.\n\n⚠️ *Nota:*\nHá divergência sobre outra coisa.\n\n💬 *Resposta pronta para o usuário*\nOk.");
   assert.doesNotMatch(r3, /Há divergência|Nota:/);
   assert.doesNotMatch(r3, /rodapé/);
+
+  // Aviso logo depois da página, não no fim da linha; página trocada pelo modelo é corrigida; "pág." não quebra a frase.
+  const r4 = limparRespostaManual("✅ *O que fazer*\n1. Veja a pág. 34 e vou verificar.\n2. Confira a classe.\n\n📘 *Onde está no manual*\n- Manual Plantão PJe 1º Grau – Usuários Externos, págs. 3, 4, 21 e 22.\n- Manual Plantão PJe 1º Grau – Usuários Externos, pág. 21 (pág. 20 do PDF).\n\n💬 *Resposta pronta para o usuário*\nOk.");
+  assert.match(r4, /págs\. 3, 4, 21 e 22 \(no rodapé impresso: "20"\)\./);
+  assert.match(r4, /pág\. 21 \(no rodapé impresso aparece "20"\)\./);
+  assert.doesNotMatch(r4, /20 do PDF|Veja a pág\./);
+  assert.match(r4, /✅ \*O que fazer\*\n1\. Confira a classe\./);
 });

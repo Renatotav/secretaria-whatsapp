@@ -99,10 +99,14 @@ export function limparRespostaManual(texto: string): string {
   }
 
   // 2) Págs. 21 a 23 do manual externo de 1º grau: no rodapé impresso aparece "20".
+  // O aviso vai logo depois da página (no fim da linha parecia valer também para as págs. 3-4).
   const [oi, oj] = secao(linhas, "📘");
-  if (oi >= 0 && !/rodap|impress/i.test(linhas.slice(oi, oj).join("\n"))) {
-    const k = linhas.findIndex((l, i) => i > oi && i < oj && MANUAIS_RE[0].test(l) && /p[áa]g[^\n]*\b2[123]\b/i.test(l));
-    if (k >= 0) linhas[k] = `${linhas[k].trimEnd()} (no rodapé impresso dessas páginas aparece "20")`;
+  for (let i = oi + 1; oi >= 0 && i < oj; i++) {
+    if (!MANUAIS_RE[0].test(linhas[i])) continue;
+    // O modelo às vezes troca: "21 (pág. 20 do PDF)" — o 20 é o rodapé impresso, não o PDF.
+    linhas[i] = linhas[i].replace(/\((?:p[áa]g(?:ina|\.)?\s*)?20 do PDF\)/gi, '(no rodapé impresso aparece "20")');
+    if (!/rodap|impress/i.test(linhas[i]))
+      linhas[i] = linhas[i].replace(/\b(2[123])((?:\s*(?:a|e|-|–|\/|,)\s*2[123]\b)*)(?!\s*\()/g, '$1$2 (no rodapé impresso: "20")');
   }
 
   // 3) "O que fazer" sem "vou verificar", instabilidade, cache ou navegador.
@@ -113,7 +117,7 @@ export function limparRespostaManual(texto: string): string {
     const corpo = linhas.slice(fi + 1, fj).flatMap((l) => {
       const item = l.match(/^(\s*)(\d+)\.\s+/);
       const resto = item ? l.slice(item[0].length) : l;
-      const frases = resto.split(/(?<=[.!?])\s+/).filter((f) => !proibida.test(f));
+      const frases = resto.split(/(?<!\bp[áa]gs?\.)(?<=[.!?])\s+/).filter((f) => !proibida.test(f));
       if (!frases.length) return [];
       return [item ? `${item[1]}${++n}. ${frases.join(" ")}` : frases.join(" ")];
     });
