@@ -463,3 +463,16 @@ test("manual: 'O que fazer' sem conselho genérico de fora dos manuais (13/11)",
   assert.match(r, /✅ \*O que fazer\*\n1\. Confira a classe na pág\. 3\.\n\n💬/);
 });
 
+test("busca nos manuais: processo novo que ninguém atendeu vai para a triagem, não para petição (13/11 noite)", async () => {
+  const { termos } = await import("../src/lib/busca-manuais");
+  assert.ok(termos("advogado protocolou sexta 22h com plantão e ninguém atendeu", true).some((w) => w.startsWith("triag")));
+  assert.ok(termos("protocolei e não apareceu pro juiz plantonista", true).some((w) => w.startsWith("triag")));
+  // "ninguém recebeu" na origem continua sendo retorno do plantão, não triagem.
+  assert.ok(!termos("foi para o gabinete de origem mas ninguém recebeu", true).some((w) => w.startsWith("triag")));
+});
+
+test("prompt do manual: processo novo não vai para ANALISAR PETIÇÃO; manual de outro fluxo existe (13/11 noite)", async () => {
+  const { SYSTEM_MANUAL } = await import("../src/lib/manuais-plantao");
+  assert.match(SYSTEM_MANUAL, /nunca a indique para processo recém-protocolado/);
+  assert.match(SYSTEM_MANUAL, /Nunca diga que não existe manual de um fluxo/);
+});

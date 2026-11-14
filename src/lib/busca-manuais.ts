@@ -92,6 +92,8 @@ const SINONIMOS: [RegExp, string][] = [
   [/\b(dois|2) lugares\b|\bao mesmo tempo\b|\bduas tarefas\b|\bduplicad/, " mesmo tempo aguardar retorno plantao triagem inicial copia "],
   [/\bvarias\b|\bvarios\b|\bde uma vez\b|\bem massa\b|\bem bloco\b/, " lote "],
   [/\bdefensoria\b|\bdefensor\b/, " dp intimar a dp "],
+  // Processo NOVO que "ninguém atendeu" = triagem inicial do plantão, não petição intermediária (13/11, noite).
+  [/\bninguem (atendeu|analisou|viu|olhou|despachou)\b|\bnao (apareceu|chegou|aparece)\b[^.?!]{0,30}\b(juiz|plantonista|plantao)\b/, " triagem inicial entrada plantao etiqueta juiz plantonista "],
 ];
 
 export function termos(s: string, expandir = false): string[] {
