@@ -43,6 +43,27 @@ export async function simulateFinance(
     ].join("\n");
   }
 
+  // "Posso ir pro bar?" sem valor: o que ele quer saber é quanto sobra no teto e em que fatura cai (14/11).
+  if (purchaseTotal === 0 && route.simCategory && !(route.simIncome && route.simIncome > 0)) {
+    const bill = creditCardBillDate(today, config.creditCardDueDay || 10, config.creditCardBestDay || 5);
+    const teto = async (d: Date) => (await budgetStatus(d.getFullYear(), d.getMonth())).items.find((x) => x.category.toLowerCase() === route.simCategory.toLowerCase());
+    const [agora, naFatura] = await Promise.all([teto(today), teto(bill)]);
+    const fim = new Date(bill.getFullYear(), bill.getMonth(), bill.getDate() + 1);
+    const fatura = await prisma.financeEntry.aggregate({
+      where: { type: "expense", paymentMethod: "cartão", card: "", status: "pending", date: { gte: bill, lt: fim } },
+      _sum: { amount: true },
+    });
+    const sobra = (b: typeof agora) =>
+      b ? ` ${b.spent >= b.limit ? `🔴 passou ${brl(b.spent - b.limit)}` : `sobram *${brl(b.limit - b.spent)}*`} (gastou ${brl(b.spent)} de ${brl(b.limit)}).` : "";
+    return [
+      `🍻 *${route.simCategory}*`,
+      `• No pix, débito ou dinheiro (conta em ${MONTH_NAMES[today.getMonth()]}):${sobra(agora)}`,
+      `• No cartão (cai na fatura de ${formatDayMonth(bill)}, que já está em ${brl(fatura._sum.amount ?? 0)}; conta em ${MONTH_NAMES[bill.getMonth()]}):${sobra(naFatura)}`,
+      "Me diz o valor (ex.: \"posso gastar 80 no bar?\") que eu simulo certinho.",
+      "\n_Simulação — não lancei nada._",
+    ].join("\n");
+  }
+
   const installments = route.simPaymentMethod === "cartão" ? Math.max(1, Math.round(route.simInstallments || 1)) : 1;
   const installmentValue = purchaseTotal / installments;
   const firstBill = route.simPaymentMethod === "cartão"

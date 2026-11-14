@@ -258,6 +258,18 @@ Retorne APENAS JSON válido, só com os campos do tipo escolhido:
   "confirmation": "Sua resposta curta"
 }`;
 
+/** "Posso ir pro bar?", "dá pra sair hoje?": pergunta de gasto em Saídas, mesmo sem valor.
+ *  A IA mandava para o bate-papo e respondia com a previsão geral, sem o teto nem a fatura (14/11). */
+export function perguntaDeSaida(text: string): { valor: number | null; metodo: "cartão" | "pix" | "débito" | "dinheiro" } | null {
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (!/\b(posso|da pra|da para|consigo|devo|vale a pena|cabe)\b/.test(t)) return null;
+  if (!/\b(bar|barzinho|boteco|sair (hoje|pra beber|para beber|a noite|de noite|com)|saidinha|dar uma saida|role|festa|show|balada|tomar uma|cerveja|beber|espetinho|happy hour|pagode|forro)\b/.test(t)) return null;
+  const v = t.match(/(?:r\$\s*)?(\d{1,4}(?:[.,]\d{1,2})?)\s*(?:reais|conto|pila|r\$)?/);
+  const valor = v && /r\$|reais|conto|pila|\bgastar\b|\blevar\b/.test(t) ? Number(v[1].replace(",", ".")) : null;
+  const metodo = /\bpix\b/.test(t) ? "pix" : /\bdebito\b/.test(t) ? "débito" : /\bdinheiro\b/.test(t) ? "dinheiro" : "cartão";
+  return { valor, metodo };
+}
+
 export async function routePersonalMessage(
   message: string,
   ownerName: string,
@@ -269,6 +281,10 @@ export async function routePersonalMessage(
   /** Texto do prompt para testar uma versão (laboratório); sem ele, vale a versão ativa. */
   promptTexto?: string
 ): Promise<PersonalRouteResult> {
+  const saida = promptTexto ? null : perguntaDeSaida(message);
+  if (saida)
+    return { type: "finance_simulation", simIncome: null, simPurchaseAmount: saida.valor, simInstallments: null, simPaymentMethod: saida.metodo, simDescription: "saída", simCategory: "Saídas", confirmation: "" };
+
   const now = new Date();
   const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
   const todayBRT = `${brtTime.getFullYear()}-${String(brtTime.getMonth() + 1).padStart(2, "0")}-${String(brtTime.getDate()).padStart(2, "0")}`;

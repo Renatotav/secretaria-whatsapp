@@ -521,3 +521,14 @@ test("manual: aviso 'o manual criminal não explica' só em pergunta criminal do
   // Mandado no criminal continua com o aviso.
   assert.match(limparRespostaManual(r('1. Marque "Expedir MANDADO".', "Manual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 28 a 31; Manual de Plantão 2º Grau – Usuários Internos, pág. 21 a 24."), "como mandar mandado de prisão pro oficial de justiça no plantão criminal"), aviso);
 });
+
+test("pergunta de saída ('posso ir pro bar?') vai para o simulador em Saídas, com ou sem valor (14/11)", async () => {
+  const { perguntaDeSaida } = await import("../src/lib/personal-router");
+  assert.deepEqual(perguntaDeSaida("Queria muito ir pra um barzinho. Nao posso né?"), { valor: null, metodo: "cartão" });
+  assert.deepEqual(perguntaDeSaida("posso gastar 80 no bar hoje no pix?"), { valor: 80, metodo: "pix" });
+  assert.deepEqual(perguntaDeSaida("dá pra sair hoje pra tomar uma?"), { valor: null, metodo: "cartão" });
+  assert.equal(perguntaDeSaida("posso ir pro bar às 22h?")?.valor, null);
+  // Não é gasto: sair do trabalho, agenda.
+  assert.equal(perguntaDeSaida("posso sair mais cedo do trabalho?"), null);
+  assert.equal(perguntaDeSaida("gastei 50 no bar"), null);
+});
