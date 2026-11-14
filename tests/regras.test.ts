@@ -476,3 +476,26 @@ test("prompt do manual: processo novo não vai para ANALISAR PETIÇÃO; manual d
   assert.match(SYSTEM_MANUAL, /nunca a indique para processo recém-protocolado/);
   assert.match(SYSTEM_MANUAL, /Nunca diga que não existe manual de um fluxo/);
 });
+
+test("manual: pergunta criminal respondida com o manual cível ganha o aviso no item 1 (13/11 noite)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const resp = "🧭 *O que aconteceu*\nX.\n\n✅ *O que fazer*\n1. Marque \"Expedir MANDADO\".\n2. Envie à CEMAN.\n\n📘 *Onde está no manual*\nManual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, págs. 28 a 31.\n\n💬 *Resposta pronta para o usuário*\nMarque Expedir MANDADO.";
+  const r = limparRespostaManual(resp, "como mandar mandado de prisão no plantão criminal");
+  assert.match(r, /✅ \*O que fazer\*\n1\. O manual criminal não explica esse passo; os passos abaixo são do manual cível\.\n2\. Marque "Expedir MANDADO"\.\n3\. Envie à CEMAN\./);
+  assert.match(r, /Marque Expedir MANDADO\. Se alguma opção não aparecer, me avise\.$/);
+  // Se o manual criminal foi citado, não mexe.
+  const r2 = limparRespostaManual(resp.replace("Fluxo Cível", "Fluxo Criminal"), "como mandar mandado de prisão no plantão criminal");
+  assert.doesNotMatch(r2, /não explica esse passo/);
+  // Pergunta cível: não mexe.
+  assert.doesNotMatch(limparRespostaManual(resp, "como expedir mandado no plantão cível"), /não explica esse passo/);
+});
+
+test("manual: aviso do manual criminal não se repete; 'mesma lógica' sai (13/11 noite)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const resp = "✅ *O que fazer*\nComo o fluxo criminal não detalha isso, use o manual cível:\n1. Marque \"Expedir MANDADO\".\n\n📘 *Onde está no manual*\nManual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 28 a 31. (O procedimento criminal segue a lógica descrita para o cível.)\n\n💬 *Resposta pronta para o usuário*\nOk.";
+  const r = limparRespostaManual(resp, "como mandar mandado de prisão no plantão criminal");
+  assert.doesNotMatch(r, /não explica esse passo/);
+  assert.doesNotMatch(r, /lógica/);
+  assert.match(r, /pág\. 28 a 31\./);
+});
+

@@ -134,11 +134,37 @@ export function limparRespostaManual(texto: string, pergunta?: string, temIncert
         /\b2[123]\b/.test(lista) ? `${pre}${lista} (no rodapé impresso: "20")` : m);
   }
 
+  // "segue a mesma lógica" é dedução do modelo, não está no manual: sai do "Onde está" (13/11, noite).
+  {
+    const [oi3, oj3] = secao(linhas, "📘");
+    for (let k = oi3 + 1; oi3 >= 0 && k < oj3; k++) linhas[k] = linhas[k].replace(/\s*\([^)]*l[oó]gica[^)]*\)/gi, "");
+  }
+
+  // 2b) Pergunta do fluxo criminal respondida só com manual cível/2º grau: o item 1 avisa de onde vêm os passos.
+  // O modelo pequeno não cumpre essa regra do prompt sozinho (13/11, noite).
+  const [oi2, oj2] = secao(linhas, "📘");
+  const onde2 = oi2 < 0 ? "" : linhas.slice(oi2, oj2).join("\n");
+  if (pergunta && /criminal|flagrante|cust[oó]dia|\bpris[aã]o\b|medida protetiva|\bmpu\b/i.test(pergunta) && !MANUAIS_RE[3].test(onde2)) {
+    const outros = [[MANUAIS_RE[2], "cível"], [MANUAIS_RE[4], "do 2º grau"]].filter(([re]) => (re as RegExp).test(onde2)).map(([, n]) => n);
+    const [fi2, fj2] = secao(linhas, "✅");
+    // Se o "O que fazer" já fala do manual criminal, não repete.
+    if (outros.length && fi2 >= 0 && !/criminal/i.test(linhas.slice(fi2 + 1, fj2).join(" "))) {
+      linhas.splice(fi2 + 1, 0, `1. O manual criminal não explica esse passo; os passos abaixo são do manual ${outros.join(" e do manual ")}.`);
+      for (let k = fi2 + 2; k < linhas.length && !ehSecao(linhas[k]); k++) linhas[k] = linhas[k].replace(/^(\s*)(\d+)\./, (_m, sp: string, d: string) => `${sp}${Number(d) + 1}.`);
+      const pi = linhas.findIndex((l) => l.trim().startsWith("💬"));
+      if (pi >= 0 && !/me avise/i.test(linhas.slice(pi).join(" "))) {
+        let fim = linhas.length - 1;
+        while (fim > pi && !linhas[fim].trim()) fim--;
+        linhas[fim] = `${linhas[fim].trimEnd()} Se alguma opção não aparecer, me avise.`;
+      }
+    }
+  }
+
   // 3) "O que fazer" sem "vou verificar", instabilidade, cache ou navegador.
   const [fi, fj] = secao(linhas, "✅");
   if (fi >= 0) {
     // Conselho genérico que não está nos manuais (visto nas respostas de 13/11): sai do "O que fazer".
-    const proibida = /vou verificar|instabilidade|cache|navegador|escala|entre em contato|contato com a unidade|normas (de procedimento )?intern[oa]s?|legisla[cç][aã]o vigente/i;
+    const proibida = /mesma l[oó]gica|segue a l[oó]gica|vou verificar|instabilidade|cache|navegador|escala|entre em contato|contato com a unidade|normas (de procedimento )?intern[oa]s?|legisla[cç][aã]o vigente/i;
     let n = 0;
     const corpo = linhas.slice(fi + 1, fj).flatMap((l) => {
       const item = l.match(/^(\s*)(\d+)\.\s+/);
