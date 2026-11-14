@@ -499,3 +499,12 @@ test("manual: aviso do manual criminal não se repete; 'mesma lógica' sai (13/1
   assert.match(r, /pág\. 28 a 31\./);
 });
 
+test("manual: ⚠️ sobre tarefa ou transição que a resposta não usa sai (13/11 noite)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const base = (aviso: string) => "✅ *O que fazer*\n1. Em \"[Sec] - Outras Diligências - ANALISAR PROCESSOS\", escolha \"07 - Intimar a DP\".\n\n📘 *Onde está no manual*\nManual de Plantão 1º Grau – Fluxo Criminal – Usuários Internos, pág. 31.\n\n" + aviso + "\n\n💬 *Resposta pronta para o usuário*\nOk.";
+  assert.doesNotMatch(limparRespostaManual(base("⚠️ A pág. 31 mostra a transição \"10 - Remeter a outra instância por declínio de competência\", sem explicação."), "intimar defensoria criminal"), /⚠️/);
+  assert.doesNotMatch(limparRespostaManual(base("⚠️ A pág. 22 cita \"[Sec] - Preparar Comunicação de Audiência\", sem detalhar."), "intimar defensoria criminal"), /⚠️/);
+  // Aviso sobre o que a resposta usa fica; aviso sem nome de tarefa também.
+  assert.match(limparRespostaManual(base("⚠️ O nome \"07 - Intimar a DP\" aparece diferente na tela."), "intimar defensoria criminal"), /⚠️/);
+  assert.match(limparRespostaManual(base("⚠️ O manual não diz qual central usar no interior."), "intimar defensoria criminal"), /⚠️/);
+});

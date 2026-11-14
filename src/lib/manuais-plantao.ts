@@ -102,6 +102,18 @@ export function limparRespostaManual(texto: string, pergunta?: string, temIncert
     if (i >= 0) linhas.splice(i, 1);
   }
 
+  // 0b) ⚠️ que cita tarefa ([Sec]/[Gab]) ou transição numerada ("10 - …") que a resposta não usa é de outro assunto: sai (13/11, noite).
+  {
+    const norm = (x: string) => x.toLowerCase().replace(/[*"“”]/g, "").replace(/\s+/g, " ").trim();
+    linhas = linhas.filter((l, i, a) => {
+      if (!l.trim().startsWith("⚠️") || /vale para todas as comarcas/i.test(l)) return true;
+      const nomes = [...l.matchAll(/["“]((?:\d{1,2} - |\[(?:Sec|Gab|SEC|GAB)\])[^"”]{3,})["”]/g)].map((m) => norm(m[1]));
+      if (!nomes.length) return true;
+      const resto = norm(a.filter((_, k) => k !== i).join(" "));
+      return nomes.some((n) => resto.includes(n));
+    });
+  }
+
   // 1) No máximo uma linha ⚠️: a fixa de Fortaleza × interior ganha; senão, sai a de manual que não foi citado.
   const avisos = linhas.map((l, i) => (l.trim().startsWith("⚠️") ? i : -1)).filter((i) => i >= 0);
   if (avisos.length) {
