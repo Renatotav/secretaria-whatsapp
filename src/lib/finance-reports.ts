@@ -183,10 +183,19 @@ export async function buildSubscriptionsResponse(): Promise<string> {
  * e gastos do dia a dia, aponta a causa principal e compara as categorias do
  * dia a dia com a média dos 2 meses anteriores (anomalias).
  */
-export async function buildMonthDiagnosis(): Promise<string> {
+/** "Como está meu mês para dezembro?": o mês citado (o mais próximo, deste mês em diante); sem mês, null (14/11). */
+export function mesPedido(text: string, today = todayBRT()): { y: number; m: number } | null {
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const m = MONTH_NAMES.findIndex((n) => new RegExp(`\\b${n.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}\\b`).test(t));
+  if (m < 0) return null;
+  return { y: today.getFullYear() + (m < today.getMonth() ? 1 : 0), m };
+}
+
+export async function buildMonthDiagnosis(ref?: { y: number; m: number } | null): Promise<string> {
   const today = todayBRT();
-  const y = today.getFullYear();
-  const m = today.getMonth();
+  const y = ref?.y ?? today.getFullYear();
+  const m = ref?.m ?? today.getMonth();
+  const futuro = y * 12 + m > today.getFullYear() * 12 + today.getMonth();
   const range = (mi: number) => ({ gte: new Date(y, mi, 1), lte: new Date(y, mi + 1, 0, 23, 59, 59) });
   const [entries, prevEntries] = await Promise.all([
     prisma.financeEntry.findMany({ where: { date: range(m) }, select: { type: true, amount: true, category: true, subcategory: true, description: true } }),
@@ -231,10 +240,19 @@ export async function buildMonthDiagnosis(): Promise<string> {
     .filter(([cat, v]) => (prevAvg[cat] || 0) > 0 && v > prevAvg[cat] * 1.5 && v - prevAvg[cat] > 100)
     .map(([cat, v]) => `• ${cat}: ${brl(v)} (média ${brl(prevAvg[cat])})`);
 
-  const risk = balance >= 300 ? "baixo" : balance >= 0 ? "médio" : "alto";
+  // Mês que ainda vem: o lançado não conta o dia a dia; a previsão desconta o que ainda deve sair pelos tetos (como o simulador).
+  // Mesma conta da previsão do resumo do dia (conta corrente, sem o VR), para não dar dois números para o mesmo mês.
+  let previsao = "";
+  let fecha = balance;
+  if (futuro) {
+    fecha = (await monthForecastParts(y, m)).total;
+    previsao = `${fecha >= 0 ? "🟢" : "🔴"} Contando o dia a dia que ainda vem pelos tetos, ${MONTH_NAMES[m]} fecha em ${fecha >= 0 ? "+" : "−"}${brl(Math.abs(fecha))}.`;
+  }
+  const risk = fecha >= 300 ? "baixo" : fecha >= 0 ? "médio" : "alto";
   const lines = [
-    `🎯 *Diagnóstico de ${MONTH_NAMES[m]}*`,
+    futuro ? `🎯 *Previsão de ${MONTH_NAMES[m]}* (o que já está lançado)` : `🎯 *Diagnóstico de ${MONTH_NAMES[m]}*`,
     `${balance >= 0 ? "🟢" : "🔴"} Entra ${brl(income)} · sai ${brl(total)} · ${balance >= 0 ? "sobra" : "falta"} ${brl(Math.abs(balance))}`,
+    ...(previsao ? [previsao] : []),
     `\n*Causa principal:* ${main.name} — ${brl(main.value)} (${pct(main.value)} das saídas)`,
     ...buckets.slice(1).map((b) => `• ${b.name}: ${brl(b.value)} (${pct(b.value)})`),
   ];
@@ -621,13 +639,13 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   return `${title}\n${items.map(line).join("\n")}\n\nTotal: ${brl(total)}${footer}`;
 }
 
-export async function buildQueryResponse(intent: PersonalQueryIntent): Promise<string> {
+export async function buildQueryResponse(intent: PersonalQueryIntent, texto = ""): Promise<string> {
   if (intent === "bills_due") return buildBillsDue("query");
   if (intent === "budget_status") return buildBudgetResponse();
   if (intent === "vr_balance") return buildVrBalance();
   if (intent === "wish_list") return buildWishList();
   if (intent === "subscriptions") return buildSubscriptionsResponse();
-  if (intent === "month_diagnosis") return buildMonthDiagnosis();
+  if (intent === "month_diagnosis") return buildMonthDiagnosis(mesPedido(texto));
 
   if (intent === "month_closing") {
     const today = todayBRT();

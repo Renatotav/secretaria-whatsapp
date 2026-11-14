@@ -30,7 +30,7 @@ import { sendBudgetChart, sendCategoryChart, sendGoalsChart, sendIncomeExpenseCh
 import { checkWish, levelIcon, wishLabel } from "./finance-wishes";
 import type { WishVerdict } from "./finance-wishes";
 import { findReserveGoal, goalMonthlyNeed, goalsViabilityLine, reserveNow } from "./finance-goals";
-import { billsDueSpeech, buildBillsDue, buildCategorySummary, buildDailyDigest, buildMonthClosing, buildQueryResponse, buildWeeklyDigest, cardLimitData, cardLimitLine, cardLimitSpeech, limitChallengeLine, monthForecastLine, salaryCheckup } from "./finance-reports";
+import { billsDueSpeech, buildBillsDue, buildCategorySummary, buildDailyDigest, buildMonthClosing, buildQueryResponse, buildWeeklyDigest, cardLimitData, cardLimitLine, cardLimitSpeech, limitChallengeLine, mesPedido, monthForecastLine, salaryCheckup } from "./finance-reports";
 import { getProviderOpts, notifyOwner } from "./owner-notify";
 import { NUMBER_PART, entryCard, fmtBRT, formatFullDate, formatTime, parseBrNumber, paymentLabel } from "./finance-text";
 import { handleGroupMessage } from "./group-messages";
@@ -1223,7 +1223,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
         categorySummary = await buildCategorySummary(route.queryCategory);
         response = categorySummary.text;
       } else {
-        response = await buildQueryResponse(route.queryIntent);
+        response = await buildQueryResponse(route.queryIntent, joinedText);
       }
       break;
   }
@@ -1237,7 +1237,8 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   // Fechamento e diagnóstico vêm com o gráfico de gastos por categoria.
   if (route.type === "agenda_query" && (route.queryIntent === "month_closing" || route.queryIntent === "month_diagnosis")) {
     const today = todayBRT();
-    const ref = route.queryIntent === "month_closing" ? new Date(today.getFullYear(), today.getMonth() - 1, 1) : today;
+    const pedido = mesPedido(joinedText);
+    const ref = route.queryIntent === "month_closing" ? new Date(today.getFullYear(), today.getMonth() - 1, 1) : pedido ? new Date(pedido.y, pedido.m, 1) : today;
     await sendMonthChart(config, ref.getFullYear(), ref.getMonth());
   }
   if (route.type === "agenda_query" && route.queryIntent === "savings_summary") {

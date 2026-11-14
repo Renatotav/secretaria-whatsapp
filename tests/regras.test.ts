@@ -532,3 +532,20 @@ test("pergunta de saída ('posso ir pro bar?') vai para o simulador em Saídas, 
   assert.equal(perguntaDeSaida("posso sair mais cedo do trabalho?"), null);
   assert.equal(perguntaDeSaida("gastei 50 no bar"), null);
 });
+
+test("conversa: raciocínio do modelo não vai para o dono (14/11)", async () => {
+  const { semRaciocinio } = await import("../src/lib/assistant-chat");
+  const vazou = "Ele mandou o título do diagnóstico, mas o que aparece é o de novembro. Preciso dizer isso sem prometer nada. Vou responder assim:\n\nEsse diagnóstico é de novembro, não de dezembro 🙂";
+  assert.equal(semRaciocinio(vazou), "Esse diagnóstico é de novembro, não de dezembro 🙂");
+  assert.equal(semRaciocinio("Oi! Tudo certo por aqui."), "Oi! Tudo certo por aqui.");
+});
+
+test("diagnóstico: 'como está meu mês para dezembro' usa dezembro; janeiro em novembro é do ano seguinte (14/11)", async () => {
+  const { mesPedido } = await import("../src/lib/finance-reports");
+  const hoje = new Date(2026, 10, 14, 12);
+  assert.deepEqual(mesPedido("Como está meu mês para Dezembro", hoje), { y: 2026, m: 11 });
+  assert.deepEqual(mesPedido("e janeiro?", hoje), { y: 2027, m: 0 });
+  assert.deepEqual(mesPedido("como está março", hoje), { y: 2027, m: 2 });
+  assert.equal(mesPedido("como está meu mês", hoje), null);
+});
+

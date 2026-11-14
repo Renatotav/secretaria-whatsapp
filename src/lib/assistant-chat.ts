@@ -100,7 +100,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
       300,
       providerOpts
     );
-    return `🧠 ${content.trim()}`;
+    return `🧠 ${semRaciocinio(content)}`;
   } catch {
     return `🧠 Encontrei ${rows.length} resultado(s), mas não consegui resumir agora.`;
   }
@@ -169,11 +169,19 @@ Regras:
 - Não invente funções que não estão na lista; se não souber fazer, diga com sinceridade.
 - Não dê sermão sobre horário, sono, bebida ou saúde.`;
 
+/** O modelo às vezes manda o raciocínio junto ("Ele mandou… Vou responder assim:"): fica só a resposta (14/11). */
+export function semRaciocinio(text: string): string {
+  const linhas = text.split("\n");
+  const i = linhas.findIndex((l, k) => k < 8 && /\b(vou responder|vou dizer|minha resposta|resposta (final|seria)|responderia)\b[^\n]{0,30}:\s*$/i.test(l.trim()));
+  return i >= 0 && linhas.slice(i + 1).join("\n").trim() ? linhas.slice(i + 1).join("\n").trim() : text.trim();
+}
+
 export async function answerChat(message: string, recentContext: string | undefined, ownerName: string, providerOpts: ProviderOptions, promptTexto?: string): Promise<string> {
   const system = preenche(promptTexto ?? (await promptAtivo("conversa", CONVERSA_PADRAO)), { dono: ownerName, manual: ASSISTANT_MANUAL });
   const prompt = `${recentContext ? `Conversa recente:\n${recentContext}\n\n` : ""}Mensagem dele agora: "${message}"`;
   try {
-    const { content } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
+    const { content: bruto } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
+    const content = semRaciocinio(bruto);
     // Mesmo proibida, a IA copiava o cartão "Lançamento salvo" ou dizia "vou ajustar" sem mudar nada (31/10 "os dois foram VR").
     if (/Lançamento salvo|\b(vou (ajustar|anotar|guardar|registrar|lançar|salvar|corrigir|mudar)|ajustei|atualizei|corrigi|registrei|lancei|salvei|anotei|guardei|mudei)\b/i.test(content)) {
       return "🤔 Não entendi o que fazer e *não mudei nada*.\nPara corrigir um gasto: *cite* a mensagem dele e mande *era vr*, *na verdade foi 25* ou *apaga*.\nLogo depois de lançar, vale mandar só *vr*, *pix* ou *os dois foram vr*.";
