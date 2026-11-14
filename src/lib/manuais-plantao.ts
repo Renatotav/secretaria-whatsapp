@@ -156,7 +156,11 @@ export function limparRespostaManual(texto: string, pergunta?: string, temIncert
   // O modelo pequeno não cumpre essa regra do prompt sozinho (13/11, noite).
   const [oi2, oj2] = secao(linhas, "📘");
   const onde2 = oi2 < 0 ? "" : linhas.slice(oi2, oj2).join("\n");
-  if (pergunta && /criminal|flagrante|cust[oó]dia|\bpris[aã]o\b|medida protetiva|\bmpu\b/i.test(pergunta) && !MANUAIS_RE[3].test(onde2)) {
+  // Não vale para pergunta do 2º grau (o manual do 2º grau é o certo para cível e criminal), nem para alerta,
+  // protocolo ou horário (o manual criminal fala disso; a resposta costuma citar o de usuários externos) (13/11, noite).
+  const doSegundoGrau = /\b2\s*[ºo°]?\s*grau|segundo grau|tribunal|desembargad/i;
+  if (pergunta && /criminal|flagrante|cust[oó]dia|\bpris[aã]o\b|medida protetiva|\bmpu\b/i.test(pergunta) && !MANUAIS_RE[3].test(onde2)
+    && !doSegundoGrau.test(pergunta) && !SOBRE_ALERTA.test(pergunta) && !MANUAIS_RE[0].test(onde2)) {
     const outros = [[MANUAIS_RE[2], "cível"], [MANUAIS_RE[4], "do 2º grau"]].filter(([re]) => (re as RegExp).test(onde2)).map(([, n]) => n);
     const [fi2, fj2] = secao(linhas, "✅");
     // Se o "O que fazer" já fala do manual criminal, não repete.

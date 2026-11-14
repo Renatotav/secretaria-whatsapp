@@ -508,3 +508,16 @@ test("manual: ⚠️ sobre tarefa ou transição que a resposta não usa sai (13
   assert.match(limparRespostaManual(base("⚠️ O nome \"07 - Intimar a DP\" aparece diferente na tela."), "intimar defensoria criminal"), /⚠️/);
   assert.match(limparRespostaManual(base("⚠️ O manual não diz qual central usar no interior."), "intimar defensoria criminal"), /⚠️/);
 });
+
+test("manual: aviso 'o manual criminal não explica' só em pergunta criminal do 1º grau sobre procedimento (13/11 noite)", async () => {
+  const { limparRespostaManual } = await import("../src/lib/manuais-plantao");
+  const r = (fazer: string, onde: string) => `🧭 *O que aconteceu*\nTexto.\n\n✅ *O que fazer*\n${fazer}\n\n📘 *Onde está no manual*\n${onde}\n\n💬 *Resposta pronta para o usuário*\nPronto.`;
+  const aviso = /O manual criminal não explica/;
+  // 2º grau: o manual do 2º grau é o certo, não é "outro fluxo".
+  assert.doesNotMatch(limparRespostaManual(r("1. Veja a triagem.", "Manual de Plantão 2º Grau – Usuários Internos, pág. 6 e 7."), "habeas corpus criminal no plantão do 2º grau, onde aparece?"), aviso);
+  assert.doesNotMatch(limparRespostaManual(r("1. O Desembargador Plantonista.", "Manual de Plantão 2º Grau – Usuários Internos, pág. 5."), "pedido de prisão preventiva no plantão do tribunal, quem analisa?"), aviso);
+  // Horário/protocolo: resposta com o manual de usuários externos.
+  assert.doesNotMatch(limparRespostaManual(r("1. Das 8h às 14h.", "Manual Plantão PJe 1º Grau – Usuários Externos, pág. 5; Manual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 4."), "plantão criminal funciona no sábado?"), aviso);
+  // Mandado no criminal continua com o aviso.
+  assert.match(limparRespostaManual(r('1. Marque "Expedir MANDADO".', "Manual de Plantão 1º Grau – Fluxo Cível – Usuários Internos, pág. 28 a 31; Manual de Plantão 2º Grau – Usuários Internos, pág. 21 a 24."), "como mandar mandado de prisão pro oficial de justiça no plantão criminal"), aviso);
+});
