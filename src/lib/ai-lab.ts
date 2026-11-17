@@ -31,6 +31,10 @@ const ROUTER_CASES: RouterCase[] = [
   { text: "os dois foram vr", ctx: CTX_ALMOCO, notType: "finance" },
   { text: "Doido e quero ficar bebi", type: "diary" },
   { text: "Mercantil 182, 58 no cartão", type: "finance", amount: 182.58 },
+  // Os de 14–16/11/2026 (valores inventados): data depois do lançamento, mês pedido, pedido de app.
+  { text: "Data 12/11", ctx: CTX_ALMOCO, type: "finance_update_date" },
+  { text: "como está meu mês pra dezembro?", notType: "finance" },
+  { text: "Pizza Ifood 41,30", type: "finance", amount: 41.3 },
 ];
 
 // Texto com erro de português + termos que não podem mudar.

@@ -224,3 +224,15 @@ export async function applySalaryReply(text: string, messages: { role: string; c
 }
 
 export const HIGH_VALUE = 500;
+
+/** "cancelei a netflix", "openrouter não é assinatura", "tira as previsões do X" → nome da série; null se não for. */
+export function parseStopSeries(text: string): string | null {
+  const t = text.trim().toLowerCase().replace(/[.!]+$/, "");
+  if (t.length > 60) return null;
+  const m =
+    t.match(/^(?:cancelei|parei de pagar|n[aã]o pago mais)\s+(?:a|o|as|os)?\s*(?:assinatura\s+(?:d[aoe]\s+)?)?(.{3,30})$/) ??
+    t.match(/^(?:tira|tirar|apaga|apagar|remove)\s+(?:as\s+)?previs[oõ]es\s+(?:d[aoe]s?\s+)?(.{3,30})$/) ??
+    t.match(/^(?:(?:a|o)\s+)?(.{3,30}?)\s+(?:n[aã]o (?:é|e) (?:assinatura|mensal|fixo|fixa)|(?:é|e) avulsa?)$/);
+  return m ? m[1].trim() : null;
+}
+

@@ -41,9 +41,9 @@ import { describeChange, histLine, undoFinanceLog } from "./finance-history";
 import type { QuotedChange } from "./finance-history";
 import { applySplit, parseSplit, splitTransactions } from "./finance-split";
 import type { SplitPart } from "./finance-split";
-import { applyQuotedEdit, entryFromQuoted, parseDeleteText, parseDidLogText, parseEditText, parseQuotedChange } from "./quoted-reply";
+import { applyQuotedEdit, entryFromQuoted, parseDeleteText, parseDidLogText, parseEditByName, parseEditText, parseQuotedChange } from "./quoted-reply";
 import { answerChat, answerFinanceQuestion } from "./assistant-chat";
-import { BILL_STATED_RE, HIGH_VALUE, PAYMENT_QUESTION, PAYMENT_REPLY_WINDOW_MS, PAYMENT_STATED_RE, SAVINGS_REPLY_MARK, UNDO_HINT, applyExplainLimitCommand, applyPaymentReply, applySalaryReply, splitRequests } from "./finance-commands";
+import { BILL_STATED_RE, HIGH_VALUE, PAYMENT_QUESTION, PAYMENT_REPLY_WINDOW_MS, PAYMENT_STATED_RE, SAVINGS_REPLY_MARK, UNDO_HINT, applyExplainLimitCommand, applyPaymentReply, applySalaryReply, parseStopSeries, splitRequests } from "./finance-commands";
 export { parseSplit };
 export { sendGoalsChart };
 export { downloadIncomingMedia, transcribeIncomingAudio };
@@ -184,7 +184,7 @@ async function applyDidLogText(text: string): Promise<string | null> {
  *  Não achou = segue o fluxo normal (pode ser gasto novo). */
 async function applyEditByText(text: string): Promise<string | null> {
   const asked = parseEditText(text);
-  if (!asked) return null;
+  if (!asked) return applyEditByName(text);
   const { amount, day, change } = asked;
   const range = day ? { gte: new Date(day.getTime() - 12 * 3600_000), lt: new Date(day.getTime() + 12 * 3600_000) } : null;
   const e = await prisma.financeEntry.findFirst({
@@ -200,6 +200,21 @@ async function applyEditByText(text: string): Promise<string | null> {
   const desc = describeChange(e, change);
   if (!desc) return null;
   pendingQuotedEdit = { entryId: e.id, change, at: Date.now(), text };
+  return `✏️ Em "${e.description || e.category}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.\nConfirma? Responda *sim* ou *não*.`;
+}
+
+/** "a pizza foi no cartão" (16/11 ela dizia que não podia): o lançamento recente com esse nome, com *sim* antes de mudar. */
+async function applyEditByName(text: string): Promise<string | null> {
+  const asked = parseEditByName(text);
+  if (!asked) return null;
+  const e = await prisma.financeEntry.findFirst({
+    where: { createdAt: { gte: new Date(Date.now() - 10 * 86400_000) }, description: { contains: asked.name, mode: "insensitive" } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!e) return null;
+  const desc = describeChange(e, asked.change);
+  if (!desc) return null;
+  pendingQuotedEdit = { entryId: e.id, change: asked.change, at: Date.now(), text };
   return `✏️ Em "${e.description || e.category}" (${brl(e.amount)}, ${formatFullDate(e.purchaseDate ?? e.date)}): ${desc}.\nConfirma? Responda *sim* ou *não*.`;
 }
 
@@ -739,6 +754,8 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   const paymentReply =
     (await applyCommitmentCommands(joinedText, config)) ??
     (await applyImageDraftReply(joinedText, config)) ??
+    (await applyDateFixReply(joinedText, config)) ??
+    (await applyStopSeries(joinedText)) ??
     (await applyInvoiceDraftReply(joinedText, config)) ??
     (await applyUndoOrEdit(joinedText)) ??
     (await applyInvoicePayment(joinedText)) ??
@@ -773,7 +790,11 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       return;
     }
   }
-  let route = await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
+  // "Data 14/11" logo depois de lançar: regra fixa, sem IA (na prova de 17/11 a IA às vezes respondia como conversa).
+  const novaData = lastSaved && Date.now() - new Date(lastSaved.since).getTime() < 30 * 60 * 1000 ? soDataDeCompra(joinedText, todayBRT()) : null;
+  let route: Awaited<ReturnType<typeof routePersonalMessage>> = novaData
+    ? { type: "finance_update_date", newPurchaseDate: novaData, confirmation: "" }
+    : await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
   // Citou uma mensagem e só comentou, sem valor: é relato, não gasto novo (03/11 "esse gasto foi me alimentar…" repetiu o almoço).
   if (route.type === "finance" && _meta.quoted && !/\d/.test(joinedText)) {
     route = { type: "diary", content: joinedText, mood: route.mood ?? "neutro", confirmation: "📔 Anotei no seu diário." };
@@ -1026,7 +1047,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
           // Resposta montada pelo código (antes era o texto livre da IA).
           response = `${entryCard(created, created.type === "income" ? "✅ Receita salva!" : "✅ Lançamento salvo!")}\n\n${
             askPayment ? `${PAYMENT_QUESTION}\nOutro dia de compra? Responda a data (ex: 15/08).\n` : ""
-          }${UNDO_HINT}`;
+          }${UNDO_HINT}${await avisoRepetido(created)}`;
 
           if (route.financeType === "income" && /sal[aá]rio/i.test(created.category)) {
             response += await salaryCheckup(created.amount, created.amount, created.date);
@@ -1090,18 +1111,14 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       });
       if (lastEntry) {
         const newPDate = parseLocalDate(route.newPurchaseDate);
-        // Compra avulsa no cartão: mudar a data da compra pode mudar a fatura.
-        // Parcelas ficam de fora (cada uma já tem o vencimento do seu mês).
-        const isSingleCardExpense = lastEntry.paymentMethod === "cartão" && lastEntry.type === "expense" && !/Parcela \d+\/\d+/.test(lastEntry.description);
-        await prisma.financeEntry.update({
-          where: { id: lastEntry.id },
-          data: {
-            purchaseDate: newPDate,
-            ...(isSingleCardExpense && { date: creditCardBillDate(newPDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5) }),
-          },
-        });
-        const formattedDate = newPDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
-        response = `📅 Perfeito! Atualizei a data de compra de "${lastEntry.description || lastEntry.category}" (${brl(lastEntry.amount)}) para **${formattedDate}**.`;
+        // "Data 14/10" num gasto lançado em 16/11 foi digitação e a pizza foi parar na fatura já paga (16/11): pergunta antes.
+        const estranha = dataEstranha(newPDate, todayBRT());
+        if (estranha) {
+          pendingDateFix = { id: lastEntry.id, date: route.newPurchaseDate, at: Date.now() };
+          response = `📅 ${fmtDia(newPDate)} é ${estranha}. Foi isso mesmo?\nResponda *sim* para mudar "${lastEntry.description || lastEntry.category}" para ${fmtDia(newPDate)}, ou mande a data certa${sugestaoData(newPDate, todayBRT())}.`;
+          break;
+        }
+        response = await aplicarDataCompra(lastEntry, newPDate, config);
       } else {
         response = "❌ Não encontrei nenhum lançamento financeiro recente para atualizar a data.";
       }
@@ -1714,16 +1731,141 @@ function imageDraftEntry(r: import("./personal-router").ImageReading, config: Ag
   };
 }
 
+/** Gasto com o mesmo valor em ±2 dias da compra (16/11 a pizza ficou duas vezes): só avisa, quem decide é ele. */
+async function avisoRepetido(e: { id: string; type: string; amount: number; purchaseDate: Date | null; date: Date }): Promise<string> {
+  if (e.type !== "expense") return "";
+  const dia = e.purchaseDate ?? e.date;
+  const igual = await prisma.financeEntry.findFirst({
+    where: {
+      id: { not: e.id }, type: "expense", amount: { gte: e.amount - 0.01, lte: e.amount + 0.01 },
+      // ±7 dias avisava em 1 de cada 4 (parcelas, almoço de toda semana): ±2 pega o print + o texto do mesmo gasto.
+      purchaseDate: { gte: new Date(dia.getTime() - 2 * 86400_000), lte: new Date(dia.getTime() + 2 * 86400_000) },
+      NOT: [{ description: { contains: "(previsto)" } }, { description: { contains: "Parcela" } }],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return igual ? `\n⚠️ Já tem "${igual.description || igual.category}" de ${brl(igual.amount)} em ${formatDayMonth(igual.purchaseDate ?? igual.date)}. Se for o mesmo gasto, responda *desfazer*.` : "";
+}
+
+// "cancelei a X": previsões futuras dessa série esperando o *sim* para sair (09/11 o Claude teve que apagar 21 do OpenRouter à mão).
+let pendingSeriesStop: { ids: string[]; name: string; at: number } | null = null;
+
+async function applyStopSeries(text: string): Promise<string | null> {
+  const t = text.trim();
+  if (pendingSeriesStop && Date.now() - pendingSeriesStop.at < 15 * 60 * 1000 && (CONFIRM_YES_RE.test(t) || CONFIRM_NO_RE.test(t))) {
+    const p = pendingSeriesStop;
+    pendingSeriesStop = null;
+    if (CONFIRM_NO_RE.test(t)) return "👍 Deixei as previsões como estavam.";
+    const { count } = await withReason(`parar a série "${p.name}" (pedido dele)`, () => prisma.financeEntry.deleteMany({ where: { id: { in: p.ids }, status: "pending" } }));
+    return `🗑️ Tirei ${count} previsões de "${p.name}". Ela não renova mais sozinha.\nErrou? Peça "histórico do ${p.name}" e "desfaz a mudança 1".`;
+  }
+  const name = parseStopSeries(t);
+  if (!name) return null;
+  const futuras = await prisma.financeEntry.findMany({
+    where: {
+      status: "pending", date: { gte: todayBRT() }, description: { contains: name, mode: "insensitive" },
+      NOT: { description: { contains: "Parcela" } },
+      OR: [{ description: { contains: "(previsto)" } }, { description: { contains: "(recorrente)" } }, { category: "Assinaturas" }],
+    },
+    orderBy: { date: "asc" },
+  });
+  if (!futuras.length) return `🤔 Não achei previsões futuras de "${name}". Nada mudou.`;
+  pendingSeriesStop = { ids: futuras.map((e) => e.id), name, at: Date.now() };
+  const total = futuras.reduce((s, e) => s + e.amount, 0);
+  return `🔁 Achei ${futuras.length} previsões de "${futuras[0].description}" (${brl(futuras[0].amount)}), de ${formatDayMonth(futuras[0].date)} até ${formatDayMonth(futuras[futuras.length - 1].date)} — ${brl(total)} no total.\nTiro todas? Responda *sim* ou *não*. (O que já foi pago fica.)`;
+}
+
+// "Data 14/10" que parece digitação: espera o *sim* antes de mudar (16/11).
+let pendingDateFix: { id: string; date: string; at: number } | null = null;
+const fmtDia = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+/** Data de compra suspeita: mais de 20 dias atrás ou no futuro. Devolve o motivo, ou null. */
+export function dataEstranha(d: Date, hoje: Date): string | null {
+  const dias = Math.round((hoje.getTime() - d.getTime()) / 86400000);
+  if (dias < -1) return "uma data que ainda não chegou";
+  if (dias > 20) return dias > 45 ? `${Math.round(dias / 30)} meses atrás` : "um mês atrás";
+  return null;
+}
+/** Mesmo dia no mês atual, quando o mês parece digitado errado ("14/10" → "14/11"). */
+function sugestaoData(d: Date, hoje: Date): string {
+  const s = new Date(hoje.getFullYear(), hoje.getMonth(), d.getDate());
+  return s <= hoje && !dataEstranha(s, hoje) ? ` (ex.: *${fmtDia(s)}*)` : "";
+}
+
+async function aplicarDataCompra(entry: { id: string; description: string; category: string; amount: number; paymentMethod: string; type: string }, newPDate: Date, config: AgentConfig): Promise<string> {
+  // Compra avulsa no cartão: mudar a data da compra pode mudar a fatura.
+  // Parcelas ficam de fora (cada uma já tem o vencimento do seu mês).
+  const isSingleCardExpense = entry.paymentMethod === "cartão" && entry.type === "expense" && !/Parcela \d+\/\d+/.test(entry.description);
+  await prisma.financeEntry.update({
+    where: { id: entry.id },
+    data: {
+      purchaseDate: newPDate,
+      ...(isSingleCardExpense && { date: creditCardBillDate(newPDate, config.creditCardDueDay || 10, config.creditCardBestDay || 5) }),
+    },
+  });
+  const formattedDate = newPDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return `📅 Perfeito! Atualizei a data de compra de "${entry.description || entry.category}" (${brl(entry.amount)}) para **${formattedDate}**.`;
+}
+
+/** Resposta sim ou não para a data suspeita. */
+async function applyDateFixReply(text: string, config: AgentConfig): Promise<string | null> {
+  if (!pendingDateFix || Date.now() - pendingDateFix.at > 15 * 60 * 1000) return null;
+  const t = text.trim();
+  if (CONFIRM_NO_RE.test(t)) {
+    pendingDateFix = null;
+    return "👍 Ok, não mudei a data.";
+  }
+  if (!CONFIRM_YES_RE.test(t)) return null;
+  const fix = pendingDateFix;
+  pendingDateFix = null;
+  const entry = await prisma.financeEntry.findUnique({ where: { id: fix.id } });
+  if (!entry) return "❌ Não achei mais esse lançamento.";
+  return aplicarDataCompra(entry, parseLocalDate(fix.date), config);
+}
+
+/** "Data 14/11", "dia 14/11", "foi dia 14" → "2026-11-14"; null se a mensagem tem mais coisa. */
+export function soDataDeCompra(text: string, hoje: Date): string | null {
+  const m = text.trim().toLowerCase().match(/^(?:a\s+)?(?:data|dia|foi\s+(?:dia|em|no\s+dia)|compra\s+(?:em|dia|no\s+dia))\s+(\d{1,2})(?:\/(\d{1,2})(?:\/(\d{2,4}))?)?[.!]?$/);
+  if (!m) return null;
+  const dia = Number(m[1]), mes = m[2] ? Number(m[2]) : hoje.getMonth() + 1;
+  if (dia < 1 || dia > 31 || mes < 1 || mes > 12) return null;
+  const ano = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : hoje.getFullYear() - (mes > hoje.getMonth() + 1 ? 1 : 0);
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
+/** Resposta ao print que só traz meio e/ou data ("cartão de crédito e data foi 14/11", "pix 15/11"). */
+export function ajusteDoPrint(text: string, hoje: Date): { metodo?: string; data?: string } | null {
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const metodo = /\b(cartao|credito)\b/.test(t) ? "cartão" : /\bpix\b/.test(t) ? "pix" : /\bdebito\b/.test(t) ? "débito" : /\bdinheiro\b/.test(t) ? "dinheiro" : /\b(vr|vale|ticket)\b/.test(t) ? "ticket" : undefined;
+  const d = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+  let data: string | undefined;
+  if (d) {
+    const ano = d[3] ? (d[3].length === 2 ? 2000 + Number(d[3]) : Number(d[3])) : hoje.getFullYear() - (Number(d[2]) > hoje.getMonth() + 1 ? 1 : 0);
+    data = `${ano}-${String(d[2]).padStart(2, "0")}-${String(d[1]).padStart(2, "0")}`;
+  }
+  // Só meio/data e palavras de ligação; outra coisa (valor, nome de loja) é mensagem nova.
+  const resto = t.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, " ").replace(/\b(cartao|de|do|credito|pix|debito|dinheiro|vr|vale|ticket|e|a|o|data|dia|foi|no|na|pago|paguei|pagamento|com|era|compra)\b/g, " ").replace(/[^a-z0-9]+/g, "");
+  return (metodo || data) && !resto ? { metodo, data } : null;
+}
+
 /** "sim"/"não" depois do cartão do print. Devolve a resposta, ou null se não for o caso. */
 async function applyImageDraftReply(text: string, config: AgentConfig): Promise<string | null> {
   if (!pendingImageDraft) return null;
-  // Vence em 30 min, a não ser que tenha fila atrás (aí espera a resposta, para a fila andar).
-  if (Date.now() - pendingImageDraft.at > 30 * 60 * 1000 && !imageDraftQueue.length) {
-    pendingImageDraft = null;
-    return null;
-  }
   const t = text.trim();
   const draft = pendingImageDraft;
+  // "cartão de crédito e data foi 14/11": corrige o meio e/ou a data do print e salva (16/11 ela recusava e o Uber se perdeu).
+  const ajuste = ajusteDoPrint(t, todayBRT());
+  if (ajuste && !draft.invoice) {
+    if (ajuste.metodo) draft.reading.paymentMethod = ajuste.metodo as typeof draft.reading.paymentMethod;
+    if (ajuste.data) draft.reading.date = ajuste.data;
+    return applyImageDraftReply("sim", config);
+  }
+  // Passou de 30 min sem resposta: não some mais calado (16/11 dois Uber se perderam). Lembra e segue a mensagem normal.
+  if (Date.now() - draft.at > 30 * 60 * 1000 && !CONFIRM_YES_RE.test(t) && !CONFIRM_NO_RE.test(t)) {
+    draft.at = Date.now();
+    await notifyOwner(config, `📸 Ainda não lancei o print de ${brl(draft.reading.amount)} (${draft.reading.description || "compra"}). Responda *sim* para lançar, *não* para descartar, ou o meio/data (ex.: *cartão 14/11*).`);
+    return null;
+  }
   if (CONFIRM_NO_RE.test(t)) {
     // "não" para a baixa da fatura: vira o cartão normal de gasto, perguntando de novo.
     if (draft.invoice) {
@@ -1769,7 +1911,7 @@ async function applyImageDraftReply(text: string, config: AgentConfig): Promise<
   const created = await prisma.financeEntry.create({
     data: { ...d, source: "whatsapp" },
   });
-  return `${entryCard(created)}\n\n${UNDO_HINT}` + (await nextQueuedDraft(config));
+  return `${entryCard(created)}\n\n${UNDO_HINT}${await avisoRepetido(created)}` + (await nextQueuedDraft(config));
 }
 
 export async function handleStatementImage(base64: string, mimetype: string): Promise<void> {
@@ -2331,7 +2473,7 @@ function flowSnapshot(): Record<string, unknown> {
   return {
     lastSaved, pendingAmount, lastInvoicePayment, pendingHighValue, confirmedHighValueText,
     pendingStatement, pendingBankImport, pendingImageDraft, imageDraftQueue, imageNote, pendingMoodAsk, pendingInvoiceDraft, pendingCommitment, lastHistoryIds,
-    pendingQuotedEdit, pendingSplit, lastNotaEntry,
+    pendingQuotedEdit, pendingSplit, lastNotaEntry, pendingDateFix, pendingSeriesStop,
   };
 }
 
@@ -2360,6 +2502,8 @@ export function restoreFlowStates(): Promise<void> {
       if (g.pendingQuotedEdit) pendingQuotedEdit = g.pendingQuotedEdit;
       if (g.pendingSplit) pendingSplit = g.pendingSplit;
       if (g.lastNotaEntry) lastNotaEntry = g.lastNotaEntry;
+      if (g.pendingDateFix) pendingDateFix = g.pendingDateFix;
+      if (g.pendingSeriesStop) pendingSeriesStop = g.pendingSeriesStop;
       markFlowStatesLoaded(flowSnapshot());
       const voltaram = Object.keys(s);
       if (voltaram.length) console.log(`[estado] recuperado do banco: ${voltaram.join(", ")}`);

@@ -72,7 +72,7 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   }
 
   // "atualiza a extensão": a Central confere a versão nova em até 2 min e se atualiza.
-  if (/^\s*atualiz(?:ar|a|e)\s+(?:a\s+)?(?:extens[aã]o|central)(?:\s+do\s+atendente)?\s*\.?\s*$/i.test(msg)) {
+  if (pedeAtualizarExtensao(msg)) {
     const cfg = await prisma.agentConfig.findFirst({ select: { id: true } });
     if (cfg) await prisma.agentConfig.update({ where: { id: cfg.id }, data: { extUpdateAt: new Date() } });
     const r = await prisma.extRelease.findFirst({ orderBy: { createdAt: "desc" }, select: { version: true } });
@@ -200,3 +200,22 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
 
   return null;
 }
+
+/** Distância de edição (letras trocadas, a mais ou a menos) — para comando com erro de digitação. */
+export function distancia(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** "atualiza a extensão", e também "atualizar exrtensão" (16/11 a letra a mais virou conversa com a IA). */
+export function pedeAtualizarExtensao(msg: string): boolean {
+  const w = msg.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter((x) => x && !["a", "o", "do", "da"].includes(x));
+  if (w.length < 2 || w.length > 3 || distancia(w[0].slice(0, 7), "atualiz") > 1) return false;
+  return distancia(w[1], "extensao") <= 2 || distancia(w[1], "central") <= 1;
+}
+

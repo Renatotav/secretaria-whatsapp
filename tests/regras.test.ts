@@ -549,3 +549,58 @@ test("diagnóstico: 'como está meu mês para dezembro' usa dezembro; janeiro em
   assert.equal(mesPedido("como está meu mês", hoje), null);
 });
 
+
+test("print na fila: resposta com meio e/ou data ajusta e salva; mensagem nova não (17/11)", async () => {
+  const { ajusteDoPrint } = await import("../src/lib/message-handlers");
+  const hoje = new Date(2026, 10, 16, 12);
+  assert.deepEqual(ajusteDoPrint("Cartao de credito e data foi 14/11", hoje), { metodo: "cartão", data: "2026-11-14" });
+  assert.deepEqual(ajusteDoPrint("pix", hoje), { metodo: "pix", data: undefined });
+  assert.deepEqual(ajusteDoPrint("foi dia 15/11", hoje), { metodo: undefined, data: "2026-11-15" });
+  assert.equal(ajusteDoPrint("35,08 Pastel no Motopizza data 13/11 pagamento cartão de crédito", hoje), null);
+  assert.equal(ajusteDoPrint("sim", hoje), null);
+});
+
+test("data de compra estranha pede confirmação (14/10 num gasto de 16/11) (17/11)", async () => {
+  const { dataEstranha } = await import("../src/lib/message-handlers");
+  const hoje = new Date(2026, 10, 16, 12);
+  assert.equal(dataEstranha(new Date(2026, 9, 14, 12), hoje), "um mês atrás");
+  assert.equal(dataEstranha(new Date(2026, 10, 14, 12), hoje), null);
+  assert.equal(dataEstranha(new Date(2026, 10, 20, 12), hoje), "uma data que ainda não chegou");
+  assert.equal(dataEstranha(new Date(2026, 7, 1, 12), hoje), "4 meses atrás");
+});
+
+test("corrigir pelo nome sem valor: 'a pizza foi no cartão' (17/11)", async () => {
+  const { parseEditByName } = await import("../src/lib/quoted-reply");
+  assert.deepEqual(parseEditByName("a pizza foi no cartão")?.name, "pizza");
+  assert.equal(parseEditByName("a pizza foi no cartão")?.change.paymentMethod, "cartão");
+  assert.ok(parseEditByName("uber foi dia 14/11")?.change.purchase?.startsWith("2026-11-14") || parseEditByName("uber foi dia 14/11")?.change.purchase);
+  assert.equal(parseEditByName("almoço 32 foi no pix"), null);
+  assert.equal(parseEditByName("hoje foi pix"), null);
+  assert.equal(parseEditByName("o dia foi bom"), null);
+});
+
+test("parar série: 'cancelei a netflix', 'openrouter não é assinatura' (17/11)", async () => {
+  const { parseStopSeries } = await import("../src/lib/finance-commands");
+  assert.equal(parseStopSeries("cancelei a netflix"), "netflix");
+  assert.equal(parseStopSeries("OpenRouter não é assinatura"), "openrouter");
+  assert.equal(parseStopSeries("tira as previsões do spotify"), "spotify");
+  assert.equal(parseStopSeries("openrouter é avulsa"), "openrouter");
+  assert.equal(parseStopSeries("almoço 25"), null);
+});
+
+test("comando com erro de digitação: 'atualizar exrtensão' (17/11)", async () => {
+  const { pedeAtualizarExtensao } = await import("../src/lib/work-commands");
+  for (const ok of ["atualiza a extensão", "atualizar exrtensão", "Atualiza a extençao", "atualiza central", "atualiza a central do atendente"]) assert.ok(pedeAtualizarExtensao(ok), ok);
+  for (const no of ["atualiza a planilha", "extensão", "atualiza o escala", "como atualizo a extensão no chrome do trabalho?"]) assert.equal(pedeAtualizarExtensao(no), false, no);
+});
+
+test("'Data 14/11' depois de lançar é regra fixa, sem IA (17/11)", async () => {
+  const { soDataDeCompra } = await import("../src/lib/message-handlers");
+  const hoje = new Date(2026, 10, 16, 12);
+  assert.equal(soDataDeCompra("Data 14/11", hoje), "2026-11-14");
+  assert.equal(soDataDeCompra("foi dia 14", hoje), "2026-11-14");
+  assert.equal(soDataDeCompra("dia 20/12", hoje), "2025-12-20");
+  assert.equal(soDataDeCompra("dia 14/11 almoço 30", hoje), null);
+  assert.equal(soDataDeCompra("data 40/11", hoje), null);
+});
+

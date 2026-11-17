@@ -106,6 +106,17 @@ export function parseEditText(text: string): { amount: number; day: Date | null;
   return { amount: parseBrNumber(num[1]), day: dm ? new Date(y, Number(dm[2]) - 1, Number(dm[1]), 12) : null, change };
 }
 
+/** "a pizza foi no cartão", "uber foi dia 14/11" sem valor → nome e mudança (meio, data ou categoria).
+ *  Sem número no nome: "almoço 32 foi no pix" continua sendo gasto novo. */
+export function parseEditByName(text: string): { name: string; change: QuotedChange } | null {
+  const t = text.trim().toLowerCase();
+  const m = t.match(/^(?:(?:o|a|os|as)\s+)?([\p{L}][\p{L}\s]{2,30}?)\s+(?:era|foi|foram|eram)\s+(.+?)[.!]?$/u);
+  if (t.length > 70 || !m || /\b(eu|isso|hoje|ontem|dia|que|n[aã]o)$/.test(m[1])) return null;
+  const change = parseQuotedChange(`era ${m[2].replace(/^dia\s+/, "")}`);
+  if (!change || change.remove || change.amount != null || !(change.paymentMethod || change.purchase || change.category)) return null;
+  return { name: m[1].trim(), change };
+}
+
 export async function applyQuotedEdit(entryId: string, c: QuotedChange): Promise<string> {
   const e = await prisma.financeEntry.findUnique({ where: { id: entryId } });
   if (!e) return "Esse lançamento não existe mais.";
