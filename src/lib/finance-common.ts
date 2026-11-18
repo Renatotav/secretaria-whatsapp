@@ -5,7 +5,7 @@
 
 import { prisma } from "./prisma";
 import { isBesteiraItem, spreadDiscount } from "./finance-taxonomy";
-import { parseLocalDate } from "./dates";
+import { parseLocalDate, todayBRT } from "./dates";
 import { brlMsg as brl } from "./format";
 import { invoiceLabel, listOpenInvoices } from "./invoices";
 
@@ -60,11 +60,19 @@ export function sobraDoMes(limitesAnt: Map<string, number>, gastoAnt: Record<str
   return out;
 }
 
+/** O mês (ano, índice) já terminou em relação a hoje? */
+export function mesFechado(year: number, monthIndex: number, hoje: Date): boolean {
+  return hoje.getFullYear() * 12 + hoje.getMonth() > year * 12 + monthIndex;
+}
+
 /** Sobra que cada categoria traz do mês anterior para este (vazio antes de SOBRA_DESDE). */
 export async function sobrasDoMes(year: number, monthIndex: number): Promise<Map<string, number>> {
   const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
   if (monthKey < SOBRA_DESDE) return new Map();
   const ant = new Date(year, monthIndex - 1, 1);
+  // Só passa sobra de mês que já acabou: antes, a previsão contava o teto que falta do mês corrente
+  // nele E de novo como "sobra" no seguinte (17/11: R$ 410,66 a mais de gasto em dezembro).
+  if (!mesFechado(ant.getFullYear(), ant.getMonth(), todayBRT())) return new Map();
   const [lim, { byCategory }] = await Promise.all([limitesBase(ant.getFullYear(), ant.getMonth()), monthTotals(ant.getFullYear(), ant.getMonth())]);
   return sobraDoMes(lim, byCategory);
 }

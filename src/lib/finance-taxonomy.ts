@@ -187,3 +187,26 @@ export function corrigeBebida(descricao: string, category: string, subcategory: 
     ? { category: "Alimentação", subcategory: "Padaria/Lanche" }
     : { category, subcategory };
 }
+
+/** Distância de edição (letras trocadas, a mais ou a menos) — para comando com erro de digitação. */
+export function distancia(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+const dobra = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+/** Categoria da IA com erro de digitação ("Alimantação", 17/11) vira a da lista; categoria criada por ele (longe de todas) fica. */
+export function normalizaCategoria(type: "income" | "expense", category: string, subcategory: string): { category: string; subcategory: string } {
+  const lista = FINANCE_TAXONOMY_DATA[type];
+  const perto = (a: string, b: string) => dobra(a) === dobra(b) || (a.length >= 5 && distancia(dobra(a), dobra(b)) <= 2);
+  const cat = Object.keys(lista).find((c) => perto(category, c));
+  if (!cat) return { category, subcategory };
+  return { category: cat, subcategory: lista[cat].find((x) => perto(subcategory, x)) ?? subcategory };
+}
+

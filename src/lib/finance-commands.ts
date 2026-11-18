@@ -7,7 +7,8 @@ import { invoiceLabel, listOpenInvoices } from "./invoices";
 import { dayRange, formatDayMonth, MONTH_NAMES, reaisFala, SALARY_REPLY_MARK, SO_SALARIO, spentBetween } from "./finance-common";
 import { checkWish, wishLabel } from "./finance-wishes";
 import { findReserveGoal } from "./finance-goals";
-import { cardLimitData, cardLimitLine } from "./finance-reports";
+import { buildDailyDigest, buildWeeklyDigest, cardLimitData, cardLimitLine } from "./finance-reports";
+import type { ProviderOptions } from "./openai";
 import { notifyOwner } from "./owner-notify";
 import { PAYMENT_OPTIONS, parseBrNumber, paymentLabel } from "./finance-text";
 
@@ -84,7 +85,8 @@ export async function applyExplainLimitCommand(text: string): Promise<string | n
 const MULTI_VERB = String.raw`(?:me\s+lembr[ae]|lembr[ae]-?me|registra|anota|lan[cç]a|gastei|paguei|comprei|recebi|marca|agenda)`;
 export function splitRequests(text: string): string[] {
   const pieces = text
-    .split(new RegExp(String.raw`\n+|;\s*|,\s*(?=${MULTI_VERB}\b)|\s+e\s+(?=${MULTI_VERB}\b)`, "i"))
+    // "almoço 25 no pix e uber 18 no cartão": também quebra antes de "nome + valor" (17/11 o uber sumia).
+    .split(new RegExp(String.raw`\n+|;\s*|,\s*(?=${MULTI_VERB}\b)|\s+e\s+(?=${MULTI_VERB}\b)|(?:,|\s+e)\s+(?=\p{L}[\p{L}\s]{1,30}?\s(?:r\$\s*)?\d)`, "iu"))
     .map((p) => p.trim().replace(/[.!]+$/, "").trim())
     .filter(Boolean);
   if (pieces.length < 2 || pieces.length > 6) return [];
@@ -234,5 +236,25 @@ export function parseStopSeries(text: string): string | null {
     t.match(/^(?:tira|tirar|apaga|apagar|remove)\s+(?:as\s+)?previs[oõ]es\s+(?:d[aoe]s?\s+)?(.{3,30})$/) ??
     t.match(/^(?:(?:a|o)\s+)?(.{3,30}?)\s+(?:n[aã]o (?:é|e) (?:assinatura|mensal|fixo|fixa)|(?:é|e) avulsa?)$/);
   return m ? m[1].trim() : null;
+}
+
+// Perguntas de todo dia em regra fixa (17/11: "resumo do dia" respondia "nenhuma pendência" e
+// "quanto posso gastar no cartão?" ia para a IA, que dizia não ver o limite).
+export const LIMIT_ASK_RE = /^\s*(?:quanto|o\s+que)\s+(?:eu\s+)?(?:posso|d[aá]\s+(?:pra|para))\s+gastar(?:\s+(?:no|com\s+o)\s+cart[aã]o)?(?:\s+(?:hoje|esse\s+m[eê]s|ainda|at[eé]\s+a\s+fatura))?\s*\??\s*$|^\s*(?:qual|como\s+est[aá])\s+(?:o\s+|meu\s+)?limite(?:\s+do\s+cart[aã]o)?\s*\??\s*$/i;
+export const DAY_DIGEST_RE = /^\s*(?:(?:me\s+)?(?:manda|d[aá])\s+(?:o\s+)?)?resumo\s+(?:do\s+dia|de\s+hoje|di[aá]rio)\s*\??\s*$/i;
+export const INVOICE_ASK_RE = /^\s*(?:quanto|qual|como)\s+(?:est[aá]|t[aá]|ficou|vai\s+ficar|deu|[eé])?\s*(?:o\s+valor\s+d[ae]\s+)?(?:a\s+|minha\s+)?fatura(?:\s+do\s+(?:meu\s+)?cart[aã]o)?(?:\s+(?:atual|aberta|desse\s+m[eê]s|do\s+m[eê]s))?\s*\??\s*$/i;
+export const WEEK_DIGEST_RE = /^\s*(?:(?:(?:me\s+)?(?:manda|d[aá])\s+(?:o\s+)?)?resumo\s+(?:da\s+semana|semanal)|quanto\s+(?:eu\s+)?gastei\s+(?:essa|nessa|esta|nesta)\s+semana)\s*\??\s*$/i;
+
+export async function applyQuickReportCommand(text: string, opts: ProviderOptions): Promise<string | null> {
+  if (LIMIT_ASK_RE.test(text)) return `${await cardLimitLine()}\nQuer ver a conta? Mande *por que meu limite*.`;
+  if (DAY_DIGEST_RE.test(text)) return buildDailyDigest();
+  // "quanto está a fatura?": a IA escrevia SQL e somava a fatura velha já paga (17/11).
+  if (INVOICE_ASK_RE.test(text)) {
+    const abertas = (await listOpenInvoices()).filter((i) => i.total >= 1);
+    if (!abertas.length) return "✅ Nenhuma fatura em aberto.";
+    return `💳 *Faturas em aberto*\n${abertas.map((i) => `• ${invoiceLabel(i.card)} — vence ${i.dueDate.slice(8, 10)}/${i.dueDate.slice(5, 7)}: *${brl(i.total)}*`).join("\n")}\nCompras novas até o fechamento entram na próxima. Para ver os itens, abra o painel (Dinheiro › Cartões).`;
+  }
+  if (WEEK_DIGEST_RE.test(text)) return (await buildWeeklyDigest(opts)).text;
+  return null;
 }
 

@@ -1,3 +1,4 @@
+import { distancia } from "./finance-taxonomy";
 import { prisma } from "./prisma";
 import { CAN_CLOSE_WHERE, upsertWorkTicket, workStats } from "./work";
 import { normalizeTicketId } from "./work-privacy";
@@ -199,17 +200,6 @@ export async function applyWorkCommand(text: string): Promise<string | null> {
   }
 
   return null;
-}
-
-/** Distância de edição (letras trocadas, a mais ou a menos) — para comando com erro de digitação. */
-export function distancia(a: string, b: string): number {
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    prev = cur;
-  }
-  return prev[b.length];
 }
 
 /** "atualiza a extensão", e também "atualizar exrtensão" (16/11 a letra a mais virou conversa com a IA). */

@@ -16,6 +16,8 @@ Erros que já aconteceram de verdade ao importar a fatura do cartão (PDF ou pri
 | 8 | Fechamento antes do melhor dia configurado | Compra do dia 2 entrou na fatura e a do dia 3 não | Antes de mexer em `creditCardBestDay`, conferir em mais de uma fatura |
 | 9 | Cobrança por uso projetada como assinatura fixa | Serviço cobrado por recarga (créditos de IA) vira "(previsto)" em todos os meses seguintes | Perguntar ao dono se é mensal. Se não for, tirar as projeções |
 | 10 | "Paguei a fatura" deu baixa no cartão errado | O lembrete era do Santander (vence 15/11) e a baixa caiu no C6 de 10/12 (26 compras), que nem tinha vencido | "desfazer" (vale 1 h) e mandar de novo. Desde 13/11 (`escolherFatura`), sem cartão citado vale a fatura que vence primeiro; mesmo dia em dois cartões, ela pergunta |
+| 11 | Fatura sem o cabeçalho "Final XXXX - NOME" entrou toda como paga | Fatura de outro banco (ou com vencimento em número, "10/12/2026") ficava "paga" antes de vencer e sumia das contas a pagar | Desde 17/11 o vencimento em número é lido e vale também sem cabeçalho (`invoiceDueDate` + `applyInvoiceDates`). Fatura antiga importada assim: conferir o status |
+| 12 | Assinatura prevista em dobro | "Netflix (previsto)" anotada e "NETFLIX.COM (previsto)" da fatura no mesmo mês | Desde 17/11 a previsão de assinatura casa pela 1ª palavra (parcelas não, para não juntar duas compras da mesma loja). Ficou o valor antigo nos meses seguintes: a próxima fatura troca |
 
 ## O que o código já faz (desde 08/11/2026)
 

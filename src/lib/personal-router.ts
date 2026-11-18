@@ -1,5 +1,5 @@
 import { generateResponse, generateVisionResponse, ProviderOptions } from "./openai";
-import { corrigeBebida, taxonomyPrompt } from "./finance-taxonomy";
+import { corrigeBebida, normalizaCategoria, taxonomyPrompt } from "./finance-taxonomy";
 import { preenche, promptAtivo } from "./prompts";
 
 // Lista única de categorias (a mesma do seletor do painel) — ver finance-taxonomy.ts.
@@ -285,9 +285,13 @@ export async function routePersonalMessage(
   if (saida)
     return { type: "finance_simulation", simIncome: null, simPurchaseAmount: saida.valor, simInstallments: null, simPaymentMethod: saida.metodo, simDescription: "saída", simCategory: "Saídas", confirmation: "" };
 
-  const now = new Date();
-  const brtTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-  const todayBRT = `${brtTime.getFullYear()}-${String(brtTime.getMonth() + 1).padStart(2, "0")}-${String(brtTime.getDate()).padStart(2, "0")}`;
+  // "como está meu mês (pra dezembro)?": regra fixa (17/11 a IA às vezes mandava para a busca livre, que falhava).
+  if (/^\s*(?:e\s+)?como\s+(?:est[aá]|t[aá]|vai|ficou|fica)\s+(?:o\s+)?meu\s+m[eê]s\b[^?]{0,30}\??\s*$/i.test(message))
+    return { type: "agenda_query", queryIntent: "month_diagnosis", confirmation: "" };
+
+  // getUTC*: o mesmo dia em qualquer fuso do processo (o local errava fora do container em UTC).
+  const brtTime = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const todayBRT = `${brtTime.getUTCFullYear()}-${String(brtTime.getUTCMonth() + 1).padStart(2, "0")}-${String(brtTime.getUTCDate()).padStart(2, "0")}`;
 
   const systemPrompt = preenche(promptTexto ?? (await promptAtivo("classificador", CLASSIFICADOR_PADRAO)), {
     dono: ownerName,
@@ -316,15 +320,20 @@ export async function routePersonalMessage(
       const status = parsed.status === "pending" ? "pending" : "paid";
       const paymentMethod = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"].includes(parsed.paymentMethod as string) ? (parsed.paymentMethod as any) : "pix";
 
-      const bebida = corrigeBebida(String(parsed.financeDescription || message), (parsed.financeCategory as string) || "Outros", (parsed.financeSubcategory as string) || "");
+      const financeType = parsed.financeType === "income" ? "income" : "expense";
+      const cb = corrigeBebida(String(parsed.financeDescription || message), (parsed.financeCategory as string) || "Outros", (parsed.financeSubcategory as string) || "");
+      const bebida = normalizaCategoria(financeType, cb.category, cb.subcategory);
+      // "recebi o vr 700" virava Outros › Reembolso (17/11): crédito do vale é sempre Salário › Vale Alimentação.
+      if (financeType === "income" && (paymentMethod === "ticket" || /\b(vr|va|vale|ticket)\b/i.test(message))) Object.assign(bebida, { category: "Salário", subcategory: "Vale Alimentação" });
       return {
         type: "finance",
-        financeType: parsed.financeType === "income" ? "income" : "expense",
+        financeType,
         amount: Number(parsed.amount) || 0,
         category: bebida.category,
         subcategory: bebida.subcategory,
         description: (parsed.financeDescription as string) || message.slice(0, 120),
         installments: Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null,
+        ...valorDaParcela(message, Number(parsed.amount) || 0, Number.isFinite(installmentsNum) && installmentsNum > 1 ? installmentsNum : null),
         date: (parsed.date as string) || (parsed.financeDate as string) || null,
         purchaseDate: (parsed.purchaseDate as string) || (parsed.financePurchaseDate as string) || null,
         billDate: typeof parsed.billDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(parsed.billDate) ? parsed.billDate.slice(0, 10) : null,
@@ -849,6 +858,7 @@ export async function readImage(
     const kinds = ["nota_fiscal", "fatura", "compra", "estorno", "outro"];
     const methods = ["cartão", "pix", "débito", "boleto", "dinheiro", "ticket"];
     const installments = Number(json.installments);
+    const cat = normalizaCategoria("expense", typeof json.category === "string" && json.category ? json.category : "Outros", typeof json.subcategory === "string" ? json.subcategory : "");
     return {
       kind: kinds.includes(json.kind as string) ? (json.kind as ImageReading["kind"]) : "outro",
       summary: typeof json.summary === "string" ? json.summary : "",
@@ -858,8 +868,8 @@ export async function readImage(
       paymentMethod: methods.includes(json.paymentMethod as string) ? (json.paymentMethod as ImageReading["paymentMethod"]) : "pix",
       paymentSeen: methods.includes(json.paymentMethod as string),
       installments: Number.isFinite(installments) && installments > 1 ? installments : null,
-      category: typeof json.category === "string" && json.category ? json.category : "Outros",
-      subcategory: typeof json.subcategory === "string" ? json.subcategory : "",
+      category: cat.category,
+      subcategory: cat.subcategory,
       suggestion: typeof json.suggestion === "string" ? json.suggestion : "",
     };
   } catch {
@@ -867,3 +877,15 @@ export async function readImage(
     return { kind: "outro", summary: "", description: "", amount: 0, date: null, paymentMethod: "pix", installments: null, category: "Outros", subcategory: "", suggestion: "" };
   }
 }
+
+/** "tv 3000 em 12 vezes" = total (a IA às vezes lia como 12× de 3000); "12x de 250" = parcela. Regra fixa, por cima da IA. */
+export function valorDaParcela(text: string, amount: number, n: number | null): { amount?: number } {
+  if (!n || amount <= 0) return {};
+  const t = text.toLowerCase();
+  if (/\d\s*(?:x|vezes|parcelas?)\s+de\s/.test(t)) return {}; // valor da parcela dito
+  const nums = [...t.matchAll(/\d+(?:\.\d{3})*(?:,\d{1,2})?/g)].map((m) => Number(m[0].replace(/\./g, "").replace(",", ".")));
+  const total = nums.find((v) => v !== n && v > amount * 1.5);
+  if (total && Math.abs(total / n - amount) < 0.02) return {}; // a IA já dividiu certo
+  return nums.some((v) => Math.abs(v - amount) < 0.01) ? { amount: Math.round((amount / n) * 100) / 100 } : {};
+}
+

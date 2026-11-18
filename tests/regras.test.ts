@@ -604,3 +604,70 @@ test("'Data 14/11' depois de lançar é regra fixa, sem IA (17/11)", async () =>
   assert.equal(soDataDeCompra("data 40/11", hoje), null);
 });
 
+test("dois gastos numa mensagem e parcelado com o total (bateria de 17/11)", async () => {
+  const { splitRequests } = await import("../src/lib/finance-commands");
+  assert.deepEqual(splitRequests("almoço 25 no pix e uber 18 no cartão"), ["almoço 25 no pix", "uber 18 no cartão"]);
+  assert.deepEqual(splitRequests("arroz e feijão 30"), []);
+  const { valorDaParcela } = await import("../src/lib/personal-router");
+  assert.deepEqual(valorDaParcela("tv 3000 em 12 vezes no cartão", 3000, 12), { amount: 250 });
+  assert.deepEqual(valorDaParcela("celular 1200 em 10x no cartão", 120, 10), {});
+  assert.deepEqual(valorDaParcela("fone em 3x de 100", 100, 3), {});
+  assert.deepEqual(valorDaParcela("almoço 30", 30, null), {});
+});
+
+test("perguntas de todo dia em regra fixa: limite e resumo (17/11)", async () => {
+  const { LIMIT_ASK_RE, DAY_DIGEST_RE, WEEK_DIGEST_RE } = await import("../src/lib/finance-commands");
+  for (const ok of ["quanto posso gastar no cartão?", "quanto eu posso gastar", "qual meu limite?", "quanto dá pra gastar até a fatura"]) assert.ok(LIMIT_ASK_RE.test(ok), ok);
+  assert.equal(LIMIT_ASK_RE.test("posso gastar 80 no bar?"), false);
+  assert.ok(DAY_DIGEST_RE.test("resumo do dia") && DAY_DIGEST_RE.test("me manda o resumo de hoje"));
+  assert.ok(WEEK_DIGEST_RE.test("resumo da semana"));
+  assert.equal(DAY_DIGEST_RE.test("resumo do dia 10 de outubro"), false);
+});
+
+test("gasto sem valor pergunta quanto foi, sem IA (17/11)", async () => {
+  const { gastoSemValor } = await import("../src/lib/message-handlers");
+  assert.equal(gastoSemValor("paguei o estacionamento"), "estacionamento");
+  assert.equal(gastoSemValor("gastei com uber"), "uber");
+  assert.equal(gastoSemValor("paguei a fatura"), null);
+  assert.equal(gastoSemValor("gastei demais"), null);
+  assert.equal(gastoSemValor("paguei o aluguel 1200"), null);
+});
+
+test("vírgula separa pedidos; 'quanto está a fatura?' é regra fixa (17/11)", async () => {
+  const { splitRequests, INVOICE_ASK_RE } = await import("../src/lib/finance-commands");
+  assert.deepEqual(splitRequests("almoço 25 no pix, uber 18 no cartão e sorvete 12 no pix"), ["almoço 25 no pix", "uber 18 no cartão", "sorvete 12 no pix"]);
+  assert.deepEqual(splitRequests("Mercantil 182, 58 no cartão"), []);
+  for (const ok of ["quanto está a fatura do cartão?", "qual a fatura", "quanto tá minha fatura?", "quanto vai ficar a fatura?"]) assert.ok(INVOICE_ASK_RE.test(ok), ok);
+  assert.equal(INVOICE_ASK_RE.test("paguei a fatura"), false);
+});
+
+test("categoria da IA com erro de digitação volta para a lista; criada por ele fica (17/11)", async () => {
+  const { normalizaCategoria } = await import("../src/lib/finance-taxonomy");
+  assert.deepEqual(normalizaCategoria("expense", "Alimantação", "Delivery"), { category: "Alimentação", subcategory: "Delivery" });
+  assert.deepEqual(normalizaCategoria("expense", "Transporte", "Uber/Taxi"), { category: "Transporte", subcategory: "Uber/Taxi" });
+  assert.deepEqual(normalizaCategoria("expense", "Scooter", "Peças"), { category: "Scooter", subcategory: "Peças" });
+});
+
+test("sobra do teto só passa de mês que já acabou (17/11: dezembro contava novembro duas vezes)", async () => {
+  const { mesFechado } = await import("../src/lib/finance-common");
+  const hoje = new Date(2026, 10, 17, 12);
+  assert.equal(mesFechado(2026, 9, hoje), true); // outubro
+  assert.equal(mesFechado(2026, 10, hoje), false); // novembro ainda corre
+  assert.equal(mesFechado(2026, 11, hoje), false);
+});
+
+test("vencimento da fatura em número (outros bancos) (17/11)", async () => {
+  const { invoiceDueDate } = await import("../src/lib/message-handlers");
+  const d = invoiceDueDate("Vencimento: 10/12/2026     Fechamento: 03/12/2026");
+  assert.equal(d?.getFullYear(), 2026); assert.equal(d?.getMonth(), 11); assert.equal(d?.getDate(), 10);
+  assert.equal(invoiceDueDate("Vencimento: 10 de dezembro de 2026")?.getMonth(), 11);
+});
+
+test("'como está meu mês?' é regra fixa, sem IA (17/11)", async () => {
+  const { routePersonalMessage } = await import("../src/lib/personal-router");
+  for (const t of ["como está meu mês?", "como tá meu mês pra dezembro?", "e como vai meu mês"]) {
+    const r = await routePersonalMessage(t, "Dono", {} as never);
+    assert.equal(r.type === "agenda_query" && r.queryIntent, "month_diagnosis", t);
+  }
+});
+

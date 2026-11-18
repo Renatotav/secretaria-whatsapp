@@ -583,13 +583,15 @@ export async function buildBudgetResponse(): Promise<string> {
  * mode "reminder" (lembrete das 9h): só vencidas e as que vencem em até 3
  * dias — devolve "" se não houver nada, para não mandar mensagem à toa.
  */
-export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promise<string> {
+export async function buildBillsDue(mode: "query" | "reminder" = "query", ref?: { y: number; m: number } | null): Promise<string> {
   const today = todayBRT();
   const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const DAY = 86400000;
+  // "o que tenho pra pagar em dezembro?" respondia só até o fim de novembro (17/11).
+  const mes = ref ?? { y: today.getFullYear(), m: today.getMonth() };
   const until = mode === "reminder"
     ? new Date(startToday.getTime() + 4 * DAY - 1)
-    : new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+    : new Date(mes.y, mes.m + 1, 0, 23, 59, 59);
   // Despesas a pagar + estornos no cartão (crédito que abate da fatura).
   const pending = await prisma.financeEntry.findMany({
     where: { status: "pending", date: { lte: until }, OR: [{ type: "expense" }, { type: "income", paymentMethod: "cartão" }] },
@@ -622,7 +624,7 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
   }
   items.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  if (items.length === 0) return mode === "reminder" ? "" : `✅ Nenhuma conta a pagar até o fim de ${MONTH_NAMES[today.getMonth()]}!`;
+  if (items.length === 0) return mode === "reminder" ? "" : `✅ Nenhuma conta a pagar até o fim de ${MONTH_NAMES[mes.m]}!`;
 
   const line = (i: (typeof items)[number]) => {
     const day = new Date(i.date.getFullYear(), i.date.getMonth(), i.date.getDate()).getTime();
@@ -632,7 +634,7 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
     return `${icon} ${i.label} — ${brl(i.amount)} (${when})`;
   };
   const total = items.reduce((sum, i) => sum + i.amount, 0);
-  const title = mode === "reminder" ? "⏰ *Contas vencendo*" : `📋 *Contas a pagar até o fim de ${MONTH_NAMES[today.getMonth()]}*`;
+  const title = mode === "reminder" ? "⏰ *Contas vencendo*" : `📋 *Contas a pagar até o fim de ${MONTH_NAMES[mes.m]}*`;
   // Exemplo com o nome de uma conta da lista (antes era sempre "o aluguel").
   const exemplo = items.find((i) => !i.label.startsWith("💳"))?.label.replace(/\s*-\s*Parcela \d+\/\d+.*$/i, "").replace(/\s*\(.*$/, "").trim().toLowerCase();
   const footer = mode === "reminder" ? `\nJá pagou? Me diga "paguei ${exemplo || "a fatura"}" que eu dou baixa.` : "";
@@ -640,7 +642,7 @@ export async function buildBillsDue(mode: "query" | "reminder" = "query"): Promi
 }
 
 export async function buildQueryResponse(intent: PersonalQueryIntent, texto = ""): Promise<string> {
-  if (intent === "bills_due") return buildBillsDue("query");
+  if (intent === "bills_due") return buildBillsDue("query", mesPedido(texto));
   if (intent === "budget_status") return buildBudgetResponse();
   if (intent === "vr_balance") return buildVrBalance();
   if (intent === "wish_list") return buildWishList();

@@ -43,7 +43,7 @@ import { applySplit, parseSplit, splitTransactions } from "./finance-split";
 import type { SplitPart } from "./finance-split";
 import { applyQuotedEdit, entryFromQuoted, parseDeleteText, parseDidLogText, parseEditByName, parseEditText, parseQuotedChange } from "./quoted-reply";
 import { answerChat, answerFinanceQuestion } from "./assistant-chat";
-import { BILL_STATED_RE, HIGH_VALUE, PAYMENT_QUESTION, PAYMENT_REPLY_WINDOW_MS, PAYMENT_STATED_RE, SAVINGS_REPLY_MARK, UNDO_HINT, applyExplainLimitCommand, applyPaymentReply, applySalaryReply, parseStopSeries, splitRequests } from "./finance-commands";
+import { BILL_STATED_RE, HIGH_VALUE, PAYMENT_QUESTION, PAYMENT_REPLY_WINDOW_MS, PAYMENT_STATED_RE, SAVINGS_REPLY_MARK, UNDO_HINT, applyExplainLimitCommand, applyPaymentReply, applySalaryReply, applyQuickReportCommand, parseStopSeries, splitRequests } from "./finance-commands";
 export { parseSplit };
 export { sendGoalsChart };
 export { downloadIncomingMedia, transcribeIncomingAudio };
@@ -128,15 +128,21 @@ let lastNotaEntry: { id: string; at: number } | null = null;
 
 /** Resposta citando uma mensagem antiga. null = não é o caso (segue o fluxo normal). */
 async function applyQuotedReply(text: string, quoted: string | undefined): Promise<string | null> {
-  if (!quoted) return null;
+  // Sem citar, logo depois de lançar: "era besteira" e "100 no vr e o resto no cartão" valem para o último
+  // (17/11: a categoria virava "já tem um igual, lanço outro?" e a divisão "não entendi").
+  const recente = !quoted && lastSaved && Date.now() - new Date(lastSaved.since).getTime() < 60 * 60 * 1000;
+  if (!quoted && !recente) return null;
   // Só correção curta e afirmativa: pergunta ("quanto gastei ontem?") segue o fluxo normal.
   const t = text.trim();
   if (t.length > 80 || /\?\s*$/.test(t)) return null;
   const looksSplit = parseSplit(t, 1_000_000) !== null;
   const change = looksSplit ? null : parseQuotedChange(t);
   if (!looksSplit && !change) return null;
-  const e = await entryFromQuoted(quoted);
-  if (!e) return /📝|💰|Nota fiscal de R\$/i.test(quoted) ? "🤔 Não achei esse lançamento (pode ter sido apagado ou mudado de valor). Corrija pelo painel ou peça o \"histórico do …\"." : null;
+  // Sem citar, só divisão e categoria (meio, valor e "desfazer" já têm o fluxo do último lançamento).
+  if (!quoted && !looksSplit && !change?.category) return null;
+  const e = quoted ? await entryFromQuoted(quoted) : (await lastSavedEntries())[0];
+  if (!e && !quoted) return null;
+  if (!e) return /📝|💰|Nota fiscal de R\$/i.test(quoted ?? "") ? "🤔 Não achei esse lançamento (pode ter sido apagado ou mudado de valor). Corrija pelo painel ou peça o \"histórico do …\"." : null;
   const label = e.description || e.category;
   const split = looksSplit ? parseSplit(t, e.amount) : null;
   if (split && "erro" in split) return `✂️ ${split.erro}`;
@@ -413,7 +419,8 @@ let pendingAmount: { text: string; at: number } | null = null;
 
 const UNDO_RE = /^(desfaz(er)?|desfa[cç]a|apag(a|ue) (o |esse |este )?([uú]ltimo|lan[çc]amento|gasto)|cancela (o |esse |este )?([uú]ltimo|lan[çc]amento|gasto))[.!]?$/i;
 const EDIT_AMOUNT_RE = new RegExp(String.raw`^(na verdade|na real|corrigindo|errei,?)\s*(foi|era|é|e|deu|custou|o valor (foi|era|é))?\s*(r\$\s*)?${NUMBER_PART}\s*(reais|conto|contos)?[.!]?$`, "i");
-const AMOUNT_ONLY_RE = new RegExp(String.raw`^(foi\s*)?(r\$\s*)?${NUMBER_PART}\s*(reais|conto|contos)?[.!]?$`, "i");
+// "12 no pix" também vale como resposta ao "quanto foi?" (17/11 virava gasto novo sem nome).
+const AMOUNT_ONLY_RE = new RegExp(String.raw`^(foi\s*)?(r\$\s*)?${NUMBER_PART}\s*(reais|conto|contos)?\s*((?:no|na|em|pelo|pela)\s+(?:pix|d[eé]bito|dinheiro|cart[aã]o|cr[eé]dito|vr|va|vale|ticket))?[.!]?$`, "i");
 
 /** O que foi criado no último lançamento por mensagem (o gasto ou a série de parcelas). */
 async function lastSavedEntries() {
@@ -547,7 +554,7 @@ function takeAmountReply(text: string): string | null {
   const m = text.trim().match(AMOUNT_ONLY_RE);
   if (!m) return null;
   pendingAmount = null;
-  return `${pending.text} — valor: R$ ${m[3]}`;
+  return `${pending.text} — valor: R$ ${m[3]}${m[5] ? ` ${m[5]}` : ""}`;
 }
 
 // Fatura em PDF com senha esperando o dono mandar a senha. Fica só na memória
@@ -708,17 +715,18 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
   if (!pendingImageDraft && !pendingInvoiceDraft) joinedText = takeAmountReply(joinedText) ?? joinedText;
 
   // "sim"/"não" para o gasto alto que estava esperando confirmação.
+  // Outra mensagem no meio não apaga a pergunta (17/11: o "sim" depois do almoço foi para a IA, que disse "geladeira lançada" sem lançar).
   if (pendingHighValue) {
     const pending = pendingHighValue;
-    pendingHighValue = null;
-    if (Date.now() - pending.at < 30 * 60 * 1000) {
-      if (CONFIRM_YES_RE.test(joinedText.trim())) {
-        joinedText = pending.text;
-        confirmedHighValueText = pending.text;
-      } else if (CONFIRM_NO_RE.test(joinedText.trim())) {
-        await notifyOwner(config, "👍 Ok, não lancei.");
-        return;
-      }
+    if (Date.now() - pending.at >= 30 * 60 * 1000) pendingHighValue = null;
+    else if (CONFIRM_YES_RE.test(joinedText.trim())) {
+      pendingHighValue = null;
+      joinedText = pending.text;
+      confirmedHighValueText = pending.text;
+    } else if (CONFIRM_NO_RE.test(joinedText.trim())) {
+      pendingHighValue = null;
+      await notifyOwner(config, "👍 Ok, não lancei.");
+      return;
     }
   }
 
@@ -738,7 +746,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await applyExtrasCommand(joinedText)) ?? (await applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyQuickReportCommand(joinedText, getProviderOpts(config))) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await applyExtrasCommand(joinedText)) ?? (await applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
@@ -790,11 +798,29 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       return;
     }
   }
+  // "paguei o estacionamento" sem valor: pergunta quanto foi (17/11 a IA respondia que "não conseguia lançar").
+  const semValor = gastoSemValor(joinedText);
+  if (semValor) {
+    pendingAmount = { text: joinedText, at: Date.now() };
+    const pergunta = `💬 Quanto foi *${semValor}*? Responda só o valor (ex: 25,90).`;
+    await notifyOwner(config, pergunta);
+    await recordExchange(config.ownerPhone, joinedText, pergunta).catch(() => {});
+    return;
+  }
   // "Data 14/11" logo depois de lançar: regra fixa, sem IA (na prova de 17/11 a IA às vezes respondia como conversa).
   const novaData = lastSaved && Date.now() - new Date(lastSaved.since).getTime() < 30 * 60 * 1000 ? soDataDeCompra(joinedText, todayBRT()) : null;
   let route: Awaited<ReturnType<typeof routePersonalMessage>> = novaData
     ? { type: "finance_update_date", newPurchaseDate: novaData, confirmation: "" }
     : await routePersonalMessage(joinedText, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
+  // Texto curto logo depois de um print ("pix pro joão do conserto"): é a descrição do print, mesmo que a IA ache que é conversa (17/11).
+  if (route.type !== "finance" && (imageReading || pendingImageDraft) && Date.now() - imageArrivedAt < IMAGE_NOTE_WINDOW_MS && !/\d|\?/.test(joinedText) && joinedText.length <= 80) {
+    route = { type: "finance", financeType: "expense", amount: 0, category: "", subcategory: "", description: joinedText.trim().replace(/^(?:pix|transferi|paguei|mandei)\s+(?:pro|pra|para|ao?)\s+/i, ""), installments: null, date: null, purchaseDate: null, billDate: null, paymentMethod: "pix", account: "Principal", status: "paid", mood: "neutro", confirmation: "" };
+  }
+  // Valor + meio de pagamento e mesmo assim "conversa" ("nota fiscal 95 no cartão", 17/11): tenta de novo como gasto.
+  if (route.type === "chat" && !novaData && /\d/.test(joinedText) && PAYMENT_STATED_RE.test(joinedText) && !/\?/.test(joinedText) && joinedText.length <= 120) {
+    const outra = await routePersonalMessage(`gastei ${joinedText}`, config.ownerName, providerOpts, recentContext, config.systemPrompt, config.creditCardDueDay, config.creditCardBestDay);
+    if (outra.type === "finance" && outra.amount > 0) route = outra;
+  }
   // Citou uma mensagem e só comentou, sem valor: é relato, não gasto novo (03/11 "esse gasto foi me alimentar…" repetiu o almoço).
   if (route.type === "finance" && _meta.quoted && !/\d/.test(joinedText)) {
     route = { type: "diary", content: joinedText, mood: route.mood ?? "neutro", confirmation: "📔 Anotei no seu diário." };
@@ -922,7 +948,8 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
       // compra vai em purchaseDate. Exceção: se ele disse explicitamente a
       // fatura ("pagamento para dia 10/11"), vale o que ele disse — o
       // fechamento às vezes muda (ex: feriado/eleição).
-      const isCardExpense = route.paymentMethod === "cartão" && route.financeType === "expense";
+      // Estorno no cartão também vai para a fatura certa, a pagar (abate dela); antes ficava "fatura de hoje", pago (17/11).
+      const isCardExpense = route.paymentMethod === "cartão" && (route.financeType === "expense" || /\b(estorno|estornad[oa]|reembolso\s+no\s+cart)/i.test(joinedText));
       // Compra no futuro não existe: a IA confundia a fatura dita ("pagamento 10/11") com o dia da compra (26/10).
       const saidPurchase = route.purchaseDate ? parseLocalDate(route.purchaseDate) : null;
       const cardPurchaseDate = saidPurchase && saidPurchase <= todayBRT() ? saidPurchase : todayBRT();
@@ -936,6 +963,10 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
           : creditCardBillDate(cardPurchaseDate, days.due, days.best)
         ).toISOString();
         route.status = "pending";
+      } else if (route.status === "paid" && saidPurchase) {
+        // Pix/débito/VR já pago: o dinheiro sai no dia da compra ("cupom de 31/10 no vr" ia para novembro, 04/11).
+        if (saidPurchase > todayBRT()) route.status = "pending"; // pix de 25/11 dito hoje ainda não saiu
+        route.date = route.purchaseDate;
       }
 
       if (route.installments) {
@@ -1019,7 +1050,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
           }
         } else {
           // Humor do dia do GASTO ("ontem gastei…" usa o diário de ontem).
-          const spentOn = route.purchaseDate ? parseLocalDate(route.purchaseDate) : new Date();
+          const spentOn = route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT();
           let finalMood = route.mood || "neutro";
           if (finalMood === "neutro") finalMood = await diaryMoodOn(spentOn);
 
@@ -1033,8 +1064,9 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
               category: route.category,
               subcategory: route.subcategory,
               description: route.description,
-              date: route.date ? parseLocalDate(route.date) : new Date(),
-              purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : new Date(),
+              // Sem data da IA: hoje em Brasília (new Date() depois das 21h já é amanhã no servidor em UTC).
+              date: route.date ? parseLocalDate(route.date) : todayBRT(),
+              purchaseDate: route.purchaseDate ? parseLocalDate(route.purchaseDate) : todayBRT(),
               paymentMethod: route.paymentMethod,
               account: route.account,
               status: route.status,
@@ -1298,8 +1330,15 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
     .filter((e) => !e.description.includes("(previsto)"))
     .reduce((s, e) => s + (e.type === "expense" ? e.amount : -e.amount), 0);
 
-  let response = `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: ${brl(total)}`;
+  // Compra parcelada mandada por mensagem/print não é "extrato" (17/11 confundia).
+  const umaCompra = real === 1 && /mensagem|print/.test(sourceLabel);
+  let response = umaCompra
+    ? `✅ Parcelado salvo: *${toInsert.find((e) => !e.description.includes("(previsto)"))?.description ?? "compra"}* · ${brl(total)} na primeira fatura`
+    : `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: ${brl(total)}`;
   if (projected > 0) response += `\n📅 +${projected} parcela(s) futura(s) projetada(s) nos próximos meses.`;
+  // Assinatura nova vira previsão de 12 meses; recarga avulsa (créditos de IA) não é (erro 9 da lista): ele decide.
+  const novasAssin = [...new Set(toInsert.filter((e) => e.description.includes("(previsto)") && !/Parcela \d+\/\d+/.test(e.description)).map((e) => e.description.replace(/\s*\(previsto\)/, "").trim()))];
+  if (novasAssin.length) response += `\n🔁 Vou repetir todo mês: ${novasAssin.slice(0, 5).join(", ")}. Se alguma não for mensal, mande *${primeiraPalavraLegivel(novasAssin[0])} não é assinatura*.`;
   if (duplicates > 0) response += `\n♻️ ${duplicates} já estavam lançadas (ignoradas pra não duplicar).`;
   if (matchedManual.length > 0) {
     const list = matchedManual.slice(0, 15).map((e) => `• ${e.description} — ${brl(e.amount)}`).join("\n");
@@ -1351,8 +1390,10 @@ async function handleStatementDocumentInner(statementText: string): Promise<void
     return;
   }
 
-  // Sem cabeçalho de cartão: texto todo, com o filtro de titular no prompt.
-  const entries = await parseStatementEntries(statementText, getProviderOpts(config), config.ownerName);
+  // Sem cabeçalho de cartão: texto todo, com o filtro de titular no prompt. Com vencimento impresso, a data e o
+  // "a pagar" vêm dele (17/11: fatura de outro banco entrava toda como paga, antes de vencer).
+  const due = invoiceDueDate(statementText);
+  const entries = (await parseStatementEntries(statementText, getProviderOpts(config), config.ownerName)).map((e) => (due ? applyInvoiceDates(e, due) : e));
   await saveStatementEntries(config, entries, "o PDF");
 }
 
@@ -1441,7 +1482,10 @@ const MONTHS_PT = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "
  * Vencimento da fatura ("Vencimento: 10 de Outubro"). Sem ano impresso, usa o
  * ano que deixa a data mais perto de hoje — a IA chutava (já saiu 2023).
  */
-function invoiceDueDate(text: string): Date | null {
+export function invoiceDueDate(text: string): Date | null {
+  // "Vencimento: 10/12/2026" (outros bancos; antes só "10 de dezembro" do C6 era lido).
+  const n = text.match(/Vencimento:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+  if (n) return parseLocalDate(isoDay(Number(n[3]), Number(n[2]) - 1, Number(n[1])));
   const m = text.match(/Vencimento:?\s*(\d{1,2})\s+de\s+([A-Za-zçÇ]+)(?:\s+de\s+(\d{4}))?/i);
   if (!m) return null;
   const month = MONTHS_PT.indexOf(m[2].toLowerCase().replace("marco", "março"));
@@ -1635,6 +1679,14 @@ async function meioDaLoja(description: string): Promise<string | null> {
   return null;
 }
 
+async function meioMaisUsado(): Promise<string | null> {
+  const ult = await prisma.financeEntry.findMany({ where: { type: "expense", source: "whatsapp" }, orderBy: { createdAt: "desc" }, take: 20, select: { paymentMethod: true } });
+  const conta = new Map<string, number>();
+  for (const e of ult) conta.set(e.paymentMethod, (conta.get(e.paymentMethod) ?? 0) + 1);
+  const [top] = [...conta].sort((a, b) => b[1] - a[1]);
+  return top && top[1] >= 5 ? top[0] : null;
+}
+
 async function readSmartImage(base64: string, mimetype: string, caption: string): Promise<void> {
   const config = await prisma.agentConfig.findFirst();
   if (!config || !config.ownerPhone) return;
@@ -1644,8 +1696,10 @@ async function readSmartImage(base64: string, mimetype: string, caption: string)
   // Print sem o meio de pagamento (pedido de app): usa o da última compra nessa loja em vez de chutar Pix.
   if (reading.kind === "compra" && reading.paymentSeen === false) {
     const meio = await meioDaLoja(reading.description);
-    if (meio) reading.paymentMethod = meio as typeof reading.paymentMethod;
-    reading.summary = `${reading.summary} (O print não mostra como pagou: ${meio ? `usei ${meio}, como na última compra nessa loja` : "usei Pix"}. Se foi outro, depois do *sim* mande o meio, ex.: *cartão*.)`.trim();
+    // Loja nova: o meio que ele mais usa nos últimos lançamentos (antes era sempre Pix, e ele paga quase tudo no cartão).
+    const habito = meio ? null : await meioMaisUsado();
+    if (meio || habito) reading.paymentMethod = (meio ?? habito) as typeof reading.paymentMethod;
+    reading.summary = `${reading.summary} (O print não mostra como pagou: ${meio ? `usei ${meio}, como na última compra nessa loja` : habito ? `usei ${habito}, o que você mais usa` : "usei Pix"}. Se foi outro, mande o meio antes do *sim*, ex.: *pix*.)`.trim();
   }
 
   if (reading.kind === "nota_fiscal") return handleInvoiceImage(base64, mimetype, caption);
@@ -1732,20 +1786,27 @@ function imageDraftEntry(r: import("./personal-router").ImageReading, config: Ag
 }
 
 /** Gasto com o mesmo valor em ±2 dias da compra (16/11 a pizza ficou duas vezes): só avisa, quem decide é ele. */
-async function avisoRepetido(e: { id: string; type: string; amount: number; purchaseDate: Date | null; date: Date }): Promise<string> {
+async function avisoRepetido(e: { id: string; type: string; amount: number; category: string; purchaseDate: Date | null; date: Date }): Promise<string> {
   if (e.type !== "expense") return "";
   const dia = e.purchaseDate ?? e.date;
   const igual = await prisma.financeEntry.findFirst({
     where: {
       id: { not: e.id }, type: "expense", amount: { gte: e.amount - 0.01, lte: e.amount + 0.01 },
       // ±7 dias avisava em 1 de cada 4 (parcelas, almoço de toda semana): ±2 pega o print + o texto do mesmo gasto.
-      purchaseDate: { gte: new Date(dia.getTime() - 2 * 86400_000), lte: new Date(dia.getTime() + 2 * 86400_000) },
+      // Ou lançado nas últimas 48 h: print do sábado + "uber 21,77" digitado na segunda (o texto vira compra de hoje).
+      OR: [
+        { purchaseDate: { gte: new Date(dia.getTime() - 2 * 86400_000), lte: new Date(dia.getTime() + 2 * 86400_000) } },
+        { createdAt: { gte: new Date(Date.now() - 48 * 3600_000) }, category: e.category },
+      ],
       NOT: [{ description: { contains: "(previsto)" } }, { description: { contains: "Parcela" } }],
     },
     orderBy: { createdAt: "desc" },
   });
   return igual ? `\n⚠️ Já tem "${igual.description || igual.category}" de ${brl(igual.amount)} em ${formatDayMonth(igual.purchaseDate ?? igual.date)}. Se for o mesmo gasto, responda *desfazer*.` : "";
 }
+
+/** "OPENAI *CHATGPT" → "openai" (o nome que ele escreveria no comando). */
+const primeiraPalavraLegivel = (d: string) => d.toLowerCase().match(/[\p{L}\d]{3,}/u)?.[0] ?? d.toLowerCase();
 
 // "cancelei a X": previsões futuras dessa série esperando o *sim* para sair (09/11 o Claude teve que apagar 21 do OpenRouter à mão).
 let pendingSeriesStop: { ids: string[]; name: string; at: number } | null = null;
@@ -1821,6 +1882,13 @@ async function applyDateFixReply(text: string, config: AgentConfig): Promise<str
   const entry = await prisma.financeEntry.findUnique({ where: { id: fix.id } });
   if (!entry) return "❌ Não achei mais esse lançamento.";
   return aplicarDataCompra(entry, parseLocalDate(fix.date), config);
+}
+
+/** "paguei o estacionamento", "gastei com uber" (sem número) → "estacionamento"; null se não for. Fatura/conta têm fluxo próprio. */
+export function gastoSemValor(text: string): string | null {
+  const m = text.trim().match(/^(?:paguei|gastei(?:\s+com)?|comprei)\s+(?:(?:o|a|os|as|um|uma|no|na)\s+)?(\p{L}[\p{L}\s]{2,30}?)[.!]?$/iu);
+  if (!m || /\b(fatura|cart[aã]o|conta|contas|boleto|tudo|isso|aquilo|hoje|ontem|demais|muito|pouco)\b/i.test(m[1])) return null;
+  return m[1].trim();
 }
 
 /** "Data 14/11", "dia 14/11", "foi dia 14" → "2026-11-14"; null se a mensagem tem mais coisa. */

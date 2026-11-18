@@ -326,10 +326,15 @@ export async function projectAndInsertFinanceEntries(
   });
   const mesKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
   const previstoNoMes = new Map(previstos.map((p) => [`${nameKey(p.description)}|${mesKey(p.date)}`, p.id]));
+  // Pela 1ª palavra também ("Netflix (previsto)" × "NETFLIX.COM (previsto)"): antes ficavam as duas em cada mês (17/11).
+  // shortcut: a previsão antiga fica com o valor antigo; a próxima fatura troca pelo real (padrão 2).
+  // Só assinatura: duas séries de parcelas da mesma loja (2 compras na Amazon) têm a mesma 1ª palavra.
+  const assinaturaNoMes = (d: string, date: Date) => (/Parcela \d+\/\d+/i.test(d) || !primeiraPalavra(d) ? "" : `w:${primeiraPalavra(d)}|${mesKey(date)}`);
+  for (const p of previstos) { const k = assinaturaNoMes(p.description, p.date); if (k) previstoNoMes.set(k, p.id); }
   const vistos: string[] = [];
   for (const c of candidates) {
     const isProjection = c.entry.description.includes("(previsto)");
-    const jaPrevisto = isProjection ? previstoNoMes.get(`${nameKey(c.entry.description)}|${mesKey(c.date)}`) : undefined;
+    const jaPrevisto = isProjection ? previstoNoMes.get(`${nameKey(c.entry.description)}|${mesKey(c.date)}`) ?? previstoNoMes.get(assinaturaNoMes(c.entry.description, c.date) || "-") : undefined;
     if (jaPrevisto) {
       vistos.push(jaPrevisto);
       duplicates++;

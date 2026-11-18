@@ -63,7 +63,7 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
 
   let sql = "";
   try {
-    const { content } = await generateResponse([{ role: "user", content: sqlPrompt }], "Você escreve SQL PostgreSQL correto e seguro.", 0, 400, providerOpts);
+    const { content } = await generateResponse([{ role: "user", content: sqlPrompt }], "Você escreve SQL PostgreSQL correto e seguro.", 0, 1200, providerOpts); // 400 cortava o SQL no meio (17/11)
     sql = content.replace(/```sql|```/gi, "").trim().replace(/;\s*$/, "");
   } catch (err) {
     console.error("[finance_question] a IA não respondeu:", err instanceof Error ? err.message.slice(0, 160) : err);
@@ -75,19 +75,32 @@ Se a pergunta NÃO disser o período, considere só o mês atual (date dentro do
     return "⚠️ Não consegui montar uma consulta segura para essa pergunta. Tenta de outro jeito?";
   }
 
-  let rows: unknown[] = [];
-  try {
-    rows = await prisma.$transaction(async (tx) => {
+  const roda = (q: string) =>
+    prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
       await tx.$executeRawUnsafe("SET LOCAL statement_timeout = 5000");
       // Papel que só lê as 4 tabelas do financeiro (criado em 03/11/2026): o próprio banco barra o resto,
       // mesmo se um truque passar pelo sqlSeguro. Sem o papel, a consulta falha em vez de rodar como superusuário.
       await tx.$executeRawUnsafe("SET LOCAL ROLE finance_reader");
-      return tx.$queryRawUnsafe<unknown[]>(sql);
+      return tx.$queryRawUnsafe<unknown[]>(q);
     });
+  let rows: unknown[] = [];
+  try {
+    rows = await roda(sql);
   } catch (err) {
-    console.error("[finance_question] erro ao consultar", err, sql);
-    return "⚠️ Não consegui buscar isso no banco. Tenta perguntar de outro jeito?";
+    // SQL com erro (alias trocado, cortado): a IA vê a mensagem do banco e corrige uma vez (17/11 falhava 2 em 5).
+    const erro = (err instanceof Error ? err.message : String(err)).split("\n").filter((l) => /Message:|error/i.test(l)).join(" ").slice(0, 300);
+    console.error("[finance_question] erro ao consultar, tentando corrigir:", erro);
+    try {
+      const { content } = await generateResponse([{ role: "user", content: `${sqlPrompt}\n\nEste SQL deu erro no PostgreSQL:\n${sql}\n\nErro: ${erro}\nDevolva o SQL corrigido, só o SQL.` }], "Você escreve SQL PostgreSQL correto e seguro.", 0, 1200, providerOpts);
+      const fixed = content.replace(/```sql|```/gi, "").trim().replace(/;\s*$/, "");
+      if (!sqlSeguro(fixed)) throw new Error("SQL corrigido recusado");
+      rows = await roda(fixed);
+      sql = fixed;
+    } catch (err2) {
+      console.error("[finance_question] erro ao consultar", err2, sql);
+      return "⚠️ Não consegui buscar isso no banco. Tenta perguntar de outro jeito?";
+    }
   }
 
   const data = JSON.stringify(rows.slice(0, 50), (_k, v) => (typeof v === "bigint" ? Number(v) : v));
@@ -183,7 +196,7 @@ export async function answerChat(message: string, recentContext: string | undefi
     const { content: bruto } = await generateResponse([{ role: "user", content: prompt }], system, 0.6, 400, providerOpts);
     const content = semRaciocinio(bruto);
     // Mesmo proibida, a IA copiava o cartão "Lançamento salvo" ou dizia "vou ajustar" sem mudar nada (31/10 "os dois foram VR").
-    if (/Lançamento salvo|\b(vou (ajustar|anotar|guardar|registrar|lançar|salvar|corrigir|mudar)|ajustei|atualizei|corrigi|registrei|lancei|salvei|anotei|guardei|mudei)\b/i.test(content)) {
+    if (/Lançamento salvo|\b(vou (ajustar|anotar|guardar|registrar|lançar|salvar|corrigir|mudar)|ajustei|atualizei|corrigi|registrei|lancei|salvei|anotei|guardei|mudei)\b|\b(pronto|feito|beleza)\b[^\n]{0,80}\b(lan[cç]ad[oa]|registrad[oa]|anotad[oa]|salv[oa])\b/i.test(content)) {
       return "🤔 Não entendi o que fazer e *não mudei nada*.\nPara corrigir um gasto: *cite* a mensagem dele e mande *era vr*, *na verdade foi 25* ou *apaga*.\nLogo depois de lançar, vale mandar só *vr*, *pix* ou *os dois foram vr*.";
     }
     return content.trim() || "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
