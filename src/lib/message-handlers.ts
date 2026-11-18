@@ -6,7 +6,7 @@ import { extractAndSaveTickets } from "./ticket-extractor";
 import { parseLocalDate, todayBRT, creditCardBillDate, billDaysFor, cardInText } from "./dates";
 import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
 import { withReason } from "./finance-reason";
-import { isBesteiraItem, normalizeItemCategory, spreadDiscount } from "./finance-taxonomy";
+import { isBesteiraItem, normalizaCategoria, normalizeItemCategory, spreadDiscount, taxonomyPrompt } from "./finance-taxonomy";
 import type { AgentConfig } from "@prisma/client";
 import { applyOutlookCommand } from "./outlook-calendar";
 import { applyAirconCommand } from "./aircon";
@@ -1290,7 +1290,8 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     const ref = route.queryIntent === "month_closing" ? new Date(today.getFullYear(), today.getMonth() - 1, 1) : pedido ? new Date(pedido.y, pedido.m, 1) : today;
     await sendMonthChart(config, ref.getFullYear(), ref.getMonth());
   }
-  if (route.type === "agenda_query" && route.queryIntent === "savings_summary") {
+  // Gráfico das metas só quando ele pergunta das metas (18/11: "meta ainda nem tô usando").
+  if (route.type === "agenda_query" && route.queryIntent === "savings_summary" && /\bmetas?\b/i.test(joinedText)) {
     await sendGoalsChart(config);
   }
   if (route.type === "agenda_query" && route.queryIntent === "budget_status") {
@@ -1332,7 +1333,11 @@ export async function saveStatementEntries(config: AgentConfig, entries: Stateme
 
   // Compra parcelada mandada por mensagem/print não é "extrato" (17/11 confundia).
   const umaCompra = real === 1 && /mensagem|print/.test(sourceLabel);
-  let response = umaCompra
+  const doBanco = /extrato do banco/.test(sourceLabel);
+  const soma = (t: string) => toInsert.filter((e) => e.type === t && !e.description.includes("(previsto)")).reduce((a, e) => a + e.amount, 0);
+  let response = doBanco
+    ? `✅ Anotei ${real} lançamento(s) do extrato.\n💸 Saídas: ${brl(soma("expense"))}${soma("income") > 0 ? ` · 💰 Entradas: ${brl(soma("income"))}` : ""}`
+    : umaCompra
     ? `✅ Parcelado salvo: *${toInsert.find((e) => !e.description.includes("(previsto)"))?.description ?? "compra"}* · ${brl(total)} na primeira fatura`
     : `✅ Importei ${real} lançamento(s) do extrato.\n💰 Total em despesas: ${brl(total)}`;
   if (projected > 0) response += `\n📅 +${projected} parcela(s) futura(s) projetada(s) nos próximos meses.`;
@@ -1536,7 +1541,7 @@ export async function handleBankFile(text: string): Promise<boolean> {
     await notifyOwner(config, `🏦 Li ${movs.length} movimento(s) do extrato: tudo já estava no app${fora ? ` (${fora} eram fatura, dinheiro guardado ou Pix entre suas contas)` : ""}. Nada para anotar.`);
     return true;
   }
-  const comCategoria = await applyMerchantMemory(novos); // regra dele e memória por loja
+  const comCategoria = await categorizaLojas(await applyMerchantMemory(novos), config); // regra dele, memória por loja e, no resto, a IA
   pendingBankImport = { entries: comCategoria, at: Date.now() };
   const linhas = comCategoria.slice(0, 25).map((l) => `• ${l.date!.slice(8, 10)}/${l.date!.slice(5, 7)} ${l.type === "income" ? "➕" : "➖"} ${l.description} — ${brl(l.amount)} (${l.paymentMethod}, ${l.category})`);
   await notifyOwner(
@@ -1544,6 +1549,35 @@ export async function handleBankFile(text: string): Promise<boolean> {
     `🏦 *Extrato do banco:* ${novos.length} lançamento(s) que não estão no app${lancs.length - fatura > novos.length ? ` (${lancs.length - fatura - novos.length} você já tinha anotado)` : ""}${fora ? `; deixei de fora ${fora} (fatura, dinheiro guardado ou Pix entre suas contas)` : ""}:\n${linhas.join("\n")}${novos.length > 25 ? `\n… e mais ${novos.length - 25}` : ""}\n\nAnoto? Responda *sim* ou *cancelar*. Categoria errada dá para corrigir depois citando o lançamento.`,
   );
   return true;
+}
+
+/**
+ * Compra no débito/boleto que nem a regra nem a memória conheciam ficava em "Outros" (17/11, "FARMACIA SAUDE").
+ * Só o nome da LOJA vai para a IA, numa chamada; Pix para pessoa fica em Outros (nome de gente não sai daqui).
+ */
+async function categorizaLojas(entries: StatementEntry[], config: AgentConfig): Promise<StatementEntry[]> {
+  // Pix só quando o nome é claramente de empresa ("LANCHONETE BOA", "… LTDA").
+  const empresa = /\b(ltda|eireli|mei?|s\.?a\.?|lanchonete|restaurante|mercad\w*|mercantil|supermercado|farm[aá]cia|drogaria|posto|padaria|bar|pizzaria|loja|com[eé]rcio|servi[cç]os|distribuidora|a[cç]ougue|hortifruti|pet|academia|cl[ií]nica|oficina|auto\s?pe[cç]as)\b/i;
+  const alvo = entries.filter((e) => e.type === "expense" && e.category === "Outros" && (e.paymentMethod !== "pix" || empresa.test(e.description)));
+  if (!alvo.length) return entries;
+  try {
+    const nomes = alvo.map((e, i) => `${i + 1}. ${e.description}`).join("\n");
+    const { content } = await generateResponse(
+      [{ role: "user", content: `${taxonomyPrompt()}\n\nPara cada loja abaixo (compra no débito ou boleto), escolha categoria e subcategoria de DESPESA da lista. Sem pista, use "Outros"/"Imprevistos".\n${nomes}\n\nResponda só JSON: [{"n":1,"category":"...","subcategory":"..."}]` }],
+      "Você classifica gastos. Responda só JSON.",
+      0,
+      600,
+      getProviderOpts(config),
+    );
+    const lista = JSON.parse(content.match(/\[[\s\S]*\]/)?.[0] ?? "[]") as { n: number; category: string; subcategory: string }[];
+    for (const r of lista) {
+      const e = alvo[r.n - 1];
+      if (e && r.category) Object.assign(e, normalizaCategoria("expense", r.category, r.subcategory ?? ""));
+    }
+  } catch (err) {
+    console.error("[extrato] não classificou as lojas:", err instanceof Error ? err.message.slice(0, 120) : err); // fica Outros, ele corrige citando
+  }
+  return entries;
 }
 
 async function applyBankImportReply(text: string, config: AgentConfig): Promise<boolean> {

@@ -671,3 +671,11 @@ test("'como está meu mês?' é regra fixa, sem IA (17/11)", async () => {
   }
 });
 
+test("'quanto tenho?' é regra fixa: dinheiro do mês + guardado + metas (18/11)", async () => {
+  const { routePersonalMessage } = await import("../src/lib/personal-router");
+  for (const t of ["quanto tenho?", "quanto tenho na reserva?", "quanto eu tenho esse mês", "quanto sobrou?"]) {
+    const r = await routePersonalMessage(t, "Dono", {} as never);
+    assert.equal(r.type === "agenda_query" && r.queryIntent, "savings_summary", t);
+  }
+});
+

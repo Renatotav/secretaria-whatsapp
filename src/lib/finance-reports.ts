@@ -693,20 +693,53 @@ export async function buildQueryResponse(intent: PersonalQueryIntent, texto = ""
     return `💰 *Financeiro de ${monthName}:*\nEntradas: ${brl(income)} (já recebido ${brl(sum("income", "paid"))})\nSaídas: ${brl(expense)} (já pago ${brl(sum("expense", "paid"))} · a pagar ${brl(sum("expense", "pending"))})\n${balance >= 0 ? "🟢" : "🔴"} Fecha o mês com ${brl(balance)}`;
   }
 
-  if (intent === "savings_summary") {
-    const goals = await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } });
-    if (goals.length === 0) return "Nenhuma meta de economia encontrada.";
-    const lines = goals.map((g) => {
-      const pct = (g.currentAmount / g.targetAmount) * 100;
-      if (g.currentAmount >= g.targetAmount) return `• 🏆 ${g.name}: ${brl(g.targetAmount)} — *Conquistada!*`;
-      const need = goalMonthlyNeed(g);
-      return `• ${g.name}: ${brl(g.currentAmount)} de ${brl(g.targetAmount)} (${pct.toFixed(0)}%)${need ? ` · guardar ${brl(need.perMonth)}/mês até ${need.until}` : ""}`;
-    });
-    return `🎯 *Metas de Economia:*\n${lines.join("\n")}${await goalsViabilityLine(goals)}`;
-  }
+  if (intent === "savings_summary") return buildMoneyNow();
 
   const summary = await prisma.dailySummary.findFirst({ orderBy: { createdAt: "desc" } });
   return summary ? summary.summary : "Nenhum resumo de grupo disponível ainda.";
+}
+
+/**
+ * "quanto tenho?" / "quanto tenho na reserva?": o dinheiro do mês primeiro, depois o guardado e as metas,
+ * cada um com o seu número (18/11 ele: "quero que especifique quanto tenho no mês e meta" — antes saía
+ * só a meta, e a previsão falava em outro valor da Reserva sem explicar).
+ */
+const sinal = (v: number) => (v < 0 ? `−${brl(-v)}` : brl(v));
+
+export async function buildMoneyNow(): Promise<string> {
+  const today = todayBRT();
+  const y = today.getFullYear(), m = today.getMonth();
+  const entries = await prisma.financeEntry.findMany({
+    where: { date: { gte: new Date(y, m, 1), lte: new Date(y, m + 1, 0, 23, 59, 59) }, NOT: { OR: ["VR", "ticket", "vale"].map((w) => ({ account: { contains: w, mode: "insensitive" as const } })) } },
+    select: { type: true, amount: true, status: true },
+  });
+  const soma = (type: string, status: string) => entries.filter((e) => e.type === type && e.status === status).reduce((t, e) => t + e.amount, 0);
+  const entrou = soma("income", "paid"), saiu = soma("expense", "paid");
+  const aReceber = soma("income", "pending"), aPagar = soma("expense", "pending");
+  const parts = await monthForecastParts(y, m);
+  const mes = MONTH_NAMES[m];
+  const linhas = [
+    `💵 *Seu dinheiro de ${mes}* (conta corrente; VR à parte)`,
+    `Entrou ${brl(entrou)} · saiu ${brl(saiu)}`,
+    `👉 *${entrou - saiu >= 0 ? "Sobrou" : "Passou"} até agora: ${sinal(entrou - saiu)}*`,
+    `Falta ${aReceber > 0 ? `receber ${brl(aReceber)} e ` : ""}pagar ${brl(aPagar)} → fecha ${mes} em ${sinal(entrou - saiu + aReceber - aPagar)}${parts.budgetRest > 0 ? ` (ou ${sinal(parts.total)} se gastar o resto dos tetos)` : ""}.`,
+  ];
+  const reserva = await findReserveGoal();
+  if (reserva) {
+    const r = await reserveNow(reserva);
+    linhas.push("", `🏦 *Guardado dos meses anteriores (${reserva.name}):* ${brl(reserva.currentAmount)}${r && r.mes !== 0 ? `\nCom o que já entrou e saiu em ${mes}: ${brl(r.agora)} (é esse o número que aparece na previsão).` : ""}`);
+  }
+  const metas = (await prisma.savingsGoal.findMany({ orderBy: { createdAt: "asc" } })).filter((g) => g.id !== reserva?.id);
+  if (metas.length) {
+    linhas.push("", "🎯 *Metas:*", ...metas.map((g) => {
+      if (g.currentAmount >= g.targetAmount) return `• 🏆 ${g.name}: ${brl(g.targetAmount)} — conquistada`;
+      const need = goalMonthlyNeed(g);
+      return `• ${g.name}: ${brl(g.currentAmount)} de ${brl(g.targetAmount)} (${((g.currentAmount / g.targetAmount) * 100).toFixed(0)}%)${need ? ` · guardar ${brl(need.perMonth)}/mês até ${need.until}` : ""}`;
+    }));
+    const viavel = await goalsViabilityLine(metas);
+    if (viavel) linhas.push(viavel.trim());
+  }
+  return linhas.join("\n");
 }
 
 /**

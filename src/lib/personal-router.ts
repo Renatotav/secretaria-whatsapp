@@ -289,6 +289,10 @@ export async function routePersonalMessage(
   if (/^\s*(?:e\s+)?como\s+(?:est[aá]|t[aá]|vai|ficou|fica)\s+(?:o\s+)?meu\s+m[eê]s\b[^?]{0,30}\??\s*$/i.test(message))
     return { type: "agenda_query", queryIntent: "month_diagnosis", confirmation: "" };
 
+  // "quanto tenho (na reserva / no mês / guardado)?": dinheiro do mês + guardado + metas (18/11).
+  if (/^\s*quanto\s+(?:eu\s+)?(?:tenho|t[oô]\s+com|sobrou|ainda\s+tenho)(?:\s+(?:de\s+dinheiro|na\s+reserva|guardado|no\s+m[eê]s|na\s+conta|esse\s+m[eê]s|dispon[ií]vel))?\s*\??\s*$/i.test(message))
+    return { type: "agenda_query", queryIntent: "savings_summary", confirmation: "" };
+
   // getUTC*: o mesmo dia em qualquer fuso do processo (o local errava fora do container em UTC).
   const brtTime = new Date(Date.now() - 3 * 60 * 60 * 1000);
   const todayBRT = `${brtTime.getUTCFullYear()}-${String(brtTime.getUTCMonth() + 1).padStart(2, "0")}-${String(brtTime.getUTCDate()).padStart(2, "0")}`;
