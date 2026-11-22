@@ -94,7 +94,9 @@ export function isBesteiraItem(i: { name: string; category: string }): boolean {
  * inventava "Petiscos", "Essenciais", "Enlatados"… para coisas iguais).
  * Vale para as notas novas (gravado assim) e para as antigas (na hora de mostrar).
  */
-export const ITEM_CATEGORIES = ["Carnes", "Frios e laticínios", "Hortifruti", "Padaria", "Mercearia", "Congelados", "Bebidas", "Besteira", "Limpeza", "Higiene e beleza", "Descontos"] as const;
+export const ITEM_CATEGORIES = ["Carnes", "Frios e laticínios", "Hortifruti", "Padaria", "Mercearia", "Congelados", "Bebidas", "Besteira", "Limpeza", "Higiene e beleza", "Farmácia", "Descontos"] as const;
+
+const REMEDIO_RE = /\b\d+(?:[.,]\d+)?\s?(?:mg|mcg|ml\/|ui)\b|comprimid|\bcomp\b|\bcpr\b|capsul|\bcaps?\b|xarope|\bgotas\b|pomada|\bgel\b.*\bmg\b|dipirona|paracetamol|ibuprofeno|amoxicilina|azitromicina|nitazox|losartana|omeprazol|loratadina|dorflex|neosaldina|\d+\s?'s\b|generico|vitamina [a-z0-9]/;
 
 /** Subcategoria pelo NOME do produto, quando a categoria lida é genérica ("Alimentação"). */
 function categoriaPeloNome(name: string): string | null {
@@ -110,12 +112,21 @@ function categoriaPeloNome(name: string): string | null {
   return null;
 }
 
-export function normalizeItemCategory(i: { name: string; category: string; amount?: number }): string {
+/** loja = categoria da nota inteira: nota de farmácia (Saúde) faz o item virar Farmácia, menos higiene/desconto (21/11 ele: "pela nota era para saber"). */
+export function normalizeItemCategory(i: { name: string; category: string; amount?: number }, loja?: { category?: string | null; subcategory?: string | null }): string {
+  const cat = categoriaDoItem(i);
+  const daFarmacia = !!loja && /farm[aá]cia|drogaria|sa[uú]de/i.test(`${loja.category ?? ""} ${loja.subcategory ?? ""}`);
+  return daFarmacia && !["Higiene e beleza", "Descontos", "Besteira", "Bebidas", "Limpeza"].includes(cat) ? "Farmácia" : cat;
+}
+
+function categoriaDoItem(i: { name: string; category: string; amount?: number }): string {
   if (isBesteiraItem(i)) return "Besteira";
   const c = i.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   // O nome manda (09/11): a IA mandou batata palha para Hortifruti e peito de peru (kg) para Carnes.
   const nome = i.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   if (/batata palha/.test(nome)) return "Mercearia";
+  // Remédio (21/11 "NITAZOX 500MG EURO 6'S" virou Mercearia): a lista era só de mercado.
+  if (REMEDIO_RE.test(nome) || /farmac|remedio|medicament|drogaria/.test(c)) return "Farmácia";
   if (/\bperu\b|blanquet|levissimo/.test(nome)) return "Frios e laticínios"; // Levíssimo = peito de peru light (12/11)
   // Categoria genérica (a da nota inteira): decide pelo nome do produto.
   if (!c || /^(aliment|supermercado|mercado|outros|geral|compras|essenciais|basico)/.test(c)) {

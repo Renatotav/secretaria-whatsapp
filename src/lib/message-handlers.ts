@@ -2320,7 +2320,7 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
       invoiceItems: {
         create: invoice.items.map(i => ({
           name: i.name,
-          category: normalizeItemCategory(i),
+          category: normalizeItemCategory(i, invoice),
           amount: i.amount,
           quantity: i.quantity,
           unitPrice: i.unitPrice

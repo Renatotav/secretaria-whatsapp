@@ -697,3 +697,20 @@ test("'guarda: …' com dois-pontos colado é nota, não agenda (21/11)", async 
   assert.equal(criadas.length, 2);
 });
 
+test("remédio na nota é Farmácia, não Mercearia (21/11)", async () => {
+  const { normalizeItemCategory } = await import("../src/lib/finance-taxonomy");
+  assert.equal(normalizeItemCategory({ name: "NITAZOX 500MG EURO 6'S", category: "Mercearia", amount: 62.5 }), "Farmácia");
+  assert.equal(normalizeItemCategory({ name: "DIPIRONA GOTAS 20ML", category: "Mercearia", amount: 8 }), "Farmácia");
+  assert.equal(normalizeItemCategory({ name: "FAROFA DA VOVO 250G", category: "Mercearia", amount: 12.59 }), "Mercearia");
+  assert.equal(normalizeItemCategory({ name: "REFRI PEPSI PET 1L BLACK", category: "Bebidas", amount: 5.29 }), "Bebidas");
+  assert.equal(normalizeItemCategory({ name: "SABONETE DOVE 90G", category: "Higiene e beleza", amount: 4 }), "Higiene e beleza");
+});
+
+test("nota de farmácia: itens viram Farmácia, menos higiene (21/11)", async () => {
+  const { normalizeItemCategory } = await import("../src/lib/finance-taxonomy");
+  const loja = { category: "Saúde", subcategory: "Farmácia" };
+  assert.equal(normalizeItemCategory({ name: "ALGODAO HIDROFILO 50G", category: "Mercearia", amount: 5 }, loja), "Farmácia");
+  assert.equal(normalizeItemCategory({ name: "SABONETE DOVE 90G", category: "Higiene e beleza", amount: 4 }, loja), "Higiene e beleza");
+  assert.equal(normalizeItemCategory({ name: "ALGODAO HIDROFILO 50G", category: "Mercearia", amount: 5 }, { category: "Alimentação", subcategory: "Supermercado" }), "Mercearia");
+});
+

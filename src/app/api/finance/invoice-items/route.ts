@@ -23,6 +23,7 @@ export const GET = withErrorHandling(async (request: Request) => {
 
   // Igual ao Raio-X do mês: subcategorias fixas (cerveja/salgadinho/biscoito = Besteira)
   // e o desconto da nota espalhado pelos itens (preço pago de verdade; total igual).
-  const pagos = spreadDiscount(items).map((i) => ({ ...i, category: normalizeItemCategory(i) }));
+  const loja = await prisma.financeEntry.findUnique({ where: { id: entryId }, select: { category: true, subcategory: true } });
+  const pagos = spreadDiscount(items).map((i) => ({ ...i, category: normalizeItemCategory(i, loja ?? undefined) }));
   return NextResponse.json(pagos.sort((a, b) => b.amount - a.amount));
 });

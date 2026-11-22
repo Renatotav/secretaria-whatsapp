@@ -50,5 +50,5 @@ export const GET = withErrorHandling(async (request: Request) => {
   const porNota = new Map<string, typeof items>();
   for (const i of items) porNota.set(i.financeEntryId, [...(porNota.get(i.financeEntryId) ?? []), i]);
   const pagos = [...porNota.values()].flatMap((lista) => spreadDiscount(lista));
-  return NextResponse.json(pagos.map((i) => ({ ...i, category: normalizeItemCategory(i) })));
+  return NextResponse.json(pagos.map((i) => ({ ...i, category: normalizeItemCategory(i, i.financeEntry) })));
 });
