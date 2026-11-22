@@ -197,7 +197,8 @@ export async function answerChat(message: string, recentContext: string | undefi
     const content = semRaciocinio(bruto);
     // Mesmo proibida, a IA copiava o cartão "Lançamento salvo" ou dizia "vou ajustar" sem mudar nada (31/10 "os dois foram VR").
     if (/Lançamento salvo|\b(vou (ajustar|anotar|guardar|registrar|lançar|salvar|corrigir|mudar)|ajustei|atualizei|corrigi|registrei|lancei|salvei|anotei|guardei|mudei)\b|\b(pronto|feito|beleza)\b[^\n]{0,80}\b(lan[cç]ad[oa]|registrad[oa]|anotad[oa]|salv[oa])\b/i.test(content)) {
-      return "🤔 Não entendi o que fazer e *não mudei nada*.\nPara corrigir um gasto: *cite* a mensagem dele e mande *era vr*, *na verdade foi 25* ou *apaga*.\nLogo depois de lançar, vale mandar só *vr*, *pix* ou *os dois foram vr*.";
+      // Resposta da trava "a IA disse que fez e não fez": genérica (19/11 um link virou dica de "corrigir gasto").
+      return "🤔 Não entendi o que fazer e *não mudei nada*.\nSe era um gasto: *almoço 25 no pix*. Para corrigir um: *cite* a mensagem e mande *era vr* ou *na verdade foi 25*. Para guardar algo: *guarda: …*";
     }
     return content.trim() || "🙂 Não entendi bem. Me manda *\"o que você faz?\"* que eu te mostro tudo que sei fazer.";
   } catch {

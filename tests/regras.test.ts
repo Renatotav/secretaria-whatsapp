@@ -679,3 +679,21 @@ test("'quanto tenho?' é regra fixa: dinheiro do mês + guardado + metas (18/11)
   }
 });
 
+test("link sozinho pergunta se guarda (19/11 um TikTok virou 'corrigir gasto')", async () => {
+  const { SO_LINK_RE } = await import("../src/lib/personal-extras");
+  assert.ok(SO_LINK_RE.test("https://vt.tiktok.com/ZSpTxnYTX/"));
+  assert.equal(SO_LINK_RE.test("guarda esse link https://exemplo.com"), false);
+  assert.equal(SO_LINK_RE.test("almoço 25 no pix"), false);
+});
+
+test("'guarda: …' com dois-pontos colado é nota, não agenda (21/11)", async () => {
+  const { prisma } = await import("../src/lib/prisma");
+  const criadas: unknown[] = [];
+  (prisma as unknown as { note: { create: (a: unknown) => Promise<unknown> } }).note = { create: async (a) => (criadas.push(a), a) };
+  const { applyNoteCommand } = await import("../src/lib/personal-extras");
+  assert.match(String(await applyNoteCommand("guarda: ideia de app de treino")), /Guardei/);
+  assert.match(String(await applyNoteCommand("ideia: caderno de receitas")), /Guardei/);
+  assert.equal(await applyNoteCommand("guarda 100 na reserva"), null);
+  assert.equal(criadas.length, 2);
+});
+

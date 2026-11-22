@@ -243,16 +243,38 @@ async function tituloDoLink(url: string): Promise<string> {
   }
 }
 
-async function applyNoteCommand(text: string): Promise<string | null> {
+// Link mandado sozinho (19/11 um TikTok por engano virou "corrigir gasto"): pergunta antes de guardar.
+let linkSolto: { url: string; at: number } | null = null;
+export const SO_LINK_RE = /^\s*(https?:\/\/\S+)\s*$/i;
+
+async function guardaNota(corpo: string): Promise<string> {
+  const url = corpo.match(/https?:\/\/\S+/)?.[0] ?? "";
+  const title = url ? await tituloDoLink(url) : "";
+  await prisma.note.create({ data: { text: corpo, url, title } });
+  return `📥 Guardei${title ? `: *${title}*` : url ? " o link" : ""}.\nPara achar depois: *o que eu guardei sobre …?* ou *minhas notas*.`;
+}
+
+export async function applyNoteCommand(text: string): Promise<string | null> {
   const t = text.trim();
+  const soLink = t.match(SO_LINK_RE);
+  if (soLink) {
+    linkSolto = { url: soLink[1], at: Date.now() };
+    return "🔗 Recebi um link. Quer que eu guarde nas suas ideias? Responda *sim*. Se mandou por engano, pode ignorar — não fiz nada.";
+  }
+  if (linkSolto && Date.now() - linkSolto.at < 15 * 60 * 1000 && /^(sim|s|guarda|pode|pode guardar)[.!]*$/i.test(t)) {
+    const url = linkSolto.url;
+    linkSolto = null;
+    return guardaNota(url);
+  }
+  if (linkSolto && /^(n[aã]o|deixa|esquece|mandei errado)\b/i.test(t)) {
+    linkSolto = null;
+    return "👍 Não guardei.";
+  }
   // "guarda 100 na reserva" / "guarda" (resposta à sugestão) são da Reserva, não daqui.
-  const salva = t.match(/^(?:(?:guarda|salva|anota)\s+(?:(?:essa|esta|a)\s+ideia|(?:esse|este|o)\s+link|(?:essa|esta)\s+(?:nota|informa[cç][aã]o)|isso|a[ií])?\s*:?|(?:ideia|nota|lembrete\s+solto)\s*:)\s*([\s\S]{3,1500})$/i);
+  // (?=[\s:]): "guarda: …" com os dois-pontos colados também vale (antes exigia espaço e virava agenda, 21/11).
+  const salva = t.match(/^(?:(?:guarda|salva|anota)(?=[\s:])\s*(?:(?:essa|esta|a)\s+ideia|(?:esse|este|o)\s+link|(?:essa|esta)\s+(?:nota|informa[cç][aã]o)|isso|a[ií])?\s*:?|(?:ideia|nota|lembrete\s+solto)\s*:)\s*([\s\S]{3,1500})$/i);
   if (salva && !/^(?:guarda|anota)\s+(?:r\$\s*)?\d/i.test(t) && !/\breserva\b/i.test(t)) {
-    const corpo = salva[1].trim();
-    const url = corpo.match(/https?:\/\/\S+/)?.[0] ?? "";
-    const title = url ? await tituloDoLink(url) : "";
-    await prisma.note.create({ data: { text: corpo, url, title } });
-    return `📥 Guardei${title ? `: *${title}*` : url ? " o link" : ""}.\nPara achar depois: *o que eu guardei sobre …?* ou *minhas notas*.`;
+    return guardaNota(salva[1].trim());
   }
   const busca = t.match(/^(?:o\s+que\s+(?:eu\s+)?guardei|minhas\s+(?:notas|ideias)|links\s+guardados|procura\s+nas\s+notas)(?:\s+(?:sobre|de|com|do|da)\s+(.+?))?\s*\??$/i);
   if (busca) {
