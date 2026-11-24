@@ -66,29 +66,83 @@ function Painel({ d }: { d: Dados }) {
   const kcalDia = comNota.length ? comNota.reduce((t, s) => t + s.kcal, 0) / (comNota.length * 7) : null;
   const mediaComida = anteriores.length ? anteriores.reduce((t, s) => t + s.besteira + s.delivery, 0) / anteriores.length : null;
 
+  const perdeu = ult && primeiro ? primeiro.value - ult.value : 0;
+  const caminho = ult && primeiro && d.meta != null && primeiro.value > d.meta ? Math.max(0, Math.min(1, perdeu / (primeiro.value - d.meta))) : null;
+  const prev = d.numeros.previsao ? new Date(d.numeros.previsao + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" }) : null;
+  const hoje = d.comidas.filter((c) => dia(c.at) === dia(new Date().toISOString())).reduce((t, c) => t + c.kcal, 0);
+  const metaK = d.numeros.kcal?.meta ?? null;
+  const semanaAtual = d.semanas.at(-1);
+  const big: React.CSSProperties = { fontSize: 44, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" };
+  const barra = (pct: number, cor: string) => (
+    <div style={{ height: 10, borderRadius: 5, background: "var(--bg-hover)", overflow: "hidden" }}>
+      <div style={{ width: `${Math.max(0, Math.min(1, pct)) * 100}%`, height: "100%", background: cor, borderRadius: 5 }} />
+    </div>
+  );
+
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(150px, 100%), 1fr))", gap: 10 }}>
-        <Kpi titulo="Peso" valor={ult ? `${n(ult.value, 1)} kg` : "—"} dica={ult ? `em ${dia(ult.at)}` : "mande: peso 108,5"} />
-        <Kpi titulo="Desde o começo" valor={ult && primeiro && d.pesos.length > 1 ? `${ult.value - primeiro.value > 0 ? "+" : ""}${n(ult.value - primeiro.value, 1)} kg` : "—"} dica={primeiro ? `desde ${dia(primeiro.at)}` : ""} />
-        <Kpi titulo="Meta" valor={d.meta != null ? `${n(d.meta, 1)} kg` : "—"} dica={falta == null ? "mande: meta de peso 95" : falta > 0 ? `faltam ${n(falta, 1)} kg` : "🏆 alcançada"} />
-        <Kpi titulo="Academia" valor={`${d.academia7} dia(s)`} dica="nos últimos 7 dias" />
-        <Kpi titulo="Ritmo" valor={d.numeros.porSemana != null ? `${d.numeros.porSemana > 0 ? "+" : ""}${n(d.numeros.porSemana, 1)} kg/sem` : "—"}
-          dica={d.numeros.previsao ? `meta por volta de ${new Date(d.numeros.previsao + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" })}` : "precisa de 3 pesos em 1 semana"} />
-        <Kpi titulo="IMC" valor={d.numeros.imc ? n(d.numeros.imc.valor, 1) : "—"} dica={d.numeros.imc ? d.numeros.imc.faixa : "mande: perfil 1,78 m 38 anos homem"} />
-        <Kpi titulo="Calorias por dia" valor={d.numeros.kcal ? `~${n(d.numeros.kcal.meta)} kcal` : "—"}
-          dica={d.numeros.kcal ? `para perder ~0,5 kg/sem · seu corpo gasta ~${n(d.numeros.kcal.gasto)}` : "precisa do perfil e do peso"} />
-        <Kpi titulo="Comprado por dia" valor={kcalDia != null ? `~${n(kcalDia)} kcal` : "—"}
-          dica={kcalDia != null ? `média das últimas 4 semanas, pelas notas${d.numeros.kcal ? ` · sua meta ~${n(d.numeros.kcal.meta)}` : ""}` : "aparece com as notas de mercado"} />
-        <Kpi titulo="Besteira e delivery" valor={comidaSemana ? brl(comidaSemana.besteira + comidaSemana.delivery) : "—"} dica={mediaComida != null ? `esta semana · média ${brl(mediaComida)}` : "esta semana"} />
-      </div>
-      <GraficoPeso pesos={d.pesos} meta={d.meta} previsao={d.numeros.previsao} />
-      {d.numeros.kcal && (
-        <div style={{ ...muted, fontSize: 12, lineHeight: 1.5 }}>
-          Contas: gasto em repouso (fórmula de Mifflin-St Jeor) {n(d.numeros.kcal.tmb)} kcal × {n(d.numeros.kcal.fator, 3)} de atividade
-          ({n(d.numeros.academiaPorSemana, 1)} dia(s) de academia por semana nas últimas 4) = {n(d.numeros.kcal.gasto)} kcal. A meta tira 500 kcal por dia. São estimativas: o ritmo real do peso é quem confirma.
+      {/* O número que importa: o peso, e o caminho até a meta. */}
+      <div style={{ ...card, display: "grid", gap: 12, borderColor: "var(--accent-border)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gap: 6 }}>
+            <span style={muted}>Peso {ult ? `em ${dia(ult.at)}` : ""}</span>
+            <span style={big}>{ult ? `${n(ult.value, 1)} kg` : "—"}</span>
+          </div>
+          <div style={{ display: "grid", gap: 2, textAlign: "right" }}>
+            {d.pesos.length > 1 && <strong style={{ fontSize: 18, color: perdeu > 0 ? "var(--success)" : "var(--warning)", fontVariantNumeric: "tabular-nums" }}>{perdeu > 0 ? "−" : "+"}{n(Math.abs(perdeu), 1)} kg</strong>}
+            <span style={muted}>{primeiro && d.pesos.length > 1 ? `desde ${dia(primeiro.at)}` : "mande: peso 108,5"}</span>
+          </div>
         </div>
+        {caminho != null && d.meta != null && (
+          <div style={{ display: "grid", gap: 6 }}>
+            {barra(caminho, "var(--accent)")}
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
+              <span>{n(primeiro!.value, 1)} kg</span>
+              <span style={{ color: "var(--text)" }}>{n(caminho * 100)}% do caminho · faltam {n(ult!.value - d.meta, 1)} kg</span>
+              <span>meta {n(d.meta, 1)} kg</span>
+            </div>
+          </div>
+        )}
+        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          {d.numeros.porSemana != null ? <>Ritmo <strong style={{ color: "var(--text)" }}>{d.numeros.porSemana > 0 ? "+" : "−"}{n(Math.abs(d.numeros.porSemana), 1)} kg/semana</strong>{prev && <> · chega na meta por volta de <strong style={{ color: "var(--text)" }}>{prev}</strong></>}</> : d.meta == null ? "Mande a meta: meta de peso 95" : "O ritmo aparece com 3 pesos em 1 semana."}
+        </div>
+      </div>
+
+      {/* Hoje e esta semana, lado a lado no computador. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 12 }}>
+        <div style={{ ...card, display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600 }}>🍽️ Hoje</h2>
+            <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{n(hoje)}<span style={{ ...muted, fontSize: 13 }}>{metaK ? ` / ${n(metaK)} kcal` : " kcal"}</span></span>
+          </div>
+          {metaK != null && barra(hoje / metaK, hoje <= metaK ? "var(--success)" : "var(--warning)")}
+          <span style={muted}>{metaK == null ? "Mande o perfil para ter a meta: perfil 1,78 m 38 anos homem" : hoje <= metaK ? `sobram ~${n(metaK - hoje)} kcal` : `passou ~${n(hoje - metaK)} kcal`} · anote com: comi 2 coxinhas</span>
+        </div>
+        <div style={{ ...card, display: "grid", gap: 10 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600 }}>📅 Esta semana</h2>
+          <div style={{ display: "flex", gap: 6 }} aria-label={`${d.academia7} dias de academia nos últimos 7`}>
+            {Array.from({ length: 7 }, (_, i) => (
+              <span key={i} style={{ flex: 1, height: 28, borderRadius: 6, background: i < d.academia7 ? "var(--accent)" : "var(--bg-hover)" }} />
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+            <span>🏋️ <strong>{d.academia7}</strong> de 7 dias</span>
+            <span>🍔 {semanaAtual ? brl(semanaAtual.besteira + semanaAtual.delivery) : "—"}{mediaComida != null && <span style={muted}> (média {brl(mediaComida)})</span>}</span>
+            <span>🛒 {kcalDia != null ? `~${n(kcalDia)} kcal/dia` : "—"}</span>
+          </div>
+        </div>
+      </div>
+
+      {(d.numeros.imc || d.numeros.kcal) && (
+        <details style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          <summary style={{ cursor: "pointer" }}>
+            {d.numeros.imc && <>IMC <strong style={{ color: "var(--text)" }}>{n(d.numeros.imc.valor, 1)}</strong> ({d.numeros.imc.faixa})</>}
+            {d.numeros.kcal && <> · seu corpo gasta ~<strong style={{ color: "var(--text)" }}>{n(d.numeros.kcal.gasto)}</strong> kcal · meta <strong style={{ color: "var(--text)" }}>{n(d.numeros.kcal.meta)}</strong></>} · como calculo
+          </summary>
+          {d.numeros.kcal && <p style={{ marginTop: 6, lineHeight: 1.5 }}>Gasto em repouso (Mifflin-St Jeor) {n(d.numeros.kcal.tmb)} kcal × {n(d.numeros.kcal.fator, 3)} de atividade ({n(d.numeros.academiaPorSemana, 1)} dia(s) de academia por semana) = {n(d.numeros.kcal.gasto)} kcal. A meta tira 500 kcal por dia. São estimativas: o ritmo do peso é quem confirma.</p>}
+        </details>
       )}
+      <GraficoPeso pesos={d.pesos} meta={d.meta} previsao={d.numeros.previsao} />
       <Comidas c={d.comidas} meta={d.numeros.kcal?.meta ?? null} />
       <Treinos t={d.treino} semanas={d.semanas} />
       <GraficoSemanas semanas={d.semanas} />
@@ -113,10 +167,10 @@ function GraficoPeso({ pesos, meta, previsao }: { pesos: Dados["pesos"]; meta: n
     return <div style={{ ...card, ...muted, fontSize: 13 }}>📈 O gráfico do peso aparece a partir do 2º registro. Dica: pese-se sempre no mesmo horário (de manhã, em jejum).</div>;
   }
   const h = 220, left = 40, right = 12, top = 16, base = h - 26;
-  const vals = [...pesos.map((p) => p.value), ...(meta != null ? [meta] : [])];
+  const vals = pesos.map((p) => p.value); // escala do período (a meta longe achatava a curva)
   const min = Math.floor(Math.min(...vals) - 1), max = Math.ceil(Math.max(...vals) + 1);
   // Com previsão, o eixo vai até a data em que chega na meta (linha pontilhada do último peso até lá).
-  const t0 = new Date(pesos[0].at).getTime(), t1 = previsao && meta != null ? new Date(previsao + "T12:00:00").getTime() : new Date(pesos.at(-1)!.at).getTime();
+  const t0 = new Date(pesos[0].at).getTime(), t1 = new Date(pesos.at(-1)!.at).getTime();
   const x = (s: string) => left + ((new Date(s).getTime() - t0) / Math.max(1, t1 - t0)) * (w - left - right);
   const y = (v: number) => top + ((max - v) / (max - min)) * (base - top);
   const linha = pesos.map((p) => `${x(p.at)},${y(p.value)}`).join(" ");
@@ -124,7 +178,7 @@ function GraficoPeso({ pesos, meta, previsao }: { pesos: Dados["pesos"]; meta: n
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
         <h2 style={{ fontSize: 15, fontWeight: 600 }}>📈 Peso</h2>
-        {meta != null && <span style={muted}><span style={{ color: "var(--success)" }}>- - -</span> meta {n(meta, 1)} kg</span>}
+        {meta != null && <span style={muted}>meta {n(meta, 1)} kg{previsao ? ` · ~${new Date(previsao + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}` : ""}</span>}
       </div>
       <div ref={ref}>
         <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Peso ao longo do tempo">
@@ -134,14 +188,11 @@ function GraficoPeso({ pesos, meta, previsao }: { pesos: Dados["pesos"]; meta: n
               <text x={left - 6} y={y(v) + 4} textAnchor="end" fontSize={10} fill="var(--text-muted)">{n(v)}</text>
             </g>
           ))}
-          {meta != null && <line x1={left} x2={w - right} y1={y(meta)} y2={y(meta)} stroke="var(--success)" strokeDasharray="5 4" />}
+          {meta != null && meta >= min && <line x1={left} x2={w - right} y1={y(meta)} y2={y(meta)} stroke="var(--success)" strokeDasharray="5 4" />}
           <polyline points={linha} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinejoin="round" />
-          {previsao && meta != null && (
-            <line x1={x(pesos.at(-1)!.at)} y1={y(pesos.at(-1)!.value)} x2={x(previsao + "T12:00:00")} y2={y(meta)} stroke="var(--accent)" strokeDasharray="2 5" strokeWidth={2} opacity={0.7} />
-          )}
           {pesos.map((p) => <circle key={p.at} cx={x(p.at)} cy={y(p.value)} r={3.5} fill="var(--accent)" />)}
           <text x={left} y={h - 6} fontSize={10} fill="var(--text-muted)">{dia(pesos[0].at)}</text>
-          <text x={w - right} y={h - 6} textAnchor="end" fontSize={10} fill="var(--text-muted)">{previsao && meta != null ? `meta ~${dia(previsao + "T12:00:00")}` : dia(pesos.at(-1)!.at)}</text>
+          <text x={w - right} y={h - 6} textAnchor="end" fontSize={10} fill="var(--text-muted)">{dia(pesos.at(-1)!.at)}</text>
         </svg>
       </div>
     </div>
