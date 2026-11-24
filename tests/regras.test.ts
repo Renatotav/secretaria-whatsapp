@@ -768,3 +768,11 @@ test("Calorias das compras: gramas pelo nome, pelo peso ou pela unidade (24/11)"
   assert.equal(gramasDoItem({ name: "BISC PIRAQUE LEITE", quantity: 1 }, null), null);
 });
 
+test("'comi …' é refeição; com dinheiro é gasto (24/11)", async () => {
+  const { ehComida } = await import("../src/lib/comida");
+  assert.equal(ehComida("comi 2 coxinhas e uma coca"), "2 coxinhas e uma coca");
+  assert.equal(ehComida("almocei arroz, feijão e frango"), "arroz, feijão e frango");
+  assert.equal(ehComida("jantei pizza"), "pizza");
+  for (const no of ["almocei 25", "comi pizza 40 reais", "almoço 25 no pix", "comi no cartão um lanche", "gastei 30 no lanche"]) assert.equal(ehComida(no), null, no);
+});
+

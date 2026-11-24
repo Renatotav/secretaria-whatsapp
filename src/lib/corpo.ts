@@ -266,6 +266,8 @@ export async function corpoPainel() {
   }
   return {
     numeros: await corpoNumeros(),
+    // O que ele anotou que comeu, por dia (últimos 14).
+    comidas: (await prisma.corpoLog.findMany({ where: { kind: "comida", at: { gte: new Date(hoje.getTime() - 14 * DIA) } }, orderBy: { at: "asc" } })).map((c) => ({ at: c.at.toISOString(), kcal: c.value ?? 0, texto: (JSON.parse(c.note || "{}") as { texto?: string }).texto ?? "" })),
     treino: await treinoPainel(),
     pesos: pesos.map((p) => ({ at: p.at.toISOString(), value: p.value })),
     meta: meta?.value ?? null,

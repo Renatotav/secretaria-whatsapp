@@ -15,7 +15,7 @@ type Numeros = {
 };
 type Exercicio = { nome: string; vezes: number; recorde: number | null; ultima: { at: string; rm: number | null; desc: string }; historico: { at: string; rm: number | null; desc: string }[] };
 type Treino = { exercicios: Exercicio[]; plano: { dia: string; treino: string }[] };
-type Dados = { treino: Treino; numeros: Numeros; pesos: { at: string; value: number }[]; meta: number | null; academia7: number; semanas: Semana[] };
+type Dados = { comidas: { at: string; kcal: number; texto: string }[]; treino: Treino; numeros: Numeros; pesos: { at: string; value: number }[]; meta: number | null; academia7: number; semanas: Semana[] };
 
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
 const TZ = { timeZone: "America/Sao_Paulo" } as const;
@@ -89,6 +89,7 @@ function Painel({ d }: { d: Dados }) {
           ({n(d.numeros.academiaPorSemana, 1)} dia(s) de academia por semana nas últimas 4) = {n(d.numeros.kcal.gasto)} kcal. A meta tira 500 kcal por dia. São estimativas: o ritmo real do peso é quem confirma.
         </div>
       )}
+      <Comidas c={d.comidas} meta={d.numeros.kcal?.meta ?? null} />
       <Treinos t={d.treino} semanas={d.semanas} />
       <GraficoSemanas semanas={d.semanas} />
     </>
@@ -255,6 +256,40 @@ function Mapa({ semanas }: { semanas: Semana[] }) {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** O que ele anotou que comeu ("comi …" ou foto), por dia, contra a meta. */
+function Comidas({ c, meta }: { c: Dados["comidas"]; meta: number | null }) {
+  const porDia = new Map<string, { kcal: number; textos: string[] }>();
+  for (const x of c) {
+    const k = dia(x.at);
+    const d = porDia.get(k) ?? { kcal: 0, textos: [] };
+    d.kcal += x.kcal;
+    d.textos.push(x.texto);
+    porDia.set(k, d);
+  }
+  const dias = [...porDia.entries()].reverse();
+  return (
+    <div style={{ ...card, display: "grid", gap: 8 }}>
+      <h2 style={{ fontSize: 15, fontWeight: 600 }}>🍽️ O que comi</h2>
+      {!dias.length && (
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          No WhatsApp: <em>comi 2 coxinhas e uma coca</em> · foto do prato com a legenda <em>comi isso</em> · <em>quanto comi hoje?</em> · <em>monta meu cardápio</em> · <em>o que cozinho hoje?</em>
+        </p>
+      )}
+      {dias.map(([d, v]) => (
+        <div key={d} style={{ display: "grid", gap: 2, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+            <strong style={{ fontSize: 14 }}>{d}</strong>
+            <span style={{ fontSize: 14, fontVariantNumeric: "tabular-nums", color: meta != null ? (v.kcal <= meta ? "var(--success)" : "var(--warning)") : "var(--text)" }}>
+              ~{n(v.kcal)} kcal{meta != null && ` de ${n(meta)}`}
+            </span>
+          </div>
+          <span style={muted}>{v.textos.join(" · ")}</span>
+        </div>
+      ))}
     </div>
   );
 }

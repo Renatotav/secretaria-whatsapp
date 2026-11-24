@@ -8,6 +8,7 @@ import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-sta
 import { withReason } from "./finance-reason";
 import { applyCorpoCommand } from "./corpo";
 import { casarProdutos } from "./nutri";
+import { applyComidaCommand, comidaPorFoto, ehComida } from "./comida";
 import { isBesteiraItem, normalizaCategoria, normalizeItemCategory, spreadDiscount, taxonomyPrompt } from "./finance-taxonomy";
 import type { AgentConfig } from "@prisma/client";
 import { applyOutlookCommand } from "./outlook-calendar";
@@ -748,7 +749,7 @@ async function handleSelfMessageInner(joinedText: string, _meta: SelfMessageMeta
     await notifyOwner(config, ytReply);
     return;
   }
-  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyCorpoCommand(joinedText)) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyQuickReportCommand(joinedText, getProviderOpts(config))) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await applyExtrasCommand(joinedText)) ?? (await applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
+  const workReply = (await attachPendingWorkChat(joinedText)) ?? (await applyWorkCommand(joinedText)) ?? (await applyAlertRuleCommand(joinedText)) ?? (await applyMcpCommand(joinedText)) ?? (await applyScooterCommand(joinedText)) ?? (await applyCorpoCommand(joinedText)) ?? (await applyComidaCommand(joinedText, getProviderOpts(config))) ?? (await applyAlexaCommand(joinedText)) ?? (await applyCreditCommand(joinedText)) ?? (await applySpentDayCommand(joinedText)) ?? (await applyAttentionCommand(joinedText)) ?? (await applyExplainLimitCommand(joinedText)) ?? (await applyQuickReportCommand(joinedText, getProviderOpts(config))) ?? (await applyHistoryCommand(joinedText)) ?? (await (await import("./health")).applyHealthCommand(joinedText, config)) ?? (await applyAiLabCommand(joinedText, (t) => notifyOwner(config, t))) ?? (await applyExtrasCommand(joinedText)) ?? (await applyUsageCommand(joinedText)) ?? (await applyOutlookCommand(joinedText)) ?? (await applyAirconCommand(joinedText)) ?? (await applySaidasCommand(joinedText));
   if (workReply) {
     await notifyOwner(config, workReply);
     return;
@@ -1694,6 +1695,12 @@ export async function handleSmartImage(base64: string, mimetype: string, caption
 }
 async function handleSmartImageInner(base64: string, mimetype: string, caption: string): Promise<void> {
   try {
+    // Foto do prato com "comi isso" / "almocei": calorias, não comprovante.
+    if (caption && (ehComida(caption) != null || /^\s*(comi|almocei|jantei|lanchei)\b/i.test(caption))) {
+      const config = await prisma.agentConfig.findFirst();
+      if (config?.ownerPhone) await notifyOwner(config, await comidaPorFoto(base64, mimetype, caption, getProviderOpts(config)));
+      return;
+    }
     await readSmartImage(base64, mimetype, caption);
   } finally {
     imageReading = false;
