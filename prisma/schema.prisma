@@ -452,6 +452,20 @@ model WorkContact {
 
 /// Diário da scooter elétrica do dono: leituras do painel e cargas (kWh da
 /// tomada). Daqui sai o consumo real (Wh/km) e quando recarregar com folga.
+/// Corpo (pedido dele, 24/11/2026): peso, dia de academia e meta de peso.
+model CorpoLog {
+  id        String   @id @default(cuid())
+  /// Dia do registro (peso/academia) — meio-dia de Brasília.
+  at        DateTime @default(now())
+  /// "peso" (kg), "academia" (dia em que foi) ou "meta" (peso que quer chegar)
+  kind      String
+  value     Float?
+  note      String   @default("")
+  createdAt DateTime @default(now())
+
+  @@index([kind, at])
+}
+
 model ScooterLog {
   id        String   @id @default(cuid())
   at        DateTime @default(now())

@@ -714,3 +714,16 @@ test("nota de farmácia: itens viram Farmácia, menos higiene (21/11)", async ()
   assert.equal(normalizeItemCategory({ name: "ALGODAO HIDROFILO 50G", category: "Mercearia", amount: 5 }, { category: "Alimentação", subcategory: "Supermercado" }), "Mercearia");
 });
 
+test("Corpo: comandos de peso, meta, academia e status (24/11)", async () => {
+  const { PESO_RE, META_RE, ACADEMIA_RE, STATUS_RE, mediaSemana } = await import("../src/lib/corpo");
+  for (const ok of ["peso 108,5", "peso 108.5 kg", "meu peso hoje 107", "peso ontem 109"]) assert.ok(PESO_RE.test(ok), ok);
+  for (const no of ["peso da nota 3 kg", "quanto pesa 2 kg de arroz", "almoço 25"]) assert.equal(PESO_RE.test(no), false, no);
+  assert.equal("meta de peso 95".match(META_RE)?.[1], "95");
+  for (const ok of ["fui na academia", "academia", "treinei ontem", "fui pra academia hoje"]) assert.ok(ACADEMIA_RE.test(ok), ok);
+  assert.equal(ACADEMIA_RE.test("academia 90 no pix"), false);
+  assert.ok(STATUS_RE.test("como está meu peso?") && STATUS_RE.test("peso?"));
+  const d = (dd: number) => new Date(2026, 10, dd, 12);
+  assert.equal(mediaSemana([{ at: d(10), value: 110 }, { at: d(14), value: 108 }, { at: d(16), value: 106 }], d(16)), 108);
+  assert.equal(mediaSemana([{ at: d(1), value: 120 }, { at: d(16), value: 106 }], d(16)), 106); // fora dos 7 dias não entra
+});
+

@@ -15,6 +15,7 @@ import { buildWishList, checkWish } from "./finance-wishes";
 import { findReserveGoal, goalMonthlyNeed, goalsViabilityLine, reserveNow } from "./finance-goals";
 import { listOpenInvoices } from "./invoices";
 import { idadeDoDinheiro } from "./idade-dinheiro";
+import { corpoLinhaSemana } from "./corpo";
 
 /**
  * Fechamento de um mês: entrou x saiu, top 3 categorias contra o mês
@@ -489,6 +490,9 @@ export async function buildWeeklyDigest(providerOpts: ProviderOptions): Promise<
 
   // Trabalho (Central do Atendente): só números, fora do comentário da IA.
   try {
+    // Corpo (pedido dele, 24/11: "resumo no domingo"): peso, academia e besteira/delivery da semana.
+    const corpo = await corpoLinhaSemana();
+    if (corpo) lines.push(corpo);
     const work = await workWeekSection(monday);
     if (work) {
       lines.push(work);
