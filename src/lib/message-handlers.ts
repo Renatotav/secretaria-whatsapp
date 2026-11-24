@@ -7,6 +7,7 @@ import { parseLocalDate, todayBRT, creditCardBillDate, billDaysFor, cardInText }
 import { loadFlowStates, saveFlowStates, markFlowStatesLoaded } from "./flow-state";
 import { withReason } from "./finance-reason";
 import { applyCorpoCommand } from "./corpo";
+import { casarProdutos } from "./nutri";
 import { isBesteiraItem, normalizaCategoria, normalizeItemCategory, spreadDiscount, taxonomyPrompt } from "./finance-taxonomy";
 import type { AgentConfig } from "@prisma/client";
 import { applyOutlookCommand } from "./outlook-calendar";
@@ -2329,6 +2330,8 @@ async function saveParsedInvoice(config: AgentConfig, invoice: InvoiceEntry, cap
       }
     }
   });
+  // Calorias das compras: casa os produtos novos com a tabela de alimentos (em segundo plano, sem atrasar a resposta).
+  void casarProdutos(invoice.items.map((i) => ({ name: i.name, category: i.category })), getProviderOpts(config)).catch((e) => console.error("[nutri]", e));
 
   // Legenda com divisão ("100 no VR e 80 no cartão"): divide já. Senão, guarda
   // a nota para uma divisão mandada logo depois.

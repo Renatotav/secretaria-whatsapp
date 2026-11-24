@@ -727,3 +727,44 @@ test("Corpo: comandos de peso, meta, academia e status (24/11)", async () => {
   assert.equal(mediaSemana([{ at: d(1), value: 120 }, { at: d(16), value: 106 }], d(16)), 106); // fora dos 7 dias não entra
 });
 
+test("Corpo: perfil, IMC, calorias e ritmo (24/11)", async () => {
+  const { lePerfil, imc, calorias, tendencia } = await import("../src/lib/corpo");
+  assert.deepEqual(lePerfil("perfil 1,78 m 38 anos homem"), { altura: 1.78, idade: 38, sexo: "M" });
+  assert.deepEqual(lePerfil("perfil homem 178 cm 38 anos"), { altura: 1.78, idade: 38, sexo: "M" });
+  assert.equal(lePerfil("perfil 1,78"), null);
+  assert.deepEqual(imc(110, 1.78), { valor: 34.7, faixa: "obesidade grau 1" });
+  assert.deepEqual(imc(70, 1.75), { valor: 22.9, faixa: "peso normal" });
+  // Mifflin-St Jeor: 10×110 + 6,25×178 − 5×38 + 5 = 2027,5; 2 dias/semana → ×1,375
+  const k = calorias({ peso: 110, altura: 1.78, idade: 38, sexo: "M" }, 2);
+  assert.equal(k.tmb, 2028); assert.equal(k.gasto, 2788); assert.equal(k.meta, 2290);
+  const d = (dd: number) => new Date(2026, 10, dd, 12);
+  assert.equal(Math.round(tendencia([{ at: d(1), value: 111 }, { at: d(8), value: 110 }, { at: d(15), value: 109 }], d(15))! * 10) / 10, -1);
+  assert.equal(tendencia([{ at: d(14), value: 111 }, { at: d(15), value: 110 }], d(15)), null);
+});
+
+test("Treino: séries pelo WhatsApp, plano e força estimada (24/11)", async () => {
+  const { leSeries, lePlano, umRM, nomeExercicio } = await import("../src/lib/treino");
+  assert.deepEqual(leSeries("supino 3x10 40kg"), [{ exercicio: "supino", series: 3, reps: 10, segundos: null, kg: 40 }]);
+  assert.deepEqual(leSeries("Supino reto 40kg 3x10"), [{ exercicio: "supino", series: 3, reps: 10, segundos: null, kg: 40 }]);
+  assert.deepEqual(leSeries("prancha 3x40s"), [{ exercicio: "prancha", series: 3, reps: null, segundos: 40, kg: null }]);
+  assert.equal(leSeries("supino 3x10 40kg\nleg press 4x12 120")?.length, 2);
+  for (const no of ["fone em 3x de 100 no cartão", "tv 3000 em 12x", "almoço 25 no pix", "peso 108"]) assert.equal(leSeries(no), null, no);
+  assert.deepEqual(lePlano("plano seg peito e tríceps, ter costas, qua perna"), { 1: "peito e tríceps", 2: "costas", 3: "perna" });
+  assert.equal(Math.round(umRM(40, 10)!), 53);
+  assert.equal(umRM(40, 15), null);
+  assert.equal(nomeExercicio("Leg Press 45"), "leg press");
+});
+
+test("Calorias das compras: gramas pelo nome, pelo peso ou pela unidade (24/11)", async () => {
+  const { gramasDoNome, gramasDoItem } = await import("../src/lib/nutri");
+  assert.equal(gramasDoNome("CERV HEINEKEN LN 330ML"), 330);
+  assert.equal(gramasDoNome("SARDINHA PESCADOR LT 125G O"), 125);
+  assert.equal(gramasDoNome("PRESUNTO AURORA FAT K 0.094KG"), 94);
+  assert.equal(gramasDoNome("REFRI PEPSI PET 1L BLACK"), 1000);
+  assert.equal(gramasDoNome("BISC PIRAQUE LEITE"), null);
+  assert.equal(gramasDoItem({ name: "LEVISSIMO SEARA kg", quantity: 0.134 }, null), 134);
+  assert.equal(gramasDoItem({ name: "CERV HEINEKEN LN 330ML", quantity: 15 }, null), 4950);
+  assert.equal(gramasDoItem({ name: "BISC PIRAQUE LEITE", quantity: 2 }, 200), 400);
+  assert.equal(gramasDoItem({ name: "BISC PIRAQUE LEITE", quantity: 1 }, null), null);
+});
+

@@ -466,6 +466,47 @@ model CorpoLog {
   @@index([kind, at])
 }
 
+/// Série de academia (24/11/2026): "supino 3x10 40kg" vira uma linha por exercício no dia.
+model TreinoSerie {
+  id        String   @id @default(cuid())
+  at        DateTime @default(now())
+  /// Nome normalizado ("supino", "agachamento")
+  exercicio String
+  series    Int      @default(1)
+  reps      Int?
+  kg        Float?
+  /// Exercício por tempo (prancha): segundos por série
+  segundos  Int?
+  createdAt DateTime @default(now())
+
+  @@index([exercicio, at])
+}
+
+/// Alimentos de referência (por 100 g) para as calorias das notas (24/11/2026). Carregada de fora do repo.
+model Alimento {
+  id       Int     @id
+  nome     String
+  grupo    String
+  kcal     Float
+  proteina Float
+  gordura  Float
+  carbo    Float
+  fibra    Float?
+
+  @@index([grupo])
+}
+
+/// Qual alimento é cada produto da nota (a IA decide uma vez; depois vale para sempre).
+model ProdutoNutri {
+  /// productKey do nome do produto
+  chave      String   @id
+  /// null = não é comida ou não tem equivalente
+  alimentoId Int?
+  /// Gramas por unidade (quando não vem no nome e não é vendido por kg)
+  gramas     Float?
+  createdAt  DateTime @default(now())
+}
+
 model ScooterLog {
   id        String   @id @default(cuid())
   at        DateTime @default(now())

@@ -6,6 +6,8 @@ import { prisma } from "./prisma";
 import { todayBRT } from "./dates";
 import { brlMsg as brl } from "./format";
 import { normalizeItemCategory } from "./finance-taxonomy";
+import { applyTreinoCommand, treinoPainel } from "./treino";
+import { comprasNutriPorSemana } from "./nutri";
 
 const DIA = 86_400_000;
 const kg = (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
@@ -30,12 +32,34 @@ function diaDe(t: string): Date {
 export const PESO_RE = /^\s*(?:meu\s+)?peso\s*(?:de\s+)?(?:hoje|ontem|anteontem|dia\s+\d{1,2}(?:\/\d{1,2})?)?\s*:?\s*(\d{2,3}(?:[.,]\d{1,2})?)\s*(?:kg|quilos?)?\s*(?:hoje|ontem|anteontem)?\s*$/i;
 export const META_RE = /^\s*(?:minha\s+)?meta\s+(?:de\s+)?peso\s*(?:[eé]\s+)?:?\s*(\d{2,3}(?:[.,]\d)?)\s*(?:kg|quilos?)?\s*$/i;
 export const ACADEMIA_RE = /^\s*(?:fui\s+(?:na|pra|para\s+a|[àa])\s+academia|academia(?:\s+feita|\s+ok)?|treinei|treino\s+(?:feito|ok))(?:\s+(?:hoje|ontem|anteontem|dia\s+\d{1,2}(?:\/\d{1,2})?))?\s*[.!]?\s*$/i;
+export const PERFIL_RE = /^\s*(?:meu\s+)?perfil\b/i;
+
+/** "perfil 1,78 m 38 anos homem" (qualquer ordem) → altura (m), idade, sexo; null se faltar algo. */
+export function lePerfil(t: string): { altura: number; idade: number; sexo: "M" | "F" } | null {
+  const alt = t.match(/\b([12][.,]\d{1,2})\s*m?\b/) ?? t.match(/\b(1\d{2}|2[0-2]\d)\s*cm\b/i);
+  const id = t.match(/\b(\d{2})\s*anos\b/i);
+  const sx = /\b(homem|masculino|m)\b/i.test(t) ? "M" : /\b(mulher|feminino|f)\b/i.test(t) ? "F" : null;
+  if (!alt || !id || !sx) return null;
+  const altura = /cm/i.test(alt[0]) ? Number(alt[1]) / 100 : num(alt[1]);
+  const idade = Number(id[1]);
+  return altura >= 1.2 && altura <= 2.3 && idade >= 12 && idade <= 100 ? { altura, idade, sexo: sx } : null;
+}
+
 export const STATUS_RE = /^\s*(?:como\s+(?:est[aá]|t[aá]|vai)\s+(?:o\s+)?(?:meu\s+)?(?:peso|corpo)|(?:meu\s+)?peso|corpo)\s*\??\s*$/i;
 
 /** Comandos do Corpo pelo WhatsApp. null = não é com ela. */
 export async function applyCorpoCommand(text: string): Promise<string | null> {
+  const treino = await applyTreinoCommand(text);
+  if (treino) return treino;
   const t = text.trim();
   if (t.length > 60) return null;
+
+  if (PERFIL_RE.test(t)) {
+    const p = lePerfil(t);
+    if (!p) return "📏 Para as contas de IMC e calorias, mande assim: *perfil 1,78 m 38 anos homem*.";
+    await prisma.corpoLog.create({ data: { kind: "perfil", value: p.altura, note: JSON.stringify({ idade: p.idade, sexo: p.sexo, em: todayBRT().getFullYear() }) } });
+    return `📏 Perfil anotado: ${p.altura.toLocaleString("pt-BR")} m, ${p.idade} anos.\n\n${await corpoResumo()}`;
+  }
 
   const meta = t.match(META_RE);
   if (meta) {
@@ -80,6 +104,65 @@ async function diasDeAcademia(dias: number): Promise<number> {
   return prisma.corpoLog.count({ where: { kind: "academia", at: { gt: new Date(todayBRT().getTime() - dias * DIA) } } });
 }
 
+/** IMC e a faixa da OMS. */
+export function imc(peso: number, altura: number): { valor: number; faixa: string } {
+  const v = peso / (altura * altura);
+  const faixa = v < 18.5 ? "abaixo do peso" : v < 25 ? "peso normal" : v < 30 ? "sobrepeso" : v < 35 ? "obesidade grau 1" : v < 40 ? "obesidade grau 2" : "obesidade grau 3";
+  return { valor: Math.round(v * 10) / 10, faixa };
+}
+
+/**
+ * Gasto do corpo por dia: TMB (Mifflin-St Jeor) × atividade, que sobe com os dias de academia
+ * (média por semana nos últimos 28 dias). Meta = gasto − 500 kcal (~0,5 kg por semana), com piso.
+ */
+export function calorias(p: { peso: number; altura: number; idade: number; sexo: "M" | "F" }, academiaPorSemana: number) {
+  const tmb = 10 * p.peso + 6.25 * p.altura * 100 - 5 * p.idade + (p.sexo === "M" ? 5 : -161);
+  const fator = academiaPorSemana >= 5 ? 1.725 : academiaPorSemana >= 3 ? 1.55 : academiaPorSemana >= 1 ? 1.375 : 1.2;
+  const gasto = tmb * fator;
+  const meta = Math.max(gasto - 500, p.sexo === "M" ? 1500 : 1200);
+  return { tmb: Math.round(tmb), fator, gasto: Math.round(gasto), meta: Math.round(meta / 10) * 10 };
+}
+
+/** kg por semana pela reta dos pesos dos últimos 28 dias (precisa de 3+ pesos em 7+ dias). */
+export function tendencia(pesos: { at: Date; value: number }[], hoje: Date): number | null {
+  const p = pesos.filter((x) => x.at.getTime() > hoje.getTime() - 28 * DIA);
+  if (p.length < 3 || p.at(-1)!.at.getTime() - p[0].at.getTime() < 7 * DIA) return null;
+  const xs = p.map((x) => x.at.getTime() / DIA), ys = p.map((x) => x.value);
+  const mx = xs.reduce((a, b) => a + b) / xs.length, my = ys.reduce((a, b) => a + b) / ys.length;
+  const cov = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0), vx = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+  return vx ? (cov / vx) * 7 : null;
+}
+
+/** Perfil mais recente (a idade anda com o ano). */
+async function perfil(): Promise<{ altura: number; idade: number; sexo: "M" | "F" } | null> {
+  const r = await prisma.corpoLog.findFirst({ where: { kind: "perfil" }, orderBy: { createdAt: "desc" } });
+  if (!r?.value) return null;
+  const j = JSON.parse(r.note || "{}") as { idade?: number; sexo?: "M" | "F"; em?: number };
+  return j.idade && j.sexo ? { altura: r.value, idade: j.idade + (todayBRT().getFullYear() - (j.em ?? todayBRT().getFullYear())), sexo: j.sexo } : null;
+}
+
+/** Números do corpo: IMC, calorias e previsão (null no que faltar dado). */
+export async function corpoNumeros() {
+  const hoje = todayBRT();
+  const [pesosRaw, metaR, pf, acad28] = await Promise.all([
+    prisma.corpoLog.findMany({ where: { kind: "peso", value: { not: null } }, orderBy: { at: "asc" } }),
+    prisma.corpoLog.findFirst({ where: { kind: "meta" }, orderBy: { createdAt: "desc" } }),
+    perfil(),
+    diasDeAcademia(28),
+  ]);
+  const pesos = pesosRaw.map((p) => ({ at: p.at, value: p.value as number }));
+  const ult = pesos.at(-1);
+  const metaPeso = metaR?.value ?? null;
+  const porSemana = tendencia(pesos, hoje);
+  const kcal = ult && pf ? calorias({ peso: ult.value, ...pf }, acad28 / 4) : null;
+  let previsao: string | null = null;
+  if (ult && metaPeso != null && porSemana != null && porSemana < -0.05 && ult.value > metaPeso) {
+    const semanas = (ult.value - metaPeso) / -porSemana;
+    if (semanas < 520) previsao = new Date(hoje.getTime() + semanas * 7 * DIA).toISOString().slice(0, 10);
+  }
+  return { perfil: pf, imc: ult && pf ? imc(ult.value, pf.altura) : null, kcal, porSemana, previsao, academiaPorSemana: acad28 / 4 };
+}
+
 /** Média dos pesos dos últimos 7 dias até `ate` (a balança varia 1 kg de um dia para o outro). */
 export function mediaSemana(pesos: { at: Date; value: number }[], ate: Date): number | null {
   const janela = pesos.filter((p) => p.at.getTime() <= ate.getTime() && p.at.getTime() > ate.getTime() - 7 * DIA);
@@ -111,11 +194,16 @@ export async function corpoResumo(): Promise<string> {
     }
   }
   if (!meta?.value) linhas.push("🎯 Sem meta ainda: mande *meta de peso 95*.");
+  const nums = await corpoNumeros();
+  if (nums.porSemana != null) linhas.push(`📈 Ritmo das últimas semanas: ${sinal(nums.porSemana)} por semana${nums.previsao ? ` → chega na meta por volta de *${ddmm(new Date(nums.previsao + "T12:00:00"))}/${nums.previsao.slice(2, 4)}*` : ""}`);
+  if (nums.imc) linhas.push(`📏 IMC ${nums.imc.valor.toLocaleString("pt-BR")} (${nums.imc.faixa})`);
+  if (nums.kcal) linhas.push(`🔥 Seu corpo gasta ~${nums.kcal.gasto.toLocaleString("pt-BR")} kcal/dia · para perder ~0,5 kg/semana: ~*${nums.kcal.meta.toLocaleString("pt-BR")} kcal/dia*`);
+  else if (ult) linhas.push("📏 Para IMC e calorias: *perfil 1,78 m 38 anos homem*.");
   linhas.push(`🏋️ Academia: ${academia7} dia(s) nos últimos 7 · ${academia28} nos últimos 28`);
   return linhas.join("\n");
 }
 
-type Semana = { inicio: string; besteira: number; delivery: number; academia: number; peso: number | null };
+type Semana = { inicio: string; besteira: number; delivery: number; academia: number; peso: number | null; kcal: number; proteina: number; cobertura: number | null };
 
 /** Segunda-feira da semana de `d` (meio-dia). */
 function segunda(d: Date): Date {
@@ -151,11 +239,12 @@ async function comidaPorSemana(desde: Date): Promise<Map<string, { besteira: num
 export async function corpoPainel() {
   const hoje = todayBRT();
   const desde = segunda(new Date(hoje.getTime() - 11 * 7 * DIA)); // 12 semanas
-  const [pesosRaw, meta, academia, comida] = await Promise.all([
+  const [pesosRaw, meta, academia, comida, nutri] = await Promise.all([
     prisma.corpoLog.findMany({ where: { kind: "peso", value: { not: null } }, orderBy: { at: "asc" } }),
     prisma.corpoLog.findFirst({ where: { kind: "meta" }, orderBy: { createdAt: "desc" } }),
     prisma.corpoLog.findMany({ where: { kind: "academia", at: { gte: desde } }, select: { at: true } }),
     comidaPorSemana(desde),
+    comprasNutriPorSemana(desde, segunda),
   ]);
   const pesos = pesosRaw.map((p) => ({ at: p.at, value: p.value as number }));
   const semanas: Semana[] = [];
@@ -169,9 +258,15 @@ export async function corpoPainel() {
       delivery: Math.round(c.delivery * 100) / 100,
       academia: academia.filter((a) => a.at >= s && a.at < fim).length,
       peso: mediaSemana(pesos, new Date(Math.min(fim.getTime() - 1, hoje.getTime() + DIA))),
+      kcal: Math.round(nutri.get(k)?.kcal ?? 0),
+      proteina: Math.round(nutri.get(k)?.proteina ?? 0),
+      // Parte dos itens de comida que deu para converter (o resto não tem equivalente ou tamanho).
+      cobertura: nutri.get(k)?.itens ? Math.round((nutri.get(k)!.contados / nutri.get(k)!.itens) * 100) : null,
     });
   }
   return {
+    numeros: await corpoNumeros(),
+    treino: await treinoPainel(),
     pesos: pesos.map((p) => ({ at: p.at.toISOString(), value: p.value })),
     meta: meta?.value ?? null,
     academia7: academia.filter((a) => a.at.getTime() > hoje.getTime() - 7 * DIA).length,
