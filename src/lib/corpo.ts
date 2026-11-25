@@ -47,6 +47,29 @@ export function lePerfil(t: string): { altura: number; idade: number; sexo: "M" 
 
 export const STATUS_RE = /^\s*(?:como\s+(?:est[aá]|t[aá]|vai)\s+(?:o\s+)?(?:meu\s+)?(?:peso|corpo)|(?:meu\s+)?peso|corpo)\s*\??\s*$/i;
 
+// Cardio: MET de cada atividade (gasto ≈ MET × peso × horas) e o ritmo para quando só vem a distância.
+const CARDIO: [RegExp, string, number, number][] = [
+  [/corri|corrida|correr/, "corrida", 9.8, 6],
+  [/caminh|andei|caminhada/, "caminhada", 3.5, 12],
+  [/pedal|bike|bicicleta|ciclismo/, "bike", 7.5, 3],
+  [/esteira/, "esteira", 5, 10],
+  [/nad|natac/, "natação", 8, 30],
+  [/eliptic|transport/, "elíptico", 5, 8],
+];
+/** "corri 5 km", "esteira 30 min", "pedalei 1h" → atividade, minutos, km (null se não for cardio). */
+export function leCardio(t: string): { atividade: string; met: number; min: number; km: number | null } | null {
+  const f = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  if (f.length > 60 || /\b(r\$|reais|pix|cartao|conto|uber|99|taxi|onibus)\b/.test(f)) return null;
+  const tipo = CARDIO.find(([re]) => re.test(f));
+  if (!tipo || !/^(fiz\s+|hoje\s+)?\S+/.test(f)) return null;
+  const km = f.match(/(\d+(?:[.,]\d+)?)\s*km\b/);
+  const min = f.match(/(\d+(?:[.,]\d+)?)\s*(min|minutos?|h|horas?)\b/);
+  if (!km && !min) return null;
+  const kmN = km ? Number(km[1].replace(",", ".")) : null;
+  const minN = min ? Number(min[1].replace(",", ".")) * (/^h/.test(min[2]) ? 60 : 1) : kmN! * tipo[3];
+  return minN > 0 && minN <= 600 ? { atividade: tipo[1], met: tipo[2], min: Math.round(minN), km: kmN } : null;
+}
+
 /** Comandos do Corpo pelo WhatsApp. null = não é com ela. */
 export async function applyCorpoCommand(text: string): Promise<string | null> {
   const treino = await applyTreinoCommand(text);
@@ -59,6 +82,18 @@ export async function applyCorpoCommand(text: string): Promise<string | null> {
     if (!p) return "📏 Para as contas de IMC e calorias, mande assim: *perfil 1,78 m 38 anos homem*.";
     await prisma.corpoLog.create({ data: { kind: "perfil", value: p.altura, note: JSON.stringify({ idade: p.idade, sexo: p.sexo, em: todayBRT().getFullYear() }) } });
     return `📏 Perfil anotado: ${p.altura.toLocaleString("pt-BR")} m, ${p.idade} anos.\n\n${await corpoResumo()}`;
+  }
+
+  const cardio = leCardio(t);
+  if (cardio) {
+    const ultPeso = (await prisma.corpoLog.findFirst({ where: { kind: "peso", value: { not: null } }, orderBy: { at: "desc" } }))?.value ?? 80;
+    const kcal = Math.round((cardio.met * ultPeso * cardio.min) / 60);
+    const at = todayBRT();
+    await prisma.corpoLog.create({ data: { kind: "cardio", value: kcal, at, note: JSON.stringify({ atividade: cardio.atividade, min: cardio.min, km: cardio.km }) } });
+    // Cardio também conta como dia ativo.
+    const ja = await prisma.corpoLog.findFirst({ where: { kind: "academia", at: { gte: new Date(at.getTime() - DIA / 2), lt: new Date(at.getTime() + DIA / 2) } } });
+    if (!ja) await prisma.corpoLog.create({ data: { kind: "academia", at, note: "cardio" } });
+    return `🏃 ${cardio.atividade[0].toUpperCase()}${cardio.atividade.slice(1)} anotada: ${cardio.min} min${cardio.km ? ` · ${cardio.km.toLocaleString("pt-BR")} km` : ""} · queimou ~*${kcal.toLocaleString("pt-BR")} kcal*${ultPeso === 80 ? " (estimativa; mande seu peso para ficar certo)" : ""}.`;
   }
 
   const meta = t.match(META_RE);
@@ -272,6 +307,10 @@ export async function corpoPainel() {
     pesos: pesos.map((p) => ({ at: p.at.toISOString(), value: p.value })),
     meta: meta?.value ?? null,
     academia7: academia.filter((a) => a.at.getTime() > hoje.getTime() - 7 * DIA).length,
+    // Os dias em que foi, nos últimos 7 (para marcar o dia certo, não só contar).
+    academiaDias: academia.filter((a) => a.at.getTime() > hoje.getTime() - 7 * DIA).map((a) => a.at.toISOString().slice(0, 10)),
+    hoje: hoje.toISOString().slice(0, 10),
+    cardioHoje: (await prisma.corpoLog.findMany({ where: { kind: "cardio", at: { gte: new Date(hoje.getTime() - DIA / 2), lt: new Date(hoje.getTime() + DIA / 2) } } })).reduce((t, c) => t + (c.value ?? 0), 0),
     semanas,
   };
 }

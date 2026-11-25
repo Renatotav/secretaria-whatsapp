@@ -25,6 +25,31 @@ export function nomeExercicio(s: string): string {
   return APELIDOS.find(([re]) => re.test(f))?.[1] ?? f;
 }
 
+// Grupo muscular de cada exercício (para ver o que ficou sem treino na semana).
+const GRUPOS: [RegExp, string][] = [
+  [/supino|crucifixo|peck|fly|flexao|paralela/, "Peito"],
+  [/puxada|remada|barra fixa|pulldown|pull|serrote|levantamento terra|terra/, "Costas"],
+  [/agachamento|leg|extensora|flexora|stiff|afundo|panturrilha|hack|cadeira|gluteo|elevacao pelvica|abdutora|adutora/, "Pernas"],
+  [/desenvolvimento|elevacao lateral|elevacao frontal|ombro|arnold|encolhimento/, "Ombros"],
+  [/rosca|biceps|martelo/, "Bíceps"],
+  [/triceps|frances|testa|mergulho|corda|coice/, "Tríceps"],
+  [/prancha|abdominal|abdomen|crunch|infra|obliquo/, "Abdômen"],
+];
+export const grupoDo = (ex: string) => GRUPOS.find(([re]) => re.test(fold(ex)))?.[1] ?? "Outros";
+const PERNA = /agachamento|leg|stiff|terra|hack|afundo|gluteo|elevacao pelvica/;
+
+/**
+ * Próxima vez (dupla progressão, como nos apps de academia): fechou 12 repetições → sobe a carga
+ * (+2,5 kg; +5 kg em perna) e volta para 8; senão, +1 repetição com a mesma carga. Prancha: +5 s.
+ */
+export function proximaVez(s: { exercicio: string; series: number; reps: number | null; kg: number | null; segundos: number | null }): string | null {
+  if (s.segundos != null) return `${s.series}×${s.segundos + 5}s`;
+  if (s.reps == null) return null;
+  if (s.kg == null) return `${s.series}×${s.reps + 1}`;
+  if (s.reps >= 12) return `${s.series}×8 com ${kg(s.kg + (PERNA.test(fold(s.exercicio)) ? 5 : 2.5))}`;
+  return `${s.series}×${s.reps + 1} com ${kg(s.kg)}`;
+}
+
 /** 1RM estimado (Epley); só até 12 repetições, acima disso a conta não vale. */
 export const umRM = (kgs: number, reps: number) => (reps >= 1 && reps <= 12 ? kgs * (1 + reps / 30) : null);
 
@@ -116,13 +141,28 @@ export async function applyTreinoCommand(text: string): Promise<string | null> {
       `• *${s.exercicio}*: ${descreve(s)}` +
         (ultima ? ` (antes: ${descreve(ultima)} em ${ddmm(ultima.at)})` : " (primeira vez)") +
         (recorde ? " 🏆 recorde!" : "") +
-        (rm != null ? ` · força ~${kg(Math.round(rm))}` : ""),
+        (rm != null ? ` · força ~${kg(Math.round(rm))}` : "") +
+        (proximaVez(s) ? `\n   ➡️ próxima vez: ${proximaVez(s)}` : ""),
     );
   }
   // Treino registrado = dia de academia (um por dia).
   const ja = await prisma.corpoLog.findFirst({ where: { kind: "academia", at: { gte: new Date(hoje.getTime() - DIA / 2), lt: new Date(hoje.getTime() + DIA / 2) } } });
   if (!ja) await prisma.corpoLog.create({ data: { kind: "academia", at: hoje } });
-  return `🏋️ Treino de ${ddmm(hoje)} anotado:\n${linhas.join("\n")}\n_Força = carga máxima estimada para 1 repetição._`;
+  const g = await gruposDaSemana();
+  return `🏋️ Treino de ${ddmm(hoje)} anotado:\n${linhas.join("\n")}\n💪 Semana: ${g.feitos.map(([n, v]) => `${n} ${v}×`).join(" · ")}${g.faltam.length ? ` · faltou: ${g.faltam.join(", ")}` : ""}\n_Força = carga máxima estimada para 1 repetição._`;
+}
+
+const PRINCIPAIS = ["Peito", "Costas", "Pernas", "Ombros", "Bíceps", "Tríceps"];
+/** Quantos dias cada grupo muscular foi treinado nos últimos 7 dias, e quais ficaram de fora. */
+export async function gruposDaSemana(): Promise<{ feitos: [string, number][]; faltam: string[] }> {
+  const series = await prisma.treinoSerie.findMany({ where: { at: { gt: new Date(todayBRT().getTime() - 7 * DIA) } }, select: { exercicio: true, at: true } });
+  const dias = new Map<string, Set<string>>();
+  for (const s of series) {
+    const g = grupoDo(s.exercicio);
+    dias.set(g, (dias.get(g) ?? new Set()).add(s.at.toISOString().slice(0, 10)));
+  }
+  const feitos = [...dias.entries()].map(([g, d]) => [g, d.size] as [string, number]).sort((a, b) => b[1] - a[1]);
+  return { feitos, faltam: PRINCIPAIS.filter((g) => !dias.has(g)) };
 }
 
 function descreve(s: { series: number; reps: number | null; kg: number | null; segundos: number | null }): string {
@@ -158,5 +198,5 @@ export async function treinoPainel() {
   });
   exercicios.sort((a, b) => b.ultima.at.localeCompare(a.ultima.at));
   const plano = await planoSalvo();
-  return { exercicios, plano: Object.entries(plano).map(([d, v]) => ({ dia: DIAS_NOME[Number(d)], treino: v })) };
+  return { grupos: await gruposDaSemana(), exercicios: exercicios.map((e) => ({ ...e, grupo: grupoDo(e.nome) })), plano: Object.entries(plano).map(([d, v]) => ({ dia: DIAS_NOME[Number(d)], treino: v })) };
 }

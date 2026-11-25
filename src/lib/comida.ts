@@ -55,11 +55,37 @@ async function linhaDoDia(): Promise<string> {
   return `📊 Hoje: ~${k(total)} kcal${meta ? ` de ~${k(meta)} (${total <= meta ? `sobram ~${k(meta - total)}` : `passou ~${k(total - meta)}`})` : ""}`;
 }
 
+/** "quantas calorias tem 100g de arroz?", "calorias da banana", "proteína do frango": consulta na tabela. */
+export const CONSULTA_RE = /^\s*(?:quantas?\s+)?(calorias?|kcal|prote[ií]nas?)\s+(?:tem\s+|d[eoa]s?\s+|n[oa]s?\s+)*(?:(\d+(?:[.,]\d+)?)\s*(?:g|gr|gramas|ml)\s+(?:de\s+)?)?(.{2,40}?)\s*\??\s*$/i;
+async function consultaAlimento(t: string): Promise<string | null> {
+  const m = t.match(CONSULTA_RE);
+  if (!m) return null;
+  const g = m[2] ? Number(m[2].replace(",", ".")) : 100;
+  const ws = m[3].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3).map((w) => (w.length > 5 ? w.slice(0, 5) : w));
+  if (!ws.length) return null;
+  const todos = await prisma.alimento.findMany();
+  const achados = todos
+    .map((a) => ({ a, pts: ws.filter((w) => a.nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(w)).length }))
+    .filter((x) => x.pts === ws.length)
+    // Primeiro o que começa com a palavra ("Arroz, tipo 1…" antes de "Bolinho de arroz"), depois o preparo
+    // comum (cozido, grelhado, assado, cru) e por fim o nome mais curto.
+    .map((x) => {
+      const nm = x.a.nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      return { ...x, ord: (nm.startsWith(ws[0]) ? 0 : 10) + (/cozid|grelhad|assad/.test(nm) ? 0 : /\bcru/.test(nm) ? 1 : 3) + (/figado|coracao|moela|pe,|pele|miud/.test(nm) ? 5 : 0) };
+    })
+    .sort((x, y) => x.ord - y.ord || x.a.nome.length - y.a.nome.length)
+    .slice(0, 4);
+  if (!achados.length) return `🔎 Não achei "${m[3]}" na tabela. Tente um nome simples (ex.: *calorias da banana*).`;
+  return `🔎 *${m[3]}* — em ${k(g)} g:\n${achados.map(({ a }) => `• ${a.nome}: ~${k((a.kcal * g) / 100)} kcal · ${k((a.proteina * g) / 100)} g proteína · ${k((a.carbo * g) / 100)} g carbo · ${k((a.gordura * g) / 100)} g gordura`).join("\n")}`;
+}
+
 /** "comi …": calcula, guarda e responde. */
 export async function applyComidaCommand(text: string, opts: ProviderOptions): Promise<string | null> {
   const t = text.trim();
   if (/^\s*(?:quanto\s+(?:eu\s+)?comi|calorias)\s+(?:de\s+)?hoje\s*\??\s*$/i.test(t)) return linhaDoDia();
   if (/^\s*(?:monta|faz|sugere)\s+(?:um\s+|meu\s+|o\s+)?card[aá]pio\b|^\s*o\s+que\s+(?:eu\s+)?(?:cozinho|fa[cç]o\s+(?:pra|para)\s+comer|como)\s+hoje\s*\??\s*$|^\s*receita\s+(?:com|de)\s+/i.test(t)) return cardapio(t, opts);
+  const consulta = await consultaAlimento(t);
+  if (consulta) return consulta;
   const comeu = ehComida(t);
   if (!comeu) return null;
   const { content } = await generateResponse(

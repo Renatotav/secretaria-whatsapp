@@ -776,3 +776,20 @@ test("'comi …' é refeição; com dinheiro é gasto (24/11)", async () => {
   for (const no of ["almocei 25", "comi pizza 40 reais", "almoço 25 no pix", "comi no cartão um lanche", "gastei 30 no lanche"]) assert.equal(ehComida(no), null, no);
 });
 
+test("Corpo extra: próxima vez, grupo muscular, cardio e consulta de calorias (24/11)", async () => {
+  const { proximaVez, grupoDo } = await import("../src/lib/treino");
+  assert.equal(proximaVez({ exercicio: "supino", series: 3, reps: 10, kg: 40, segundos: null }), "3×11 com 40 kg");
+  assert.equal(proximaVez({ exercicio: "supino", series: 3, reps: 12, kg: 40, segundos: null }), "3×8 com 42,5 kg");
+  assert.equal(proximaVez({ exercicio: "leg press", series: 4, reps: 12, kg: 120, segundos: null }), "4×8 com 125 kg");
+  assert.equal(proximaVez({ exercicio: "prancha", series: 3, reps: null, kg: null, segundos: 40 }), "3×45s");
+  assert.equal(grupoDo("rosca direta"), "Bíceps"); assert.equal(grupoDo("leg press"), "Pernas"); assert.equal(grupoDo("puxada"), "Costas");
+  const { leCardio } = await import("../src/lib/corpo");
+  assert.deepEqual(leCardio("corri 5 km"), { atividade: "corrida", met: 9.8, min: 30, km: 5 });
+  assert.equal(leCardio("esteira 30 min")?.min, 30);
+  assert.equal(leCardio("pedalei 1h")?.min, 60);
+  for (const no of ["uber 18 no pix", "caminhei hoje", "corrida de uber 20 reais"]) assert.equal(leCardio(no), null, no);
+  const { CONSULTA_RE } = await import("../src/lib/comida");
+  assert.equal("quantas calorias tem 100g de arroz?".match(CONSULTA_RE)?.[3], "arroz");
+  assert.equal("calorias da banana".match(CONSULTA_RE)?.[3], "banana");
+});
+
