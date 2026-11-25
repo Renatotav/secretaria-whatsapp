@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useWidth } from "@/lib/use-width";
 import { brl } from "@/lib/format";
+import { PerguntaIA } from "../pergunta-ia";
 
 type Semana = { inicio: string; besteira: number; delivery: number; academia: number; peso: number | null; kcal: number; proteina: number; cobertura: number | null };
 type Numeros = {
@@ -161,6 +162,7 @@ function Painel({ d }: { d: Dados }) {
           {d.numeros.kcal && <p style={{ marginTop: 6, lineHeight: 1.5 }}>Gasto em repouso (Mifflin-St Jeor) {n(d.numeros.kcal.tmb)} kcal × {n(d.numeros.kcal.fator, 3)} de atividade ({n(d.numeros.academiaPorSemana, 1)} dia(s) de academia por semana) = {n(d.numeros.kcal.gasto)} kcal. A meta tira 500 kcal por dia. São estimativas: o ritmo do peso é quem confirma.</p>}
         </details>
       )}
+      <PerguntaIA aba="corpo" titulo="💬 Pergunte à treinadora" exemplos={["O que eu janto hoje para fechar a meta?", "Monta meu treino de perna com o que eu já faço", "Estou no ritmo certo para a meta?"]} />
       <GraficoPeso pesos={d.pesos} meta={d.meta} previsao={d.numeros.previsao} />
       <Comidas c={d.comidas} meta={d.numeros.kcal?.meta ?? null} />
       <Treinos t={d.treino} semanas={d.semanas} />

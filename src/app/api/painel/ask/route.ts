@@ -5,6 +5,7 @@ import { withErrorHandling } from "@/lib/api-handler";
 import { generateResponse } from "@/lib/openai";
 import { airconData } from "@/lib/aircon";
 import { scooterNumbers } from "@/lib/scooter";
+import { corpoPainel } from "@/lib/corpo";
 import { getProviderOpts } from "@/lib/message-handlers";
 import { answerFinanceQuestion, type ContaSql } from "@/lib/assistant-chat";
 
@@ -14,7 +15,7 @@ import { answerFinanceQuestion, type ContaSql } from "@/lib/assistant-chat";
 //   a consulta e as linhas ("🔍 Ver a conta");
 // - abas Scooter e Ar: os números da aba inteira.
 // Nada é gravado. Dado do trabalho não passa aqui (tem a caixa própria, com ZDR).
-const ABAS: Record<string, string> = { ar: "Ar-condicionado", scooter: "Scooter", finance: "Financeiro", parcelas: "Parcelas" };
+const ABAS: Record<string, string> = { ar: "Ar-condicionado", scooter: "Scooter", finance: "Financeiro", parcelas: "Parcelas", corpo: "Corpo" };
 
 export const POST = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -39,7 +40,11 @@ export const POST = withErrorHandling(async (request: Request) => {
   else if (aba === "ar") dados = await airconData();
   else if (aba === "scooter")
     dados = { ...(await scooterNumbers()), registros: (await prisma.scooterLog.findMany({ orderBy: { at: "desc" }, take: 40 })).map((l) => ({ dia: l.at, tipo: l.kind, odo: l.odo, kwh: l.kwh, horas: l.hours, psi: l.psiFront != null ? `${l.psiFront}/${l.psiRear}` : null })) };
-  else return NextResponse.json({ error: "Escolha um gráfico para perguntar." }, { status: 400 });
+  else if (aba === "corpo") {
+    // Corpo (24/11, ele: "colocar o openrouter para ajudar lá também"): todos os números da aba + o que ele comprou de comida nas notas recentes.
+    const itens = await prisma.invoiceItem.findMany({ where: { amount: { gt: 0 }, financeEntry: { purchaseDate: { gte: new Date(Date.now() - 14 * 86_400_000) } } }, select: { name: true }, take: 80 });
+    dados = { ...(await corpoPainel()), comprasRecentes: [...new Set(itens.map((i) => i.name))] };
+  } else return NextResponse.json({ error: "Escolha um gráfico para perguntar." }, { status: 400 });
 
   const hoje = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
   const onde = grafico ? `o gráfico "${grafico.titulo}" da aba ${ABAS[aba]}` : `a aba "${ABAS[aba]}"`;
@@ -49,7 +54,10 @@ export const POST = withErrorHandling(async (request: Request) => {
     "Português simples, curto (até 4 frases), sem termos técnicos, valores em reais no formato R$ 1.234,56, kWh com vírgula. " +
     "Datas ISO estão em UTC: some -3 h. Não invente números. Sem sermão sobre gastos, bebida ou horário." +
     (aba === "scooter" ? " Casa → trabalho fica a ~2 km (ida e volta ≈ 4 km); safeKm = km que dá para rodar com folga depois da carga, kmSince = km rodados desde ela." : "") +
+    (aba === "corpo"
+      ? " Aqui você é a treinadora e nutricionista prática dele: pode sugerir o que comer, montar treino, ajustar carga e explicar o ritmo do peso, usando os números (peso, meta, calorias, treinos, o que comeu, comprasRecentes). Até 8 linhas, direto, com números. kcal.meta = calorias por dia para perder ~0,5 kg/semana. Força = carga máxima estimada para 1 repetição. Não fale de médico nem de remédio; sem julgar comida ou bebida."
+      : "") +
     "\n\nDADOS:\n" + JSON.stringify(dados).slice(0, 12_000);
-  const r = await generateResponse([{ role: "user", content: pergunta }], sistema, 0.2, 400, opts);
+  const r = await generateResponse([{ role: "user", content: pergunta }], sistema, 0.2, aba === "corpo" ? 700 : 400, opts);
   return NextResponse.json({ resposta: r.content.trim(), ...(grafico ? { dados: grafico.dados } : {}) });
 });

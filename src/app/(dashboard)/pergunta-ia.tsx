@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Aba = "ar" | "scooter" | "finance" | "parcelas";
+type Aba = "ar" | "scooter" | "finance" | "parcelas" | "corpo";
 export type Grafico = { titulo: string; dados: unknown };
 type Conta = { sql?: string; linhas?: unknown[]; dados?: unknown };
 
