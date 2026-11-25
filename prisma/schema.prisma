@@ -477,9 +477,36 @@ model TreinoSerie {
   kg        Float?
   /// Exercício por tempo (prancha): segundos por série
   segundos  Int?
+  /// Treino guiado (aba Treino): cada série é uma linha; sessão do dia e posição. Nulos = veio do WhatsApp.
+  sessaoId  String?
+  ordem     Int?
+  /// Esforço da série (RIR: repetições que ainda daria para fazer), opcional
+  rir       Int?
   createdAt DateTime @default(now())
 
   @@index([exercicio, at])
+  @@index([sessaoId])
+}
+
+/// Rotina de treino (aba Treino): nome, dia da semana (0=dom…6=sáb, null = livre) e os exercícios.
+model Rotina {
+  id        String   @id @default(cuid())
+  nome      String
+  dia       Int?
+  /// [{exercicio, series, repMin, repMax, descanso (s), segundos?}]
+  itens     Json
+  ativa     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Exercício criado por ele (além da biblioteca do código).
+model ExercicioProprio {
+  id        String   @id @default(cuid())
+  nome      String   @unique
+  grupo     String
+  equipamento String @default("")
+  createdAt DateTime @default(now())
 }
 
 /// Alimentos de referência (por 100 g) para as calorias das notas (24/11/2026). Carregada de fora do repo.

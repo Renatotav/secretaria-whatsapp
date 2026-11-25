@@ -744,15 +744,17 @@ test("Corpo: perfil, IMC, calorias e ritmo (24/11)", async () => {
 
 test("Treino: séries pelo WhatsApp, plano e força estimada (24/11)", async () => {
   const { leSeries, lePlano, umRM, nomeExercicio } = await import("../src/lib/treino");
-  assert.deepEqual(leSeries("supino 3x10 40kg"), [{ exercicio: "supino", series: 3, reps: 10, segundos: null, kg: 40 }]);
-  assert.deepEqual(leSeries("Supino reto 40kg 3x10"), [{ exercicio: "supino", series: 3, reps: 10, segundos: null, kg: 40 }]);
-  assert.deepEqual(leSeries("prancha 3x40s"), [{ exercicio: "prancha", series: 3, reps: null, segundos: 40, kg: null }]);
+  assert.deepEqual(leSeries("supino 3x10 40kg"), [{ exercicio: "Supino reto com barra", series: 3, reps: 10, segundos: null, kg: 40 }]);
+  assert.deepEqual(leSeries("Supino reto 40kg 3x10"), [{ exercicio: "Supino reto com barra", series: 3, reps: 10, segundos: null, kg: 40 }]);
+  assert.deepEqual(leSeries("prancha 3x40s"), [{ exercicio: "Prancha", series: 3, reps: null, segundos: 40, kg: null }]);
   assert.equal(leSeries("supino 3x10 40kg\nleg press 4x12 120")?.length, 2);
   for (const no of ["fone em 3x de 100 no cartão", "tv 3000 em 12x", "almoço 25 no pix", "peso 108"]) assert.equal(leSeries(no), null, no);
   assert.deepEqual(lePlano("plano seg peito e tríceps, ter costas, qua perna"), { 1: "peito e tríceps", 2: "costas", 3: "perna" });
   assert.equal(Math.round(umRM(40, 10)!), 53);
   assert.equal(umRM(40, 15), null);
-  assert.equal(nomeExercicio("Leg Press 45"), "leg press");
+  assert.equal(nomeExercicio("Leg Press 45"), "Leg press 45°");
+  assert.equal(nomeExercicio("puxada alta"), "Puxada frontal na polia");
+  assert.equal(nomeExercicio("remada cavalinho"), "Remada cavalinho");
 });
 
 test("Calorias das compras: gramas pelo nome, pelo peso ou pela unidade (24/11)", async () => {
@@ -782,7 +784,7 @@ test("Corpo extra: próxima vez, grupo muscular, cardio e consulta de calorias (
   assert.equal(proximaVez({ exercicio: "supino", series: 3, reps: 12, kg: 40, segundos: null }), "3×8 com 42,5 kg");
   assert.equal(proximaVez({ exercicio: "leg press", series: 4, reps: 12, kg: 120, segundos: null }), "4×8 com 125 kg");
   assert.equal(proximaVez({ exercicio: "prancha", series: 3, reps: null, kg: null, segundos: 40 }), "3×45s");
-  assert.equal(grupoDo("rosca direta"), "Bíceps"); assert.equal(grupoDo("leg press"), "Pernas"); assert.equal(grupoDo("puxada"), "Costas");
+  assert.equal(grupoDo("rosca direta"), "Bíceps"); assert.equal(grupoDo("leg press"), "Pernas"); assert.equal(grupoDo("puxada"), "Costas"); assert.equal(grupoDo("elevação pélvica"), "Glúteos");
   const { leCardio } = await import("../src/lib/corpo");
   assert.deepEqual(leCardio("corri 5 km"), { atividade: "corrida", met: 9.8, min: 30, km: 5 });
   assert.equal(leCardio("esteira 30 min")?.min, 30);
@@ -796,5 +798,24 @@ test("Corpo extra: próxima vez, grupo muscular, cardio e consulta de calorias (
 test("Strava: tipo de atividade em português (24/11)", async () => {
   const { nomeTipo } = await import("../src/lib/strava");
   assert.equal(nomeTipo("Run"), "corrida"); assert.equal(nomeTipo("WeightTraining"), "musculação"); assert.equal(nomeTipo("Walk"), "caminhada");
+});
+
+test("Treino guiado: carga sugerida, alívio de 10% e rotina limpa (24/11)", async () => {
+  const { sugestao, limpaItens } = await import("../src/lib/treino-guiado");
+  const item = { exercicio: "Supino reto com barra", series: 3, repMin: 8, repMax: 12, descanso: 90, segundos: null };
+  const set = (kg: number, reps: number) => ({ id: "x", at: new Date(), exercicio: item.exercicio, reps, kg, segundos: null, sessaoId: "s", ordem: 1, series: 1 });
+  assert.equal(sugestao(item, []).kg, null);
+  assert.deepEqual(sugestao(item, [{ sets: [set(40, 12), set(40, 12), set(40, 12)] }]).kg, 42.5);
+  assert.equal(sugestao({ ...item, exercicio: "Leg press 45°" }, [{ sets: [set(120, 12), set(120, 12), set(120, 12)] }]).kg, 125);
+  const s = sugestao(item, [{ sets: [set(40, 10), set(40, 9), set(40, 8)] }]);
+  assert.equal(s.kg, 40); assert.equal(s.reps, 11);
+  const parado = [{ sets: [set(40, 9), set(40, 8)] }, { sets: [set(40, 9), set(40, 8)] }, { sets: [set(40, 10), set(40, 8)] }];
+  assert.equal(sugestao(item, parado).kg, 35);
+  const r = limpaItens([{ exercicio: "supino", series: 4, repMin: 6, repMax: 10, descanso: 120 }, { exercicio: "prancha", series: 3 }, { lixo: 1 }]);
+  assert.equal(r.length, 2); assert.equal(r[0].exercicio, "Supino reto com barra"); assert.equal(r[1].segundos, 30);
+  const { acharExercicio } = await import("../src/lib/exercicios");
+  assert.equal(acharExercicio("leg 45")?.nome, "Leg press 45°");
+  assert.equal(acharExercicio("voador")?.grupo, "Peito");
+  assert.equal(acharExercicio("xablau"), null);
 });
 

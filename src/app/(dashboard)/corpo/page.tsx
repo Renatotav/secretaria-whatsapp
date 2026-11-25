@@ -165,7 +165,11 @@ function Painel({ d }: { d: Dados }) {
       <PerguntaIA aba="corpo" titulo="💬 Pergunte à treinadora" exemplos={["O que eu janto hoje para fechar a meta?", "Monta meu treino de perna com o que eu já faço", "Estou no ritmo certo para a meta?"]} />
       <GraficoPeso pesos={d.pesos} meta={d.meta} previsao={d.numeros.previsao} />
       <Comidas c={d.comidas} meta={d.numeros.kcal?.meta ?? null} />
-      <Treinos t={d.treino} semanas={d.semanas} />
+      {/* Treino tem aba própria (24/11: "ficou confuso a parte do treino"). Aqui só o atalho. */}
+      <a href="/treino" style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, textDecoration: "none", color: "var(--text)" }}>
+        <span><strong style={{ fontSize: 15 }}>🏋️ Treino</strong><br /><span style={muted}>treino guiado, rotinas, cargas e evolução</span></span>
+        <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>Abrir ›</span>
+      </a>
       <GraficoSemanas semanas={d.semanas} />
       <Relogio />
     </>

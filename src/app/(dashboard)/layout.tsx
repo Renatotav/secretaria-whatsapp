@@ -16,6 +16,7 @@ const NAV = [
   { href: "/wishlist", icon: "🛍️", label: "Desejos" },
   { href: "/scooter", icon: "🛵", label: "Scooter" },
   { href: "/corpo", icon: "💪", label: "Corpo" },
+  { href: "/treino", icon: "🏋️", label: "Treino" },
   { href: "/ar", icon: "❄️", label: "Ar-condicionado" },
   { href: "/diary", icon: "📓", label: "Diário" },
   { href: "/daily-summary", icon: "📋", label: "Resumo do dia" },

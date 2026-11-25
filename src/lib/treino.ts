@@ -3,40 +3,35 @@
 
 import { prisma } from "./prisma";
 import { todayBRT } from "./dates";
+import { acharExercicio } from "./exercicios";
 
 const DIA = 86_400_000;
 const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 const kg = (v: number) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
 const ddmm = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 
-// Nomes que ele pode escrever de jeitos diferentes viram um só (o histórico e o recorde juntam).
-const APELIDOS: [RegExp, string][] = [
-  [/^supino( reto)?( com barra)?$/, "supino"],
-  [/^agachamento( livre)?$/, "agachamento"],
-  [/^(leg ?press|legpress)( 45)?$/, "leg press"],
-  [/^(puxada|pulldown|puxador)( frente| alta)?$/, "puxada"],
-  [/^(rosca|rosca direta)$/, "rosca direta"],
-  [/^(desenvolvimento|desenv)( com halter| militar)?$/, "desenvolvimento"],
-  [/^(cadeira extensora|extensora)$/, "cadeira extensora"],
-  [/^(mesa flexora|flexora)$/, "mesa flexora"],
-];
+// Nome escrito por ele ("supino", "leg 45") → nome da biblioteca ("Supino reto com barra"), para o
+// histórico e o recorde juntarem; desconhecido fica como ele escreveu (com a 1ª letra maiúscula).
 export function nomeExercicio(s: string): string {
-  const f = fold(s);
-  return APELIDOS.find(([re]) => re.test(f))?.[1] ?? f;
+  const e = acharExercicio(s);
+  const t = s.trim().replace(/\s+/g, " ");
+  return e?.nome ?? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
 }
 
-// Grupo muscular de cada exercício (para ver o que ficou sem treino na semana).
-const GRUPOS: [RegExp, string][] = [
+// Grupo muscular: o da biblioteca; nome livre cai na regra por palavra.
+const GRUPOS_RE: [RegExp, string][] = [
   [/supino|crucifixo|peck|fly|flexao|paralela/, "Peito"],
-  [/puxada|remada|barra fixa|pulldown|pull|serrote|levantamento terra|terra/, "Costas"],
-  [/agachamento|leg|extensora|flexora|stiff|afundo|panturrilha|hack|cadeira|gluteo|elevacao pelvica|abdutora|adutora/, "Pernas"],
+  [/puxada|remada|barra fixa|pulldown|pull|serrote|terra/, "Costas"],
+  [/agachamento|leg|extensora|flexora|stiff|afundo|hack/, "Pernas"],
+  [/gluteo|elevacao pelvica|abdutora/, "Glúteos"],
+  [/panturrilha/, "Panturrilha"],
   [/desenvolvimento|elevacao lateral|elevacao frontal|ombro|arnold|encolhimento/, "Ombros"],
   [/rosca|biceps|martelo/, "Bíceps"],
   [/triceps|frances|testa|mergulho|corda|coice/, "Tríceps"],
   [/prancha|abdominal|abdomen|crunch|infra|obliquo/, "Abdômen"],
 ];
-export const grupoDo = (ex: string) => GRUPOS.find(([re]) => re.test(fold(ex)))?.[1] ?? "Outros";
-const PERNA = /agachamento|leg|stiff|terra|hack|afundo|gluteo|elevacao pelvica/;
+export const grupoDo = (ex: string) => acharExercicio(ex)?.grupo ?? GRUPOS_RE.find(([re]) => re.test(fold(ex)))?.[1] ?? "Outros";
+const grande = (ex: string) => acharExercicio(ex)?.grande ?? /agachamento|leg|stiff|terra|hack|gluteo|elevacao pelvica/.test(fold(ex));
 
 /**
  * Próxima vez (dupla progressão, como nos apps de academia): fechou 12 repetições → sobe a carga
@@ -46,7 +41,7 @@ export function proximaVez(s: { exercicio: string; series: number; reps: number 
   if (s.segundos != null) return `${s.series}×${s.segundos + 5}s`;
   if (s.reps == null) return null;
   if (s.kg == null) return `${s.series}×${s.reps + 1}`;
-  if (s.reps >= 12) return `${s.series}×8 com ${kg(s.kg + (PERNA.test(fold(s.exercicio)) ? 5 : 2.5))}`;
+  if (s.reps >= 12) return `${s.series}×8 com ${kg(s.kg + (grande(s.exercicio) ? 5 : 2.5))}`;
   return `${s.series}×${s.reps + 1} com ${kg(s.kg)}`;
 }
 
@@ -114,6 +109,12 @@ export async function applyTreinoCommand(text: string): Promise<string | null> {
   if (/^\s*(?:qual\s+(?:[eé]\s+)?(?:o\s+)?)?treino\s+(?:de\s+)?(?:hoje|amanh[aã])\s*\??\s*$/i.test(t)) {
     const amanha = /amanh/i.test(t);
     const d = new Date(todayBRT().getTime() + (amanha ? DIA : 0));
+    // A rotina da aba Treino manda; o "plano …" antigo do WhatsApp fica de reserva.
+    const rotina = await prisma.rotina.findFirst({ where: { ativa: true, dia: d.getDay() }, orderBy: { updatedAt: "desc" } });
+    if (rotina) {
+      const itens = rotina.itens as unknown as { exercicio: string; series: number; repMin: number; repMax: number; segundos?: number | null }[];
+      return `📋 ${amanha ? "Amanhã" : "Hoje"} (${DIAS_NOME[d.getDay()]}): *${rotina.nome}*\n${itens.map((i) => `• ${i.exercicio}: ${i.series}×${i.segundos ? `${i.segundos}s` : `${i.repMin}–${i.repMax}`}`).join("\n")}\nNa aba 🏋️ Treino já estão as cargas sugeridas e o descanso.`;
+    }
     const p = await planoSalvo();
     const doDia = p[d.getDay()];
     if (!doDia) return Object.keys(p).length ? `📋 ${amanha ? "Amanhã" : "Hoje"} (${DIAS_NOME[d.getDay()]}) está livre no seu plano.` : "📋 Ainda sem plano. Mande, por exemplo: *plano seg peito e tríceps, ter costas e bíceps, qua perna*.";
@@ -153,6 +154,7 @@ export async function applyTreinoCommand(text: string): Promise<string | null> {
 }
 
 const PRINCIPAIS = ["Peito", "Costas", "Pernas", "Ombros", "Bíceps", "Tríceps"];
+export { grande };
 /** Quantos dias cada grupo muscular foi treinado nos últimos 7 dias, e quais ficaram de fora. */
 export async function gruposDaSemana(): Promise<{ feitos: [string, number][]; faltam: string[] }> {
   const series = await prisma.treinoSerie.findMany({ where: { at: { gt: new Date(todayBRT().getTime() - 7 * DIA) } }, select: { exercicio: true, at: true } });

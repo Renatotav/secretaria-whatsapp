@@ -8,6 +8,7 @@ type Item = { nivel: "ok" | "atencao" | "problema"; titulo: string; detalhe: str
 
 // Aba "☰ Mais" do celular: o que não cabe nas 4 abas de baixo, com o sinal da Saúde no topo.
 const TELAS = [
+  { href: "/treino", icon: "🏋️", label: "Treino", dica: "treino guiado e evolução" },
   { href: "/corpo", icon: "💪", label: "Corpo", dica: "peso e academia" },
   { href: "/parcelas", icon: "📆", label: "Parcelas", dica: "quanto falta pagar" },
   { href: "/ar", icon: "❄️", label: "Ar-condicionado", dica: "gasto e conta de luz" },
