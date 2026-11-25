@@ -167,6 +167,7 @@ function Painel({ d }: { d: Dados }) {
       <Comidas c={d.comidas} meta={d.numeros.kcal?.meta ?? null} />
       <Treinos t={d.treino} semanas={d.semanas} />
       <GraficoSemanas semanas={d.semanas} />
+      <Relogio />
     </>
   );
 }
@@ -380,6 +381,83 @@ function Comidas({ c, meta }: { c: Dados["comidas"]; meta: number | null }) {
           <span style={muted}>{v.textos.join(" · ")}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+type StravaStatus = { configurado: boolean; autorizado: boolean; atleta: string | null; ultimaSync: number | null; erro: string | null; dominio?: string };
+
+/** Relógio (Amazfit → Zepp → Strava): passo a passo até ligar; depois, status e "sincronizar agora". */
+function Relogio() {
+  const [st, setSt] = useState<StravaStatus | null>(null);
+  const [id, setId] = useState("");
+  const [sec, setSec] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const chamar = async (body: object) => {
+    setOcupado(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/strava/oauth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      return { ok: r.ok, j: await r.json() };
+    } finally {
+      setOcupado(false);
+    }
+  };
+  useEffect(() => {
+    chamar({ acao: "status" }).then(({ j }) => setSt(j)).catch(() => {});
+    const q = new URLSearchParams(window.location.search).get("strava");
+    if (q) setMsg(q === "ok" ? "✅ Strava ligado! As atividades entram sozinhas de hora em hora." : "❌ Não deu certo. Confira o Client ID/Secret e o domínio no Strava e tente de novo.");
+  }, []);
+  if (!st) return null;
+  const input: React.CSSProperties = { width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", font: "inherit" };
+  const btn: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontWeight: 600, cursor: "pointer", font: "inherit" };
+  return (
+    <div style={{ ...card, display: "grid", gap: 10 }}>
+      <h2 style={{ fontSize: 15, fontWeight: 600 }}>⌚ Relógio (Strava)</h2>
+      {st.autorizado ? (
+        <>
+          <span style={{ fontSize: 14 }}>✅ Ligado{st.atleta ? ` à conta de ${st.atleta}` : ""}. Corridas, caminhadas, bike e treinos do relógio entram sozinhos (de hora em hora){st.ultimaSync ? ` · última conferida ${new Date(st.ultimaSync).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}.</span>
+          {st.erro && <span style={{ fontSize: 13, color: "var(--danger)" }}>{st.erro}</span>}
+          <div>
+            <button type="button" style={btn} disabled={ocupado} onClick={async () => {
+              const { j } = await chamar({ acao: "sync" });
+              setMsg(j.erro ? `❌ ${j.erro}` : j.novas?.length ? `✅ ${j.novas.length} atividade(s) nova(s). Atualize a página.` : "Nenhuma atividade nova.");
+            }}>{ocupado ? "Conferindo…" : "Sincronizar agora"}</button>
+          </div>
+        </>
+      ) : (
+        <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 10, fontSize: 14 }}>
+          <li>No app <strong>Zepp</strong> (do relógio): Perfil → Adicionar contas → <strong>Strava</strong>.</li>
+          <li>
+            Em <strong>strava.com/settings/api</strong>, crie o app (nome: Secretária; site: o endereço do painel) e em <em>Authorization Callback Domain</em> coloque:
+            <div style={{ marginTop: 4, padding: "6px 10px", borderRadius: 8, background: "var(--bg-hover)", fontFamily: "monospace", fontSize: 13, overflowWrap: "anywhere" }}>{st.dominio}</div>
+          </li>
+          <li style={{ display: "grid", gap: 6 }}>
+            Cole aqui o <strong>Client ID</strong> e o <strong>Client Secret</strong> do app:
+            {st.configurado && <span style={muted}>Já guardado. Cole de novo só se trocar.</span>}
+            <input style={input} inputMode="numeric" placeholder="Client ID (número)" value={id} onChange={(e) => setId(e.target.value)} autoComplete="off" />
+            <input style={input} type="password" placeholder="Client Secret" value={sec} onChange={(e) => setSec(e.target.value)} autoComplete="new-password" />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(id || sec) && (
+                <button type="button" style={btn} disabled={ocupado} onClick={async () => {
+                  const { ok, j } = await chamar({ acao: "app", clientId: id, clientSecret: sec });
+                  if (!ok) setMsg(`❌ ${j.error}`);
+                  else { setSt({ ...st, ...j }); setId(""); setSec(""); setMsg("Guardado. Agora toque em Autorizar no Strava."); }
+                }}>Guardar</button>
+              )}
+              {st.configurado && (
+                <button type="button" style={btn} disabled={ocupado} onClick={async () => {
+                  const { j } = await chamar({ acao: "autorizar" });
+                  if (j.url) window.location.href = j.url;
+                  else setMsg(`❌ ${j.error}`);
+                }}>Autorizar no Strava</button>
+              )}
+            </div>
+          </li>
+        </ol>
+      )}
+      {msg && <span style={{ fontSize: 13 }}>{msg}</span>}
     </div>
   );
 }

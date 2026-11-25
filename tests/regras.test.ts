@@ -793,3 +793,8 @@ test("Corpo extra: próxima vez, grupo muscular, cardio e consulta de calorias (
   assert.equal("calorias da banana".match(CONSULTA_RE)?.[3], "banana");
 });
 
+test("Strava: tipo de atividade em português (24/11)", async () => {
+  const { nomeTipo } = await import("../src/lib/strava");
+  assert.equal(nomeTipo("Run"), "corrida"); assert.equal(nomeTipo("WeightTraining"), "musculação"); assert.equal(nomeTipo("Walk"), "caminhada");
+});
+

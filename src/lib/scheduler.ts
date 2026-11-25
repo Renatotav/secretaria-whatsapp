@@ -12,6 +12,7 @@ import { writePendingKb } from "./work-kb";
 import { checkAlertRules } from "./work-alert-rules";
 import { buildWeeklyWorkReport } from "./work-weekly";
 import { rollForecasts } from "./forecast-roll";
+import { stravaSync } from "./strava";
 import { sendInvoiceBuddyReminder } from "./invoice-buddy";
 import { dueContactReminders } from "./work-crm";
 import { classifyPendingGroups } from "./work-groups";
@@ -260,6 +261,15 @@ export function startScheduler(): void {
           if (aviso) await sendTextWithTyping(evolutionConfig.evolutionUrl, evolutionConfig.evolutionApiKey, evolutionConfig.instanceId, config.ownerPhone, aviso, 10, 2);
         } catch (err) {
           console.error("[scooter] lembrete de ODO falhou:", err);
+        }
+      }
+      // Strava (relógio dele): atividades novas de hora em hora, sem avisar (aparecem na aba Corpo).
+      if (hhmm.endsWith(":35")) {
+        try {
+          const r = await stravaSync();
+          if (r.novas.length) console.log(`[strava] ${r.novas.length} atividade(s) nova(s)`);
+        } catch (err) {
+          console.error("[strava] sync falhou:", err);
         }
       }
       // Ar-condicionado (SmartThings): lê o contador de energia de hora em hora;

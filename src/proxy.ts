@@ -6,7 +6,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session-token";
 // /api/scooter/charge: programinha do notebook (tomada da scooter), também com chave própria.
 // /api/aircon/oauth: a Samsung volta aqui depois de autorizar a chave permanente (protegida pelo state).
 // /manifest.webmanifest e /icons/: o celular lê antes do login para instalar o painel como app.
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook", "/api/work/ingest", "/api/work/ext/", "/api/scooter/charge", "/api/aircon/oauth", "/api/scooter/status", "/api/scooter/command", "/api/presence", "/api/alexa/skill", "/api/mcp", "/manifest.webmanifest", "/icons/"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/webhook", "/api/work/ingest", "/api/work/ext/", "/api/scooter/charge", "/api/aircon/oauth", "/api/strava/oauth", "/api/scooter/status", "/api/scooter/command", "/api/presence", "/api/alexa/skill", "/api/mcp", "/manifest.webmanifest", "/icons/"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
