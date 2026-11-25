@@ -134,3 +134,33 @@ async function cardapio(pedido: string, opts: ProviderOptions): Promise<string> 
   );
   return `🥗 ${content.trim()}\n_Calorias aproximadas._`;
 }
+
+/**
+ * Print do resumo de treino (app Zepp do relógio, ou outro app): vira cardio no Corpo e conta como dia ativo.
+ * Alternativa grátis ao Strava (24/11: a API pedia assinatura). null = o print não é de treino.
+ */
+export async function treinoPorPrint(base64: string, mimetype: string, opts: ProviderOptions): Promise<string | null> {
+  const resp = await generateVisionResponse(
+    base64,
+    mimetype,
+    'Este print é o resumo de um TREINO/ATIVIDADE FÍSICA de um app de relógio ou de academia (Zepp, Amazfit, Strava, Samsung Health…)? Se for, extraia. Responda só JSON: {"treino":true,"atividade":"caminhada|corrida|bike|esteira|musculação|natação|elíptico|outro","min":32,"km":3.4,"kcal":250,"fc":118,"data":"AAAA-MM-DD ou null"}. Se não for treino: {"treino":false}.',
+    opts,
+  );
+  const j = JSON.parse(resp.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { treino?: boolean; atividade?: string; min?: number; km?: number | null; kcal?: number | null; fc?: number | null; data?: string | null };
+  if (!j.treino || !(j.min && j.min > 0 && j.min < 600)) return null;
+  const hoje = todayBRT();
+  const at = j.data && /^\d{4}-\d{2}-\d{2}$/.test(j.data) && new Date(`${j.data}T12:00:00`) <= hoje ? new Date(`${j.data}T12:00:00`) : hoje;
+  const peso = (await prisma.corpoLog.findFirst({ where: { kind: "peso", value: { not: null } }, orderBy: { at: "desc" } }))?.value ?? 80;
+  const met: Record<string, number> = { corrida: 9.8, caminhada: 3.5, bike: 7.5, esteira: 5, "musculação": 5, "natação": 8, "elíptico": 5 };
+  const kcal = Math.round(j.kcal && j.kcal > 0 ? j.kcal : ((met[j.atividade ?? ""] ?? 5) * peso * j.min) / 60);
+  // Mesmo treino mandado duas vezes (mesmo dia, tipo e tempo) não duplica.
+  const igual = await prisma.corpoLog.findFirst({ where: { kind: "cardio", at: { gte: new Date(at.getTime() - DIA / 2), lt: new Date(at.getTime() + DIA / 2) }, note: { contains: `"min":${Math.round(j.min)},` } } });
+  if (!igual) {
+    await prisma.corpoLog.create({ data: { kind: "cardio", value: kcal, at, note: JSON.stringify({ atividade: j.atividade ?? "treino", min: Math.round(j.min), km: j.km ?? null, fc: j.fc ?? null, fonte: "print" }) } });
+    const ja = await prisma.corpoLog.findFirst({ where: { kind: "academia", at: { gte: new Date(at.getTime() - DIA / 2), lt: new Date(at.getTime() + DIA / 2) } } });
+    if (!ja) await prisma.corpoLog.create({ data: { kind: "academia", at, note: "print" } });
+  }
+  const dd = `${String(at.getDate()).padStart(2, "0")}/${String(at.getMonth() + 1).padStart(2, "0")}`;
+  return `⌚ ${igual ? "Esse treino já estava anotado" : "Treino anotado"} (${dd}): *${j.atividade ?? "treino"}* · ${Math.round(j.min)} min${j.km ? ` · ${String(j.km).replace(".", ",")} km` : ""} · ~${k(kcal)} kcal${j.fc ? ` · FC média ${j.fc}` : ""}. Conta como dia ativo.`;
+}
+

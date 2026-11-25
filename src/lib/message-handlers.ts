@@ -9,7 +9,7 @@ import { withReason } from "./finance-reason";
 import { applyCorpoCommand } from "./corpo";
 import { casarProdutos } from "./nutri";
 import { applyStravaCommand } from "./strava";
-import { applyComidaCommand, comidaPorFoto, ehComida } from "./comida";
+import { applyComidaCommand, comidaPorFoto, ehComida, treinoPorPrint } from "./comida";
 import { isBesteiraItem, normalizaCategoria, normalizeItemCategory, spreadDiscount, taxonomyPrompt } from "./finance-taxonomy";
 import type { AgentConfig } from "@prisma/client";
 import { applyOutlookCommand } from "./outlook-calendar";
@@ -1696,6 +1696,12 @@ export async function handleSmartImage(base64: string, mimetype: string, caption
 }
 async function handleSmartImageInner(base64: string, mimetype: string, caption: string): Promise<void> {
   try {
+    // Print do treino do relógio com legenda "treino"/"zepp"/"relógio": vai direto para o Corpo.
+    if (caption && /\b(treino|zepp|rel[oó]gio|amazfit|caminhada|corrida|academia)\b/i.test(caption)) {
+      const config = await prisma.agentConfig.findFirst();
+      if (config?.ownerPhone) await notifyOwner(config, (await treinoPorPrint(base64, mimetype, getProviderOpts(config))) ?? "⌚ Não achei um resumo de treino nesse print. Mande o print da tela de resumo do treino no app Zepp.");
+      return;
+    }
     // Foto do prato com "comi isso" / "almocei": calorias, não comprovante.
     if (caption && (ehComida(caption) != null || /^\s*(comi|almocei|jantei|lanchei)\b/i.test(caption))) {
       const config = await prisma.agentConfig.findFirst();
@@ -1757,6 +1763,10 @@ async function readSmartImage(base64: string, mimetype: string, caption: string)
   }
 
   if ((reading.kind === "compra" || reading.kind === "estorno") && reading.amount > 0) return offerImageDraft({ reading, at: Date.now() }, config);
+
+  // Print que não é compra nem nota: pode ser o resumo de treino do relógio (sem legenda).
+  const treino = await treinoPorPrint(base64, mimetype, getProviderOpts(config)).catch(() => null);
+  if (treino) return notifyOwner(config, treino);
 
   await notifyOwner(
     config,
