@@ -25,6 +25,13 @@ type Dados = {
   stats: { dias: string[]; seriesGrupo: Record<string, number>; faixa: [number, number]; evolucao: Evol[] };
 };
 
+// Cor de cada grupo muscular (só no selo do exercício).
+const COR_GRUPO: Record<string, string> = { Peito: "#f87171", Costas: "#60a5fa", Pernas: "#4ade80", "Glúteos": "#f472b6", Ombros: "#fbbf24", "Bíceps": "#a78bfa", "Tríceps": "#c084fc", "Abdômen": "#2dd4bf", Panturrilha: "#86efac", "Antebraço": "#fdba74", Cardio: "#38bdf8" };
+const Selo = ({ g }: { g: string }) => (
+  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", padding: "2px 8px", borderRadius: 999, color: COR_GRUPO[g] ?? "var(--text-muted)", background: "color-mix(in srgb, currentColor 14%, transparent)", border: "1px solid color-mix(in srgb, currentColor 35%, transparent)" }}>{g}</span>
+);
+const COLS = "26px minmax(0, 96px) minmax(0, 96px) 48px";
+
 const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
 const dia = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -62,7 +69,7 @@ export default function TreinoPage() {
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
-      <div style={{ padding: 20, paddingBottom: 140, maxWidth: 900, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
+      <div style={{ padding: 20, paddingBottom: 140, maxWidth: 1180, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>🏋️ Treino</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Marque cada série com ✓. Também vale pelo WhatsApp: <em>supino 3x10 40kg</em>.</p>
@@ -112,6 +119,7 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
 
   const itens = [...d.sessao, ...extras.filter((e) => !d.sessao.some((s) => s.exercicio === e.exercicio))];
   const feitasTotal = itens.reduce((t, i) => t + i.feitas.length, 0);
+  const planejadas = itens.reduce((t, i) => t + Math.max(i.series, i.feitas.length), 0);
 
   const marcar = async (item: ItemSessao, ordem: number, kg: string, reps: string) => {
     try {
@@ -127,9 +135,20 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
     <>
       <div style={{ ...card, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-          <strong style={{ fontSize: 18 }}>{d.rotinaHoje ? d.rotinaHoje.nome : "Treino livre"}</strong>
-          <span style={muted}>{DIAS[new Date(d.hoje + "T12:00:00").getDay()]}, {dia(d.hoje)}{feitasTotal ? ` · ${feitasTotal} série(s) feitas` : ""}</span>
+          <strong style={{ fontSize: 22, letterSpacing: "-0.01em" }}>{d.rotinaHoje ? d.rotinaHoje.nome : "Treino livre"}</strong>
+          <span style={muted}>{DIAS[new Date(d.hoje + "T12:00:00").getDay()]}, {dia(d.hoje)}</span>
         </div>
+        {planejadas > 0 && (
+          <div style={{ display: "grid", gap: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+              <span><strong style={{ fontSize: 16 }}>{feitasTotal}</strong> de {planejadas} séries</span>
+              <span style={muted}>{itens.filter((i) => i.feitas.length >= i.series).length} de {itens.length} exercícios</span>
+            </div>
+            <div style={{ height: 8, borderRadius: 4, background: "var(--bg-hover)", overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(1, feitasTotal / planejadas) * 100}%`, height: "100%", borderRadius: 4, background: feitasTotal >= planejadas ? "var(--success)" : "var(--accent)", transition: "width .6s cubic-bezier(0.16, 1, 0.3, 1)" }} />
+            </div>
+          </div>
+        )}
         {d.rotinas.length > 0 ? (
           <select value={rotinaSel ?? d.rotinaHoje?.id ?? ""} onChange={(e) => setRotinaSel(e.target.value || null)} style={{ ...input, textAlign: "left" }} aria-label="Rotina de hoje">
             <option value="">Treino livre (sem rotina)</option>
@@ -149,7 +168,9 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
         </div>
       )}
 
-      {itens.map((item) => <CartaoExercicio key={item.exercicio} item={item} marcar={marcar} recarregar={recarregar} />)}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(360px, 100%), 1fr))", gap: 12 }}>
+        {itens.map((item, i) => <CartaoExercicio key={item.exercicio} item={item} marcar={marcar} recarregar={recarregar} atraso={i * 60} />)}
+      </div>
 
       <AdicionarExercicio biblioteca={d.biblioteca} onAdd={(lib) => setExtras((x) => [...x, { exercicio: lib.nome, grupo: lib.grupo, series: 3, repMin: 8, repMax: 12, descanso: 90, segundos: lib.tempo ? 30 : null, sugestao: { kg: null, reps: 10, motivo: "novo hoje" }, ultima: null, recorde: null, feitas: [] }])} />
 
@@ -164,7 +185,7 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
   );
 }
 
-function CartaoExercicio({ item, marcar, recarregar }: { item: ItemSessao; marcar: (i: ItemSessao, ordem: number, kg: string, reps: string) => Promise<void>; recarregar: () => void }) {
+function CartaoExercicio({ item, marcar, recarregar, atraso = 0 }: { item: ItemSessao; marcar: (i: ItemSessao, ordem: number, kg: string, reps: string) => Promise<void>; recarregar: () => void; atraso?: number }) {
   const tempo = item.segundos != null;
   const [extra, setExtra] = useState(0);
   const linhas = Math.max(item.series + extra, item.feitas.length + (item.feitas.length >= item.series + extra ? 0 : 0));
@@ -173,39 +194,50 @@ function CartaoExercicio({ item, marcar, recarregar }: { item: ItemSessao; marca
   const repsPadrao = tempo ? (ultimaFeita?.segundos ?? item.segundos ?? 30) : (ultimaFeita?.reps ?? item.sugestao.reps);
   const completo = item.feitas.length >= item.series;
   return (
-    <div style={{ ...card, display: "grid", gap: 10, borderColor: completo ? "var(--success)" : "var(--border)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-        <div style={{ minWidth: 0 }}>
-          <strong style={{ fontSize: 16 }}>{item.exercicio}</strong>
-          <div style={muted}>{item.grupo} · {item.series}×{tempo ? `${item.segundos}s` : `${item.repMin}–${item.repMax}`} · descanso {item.descanso}s</div>
+    <div className="surge" style={{ ...card, display: "grid", gap: 10, alignContent: "start", borderColor: completo ? "var(--success)" : "var(--border)", animationDelay: `${atraso}ms` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
+        <div style={{ minWidth: 0, display: "grid", gap: 4 }}>
+          <strong style={{ fontSize: 17, lineHeight: 1.25 }}>{completo ? "✅ " : ""}{item.exercicio}</strong>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <Selo g={item.grupo} />
+            <span style={muted}>{item.series}×{tempo ? `${item.segundos}s` : `${item.repMin}–${item.repMax}`} · descanso {item.descanso}s</span>
+          </div>
         </div>
-        {item.recorde != null && <span style={{ ...muted, whiteSpace: "nowrap" }} title="Força: carga máxima estimada para 1 repetição">🏆 {n(item.recorde)} kg</span>}
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <strong style={{ fontSize: 15, fontVariantNumeric: "tabular-nums" }}>{item.feitas.length}/{item.series}</strong>
+          {item.recorde != null && <div style={{ ...muted, whiteSpace: "nowrap" }} title="Força: carga máxima estimada para 1 repetição">🏆 {n(item.recorde)} kg</div>}
+        </div>
       </div>
       {!tempo && (
         <div style={{ fontSize: 13, padding: "6px 10px", borderRadius: 8, background: "var(--accent-dim)" }}>
-          <strong>Hoje: {item.sugestao.kg != null ? `${n(item.sugestao.kg, 1)} kg × ${item.sugestao.reps}` : `${item.sugestao.reps} repetições`}</strong>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Hoje </span><strong style={{ fontSize: 17, fontVariantNumeric: "tabular-nums" }}>{item.sugestao.kg != null ? `${n(item.sugestao.kg, 1)} kg × ${item.sugestao.reps}` : `${item.sugestao.reps} repetições`}</strong>
           <span style={{ color: "var(--text-muted)" }}> · {item.sugestao.motivo}</span>
           {item.ultima && <div style={muted}>Última ({dia(item.ultima.dia)}): {item.ultima.sets.map((s) => `${s.kg != null ? n(s.kg, 1) : "—"}×${s.reps ?? "—"}`).join(" · ")}</div>}
         </div>
       )}
       <div style={{ display: "grid", gap: 6 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0,1fr) minmax(0,1fr) 52px", gap: 6, ...muted }}>
+        <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 6, ...muted }}>
           <span>Série</span><span style={{ textAlign: "center" }}>kg</span><span style={{ textAlign: "center" }}>{tempo ? "segundos" : "repetições"}</span><span />
         </div>
         {Array.from({ length: Math.max(linhas, item.feitas.length) }, (_, i) => {
           const f = item.feitas[i];
           return f ? (
-            <div key={f.id} style={{ display: "grid", gridTemplateColumns: "28px minmax(0,1fr) minmax(0,1fr) 52px", gap: 6, alignItems: "center" }}>
+            <div key={f.id} style={{ display: "grid", gridTemplateColumns: COLS, gap: 6, alignItems: "center" }}>
               <span style={{ fontWeight: 700 }}>{i + 1}</span>
               <span style={{ textAlign: "center", fontVariantNumeric: "tabular-nums", fontSize: 16 }}>{f.kg != null ? n(f.kg, 1) : "—"}</span>
               <span style={{ textAlign: "center", fontVariantNumeric: "tabular-nums", fontSize: 16 }}>{tempo ? `${f.segundos}s` : f.reps}</span>
-              <button type="button" aria-label="Desfazer série" title="Desfazer" style={{ ...btn, background: "var(--success)", padding: "10px 0" }}
+              <button type="button" aria-label="Desfazer série" title="Desfazer" className="acende" style={{ ...btn, background: "var(--success)", padding: "10px 0" }}
                 onClick={async () => { await post({ acao: "apagarSerie", id: f.id }); recarregar(); }}>✓</button>
             </div>
           ) : i === item.feitas.length ? (
             <LinhaNova key={`n${i}`} n={i + 1} kg={kgPadrao} reps={repsPadrao} tempo={tempo} onOk={(kg, reps) => marcar(item, i + 1, kg, reps)} />
           ) : (
-            <div key={`p${i}`} style={{ display: "grid", gridTemplateColumns: "28px 1fr", gap: 6, ...muted }}><span>{i + 1}</span><span>próxima</span></div>
+            <div key={`p${i}`} style={{ display: "grid", gridTemplateColumns: COLS, gap: 6, alignItems: "center", ...muted }}>
+              <span>{i + 1}</span>
+              <span style={{ height: 40, borderRadius: 8, border: "1px dashed var(--border)" }} />
+              <span style={{ height: 40, borderRadius: 8, border: "1px dashed var(--border)" }} />
+              <span />
+            </div>
           );
         })}
       </div>
@@ -220,7 +252,7 @@ function LinhaNova({ n: num, kg, reps, tempo, onOk }: { n: number; kg: number | 
   const [ocupado, setOcupado] = useState(false);
   useEffect(() => { setK(kg != null ? String(kg).replace(".", ",") : ""); setR(String(reps)); }, [kg, reps]);
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "28px minmax(0,1fr) minmax(0,1fr) 52px", gap: 6, alignItems: "center" }}>
+    <div style={{ display: "grid", gridTemplateColumns: COLS, gap: 6, alignItems: "center" }}>
       <span style={{ fontWeight: 700 }}>{num}</span>
       <input style={input} inputMode="decimal" value={k} onChange={(e) => setK(e.target.value)} placeholder="kg" aria-label={`Carga da série ${num}`} />
       <input style={input} inputMode="numeric" value={r} onChange={(e) => setR(e.target.value)} aria-label={tempo ? `Segundos da série ${num}` : `Repetições da série ${num}`} />
@@ -255,7 +287,7 @@ function Descanso({ fim, total, onFim, onMais }: { fim: number; total: number; o
     <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(64px + env(safe-area-inset-bottom, 0px))", padding: "0 12px", zIndex: 20 }}>
       <div style={{ maxWidth: 620, margin: "0 auto", ...card, borderColor: resta === 0 ? "var(--success)" : "var(--accent-border)", display: "grid", gap: 8, boxShadow: "0 8px 24px rgba(0,0,0,.45)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <strong style={{ fontSize: 22, fontVariantNumeric: "tabular-nums" }}>{resta === 0 ? "Bora, próxima série!" : `Descanso ${Math.floor(resta / 60)}:${String(resta % 60).padStart(2, "0")}`}</strong>
+          <strong className={resta === 0 ? "acende" : undefined} style={{ fontSize: resta === 0 ? 20 : 30, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em", color: resta === 0 ? "var(--success)" : "var(--text)" }}>{resta === 0 ? "Bora, próxima série! 💪" : <>{Math.floor(resta / 60)}:{String(resta % 60).padStart(2, "0")}<span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)", marginLeft: 6 }}>descanso</span></>}</strong>
           <div style={{ display: "flex", gap: 6 }}>
             {resta > 0 && <button type="button" style={{ ...btn2, padding: "6px 10px" }} onClick={onMais}>+15s</button>}
             <button type="button" style={{ ...btn2, padding: "6px 10px" }} onClick={onFim}>{resta > 0 ? "Pular" : "Fechar"}</button>
@@ -301,6 +333,8 @@ function AdicionarExercicio({ biblioteca, onAdd, rotulo = "+ Adicionar exercíci
 
 /* ───────────────────────────── Rotinas ───────────────────────────── */
 
+const grupoLib = (nome: string, lib: Lib[]) => lib.find((e) => e.nome === nome)?.grupo ?? "Outros";
+
 function Rotinas({ d, recarregar }: { d: Dados; recarregar: () => void }) {
   const [edit, setEdit] = useState<Rotina | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -309,12 +343,13 @@ function Rotinas({ d, recarregar }: { d: Dados; recarregar: () => void }) {
     <>
       {msg && <div role="status" style={{ ...card, borderColor: "var(--success)" }}>{msg}</div>}
       {d.rotinas.map((r) => (
-        <button key={r.id} type="button" onClick={() => setEdit(r)} style={{ ...card, textAlign: "left", cursor: "pointer", color: "inherit", font: "inherit", display: "grid", gap: 4 }}>
+        <button key={r.id} type="button" onClick={() => setEdit(r)} className="surge" style={{ ...card, textAlign: "left", cursor: "pointer", color: "inherit", font: "inherit", display: "grid", gap: 6 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
             <strong style={{ fontSize: 16 }}>{r.nome}</strong>
-            <span style={muted}>{r.dia != null ? DIAS[r.dia] : "livre"}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: r.dia === new Date(d.hoje + "T12:00:00").getDay() ? "var(--accent)" : "var(--text-muted)" }}>{r.dia != null ? DIAS[r.dia] : "livre"}{r.dia === new Date(d.hoje + "T12:00:00").getDay() ? " · hoje" : ""}</span>
           </div>
-          <span style={muted}>{r.itens.map((i) => `${i.exercicio} ${i.series}×${i.segundos ? `${i.segundos}s` : `${i.repMin}–${i.repMax}`}`).join(" · ")}</span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{[...new Set(r.itens.map((i) => grupoLib(i.exercicio, d.biblioteca)))].map((g) => <Selo key={g} g={g} />)}<span style={muted}>{r.itens.length} exercício(s)</span></div>
+          <span style={muted}>{r.itens.map((i) => i.exercicio).join(" · ")}</span>
         </button>
       ))}
       {!d.rotinas.length && <p style={{ fontSize: 14, color: "var(--text-muted)" }}>Monte uma rotina para cada dia de treino (ex.: Segunda · Peito e tríceps). No dia, ela abre sozinha na aba Hoje com as cargas sugeridas.</p>}
@@ -414,7 +449,7 @@ function Evolucao({ d }: { d: Dados }) {
             <span>{g}</span>
             <div style={{ position: "relative", height: 12, borderRadius: 6, background: "var(--bg-hover)" }}>
               <div style={{ position: "absolute", left: `${(fmin / maxSeries) * 100}%`, width: `${((fmax - fmin) / maxSeries) * 100}%`, top: 0, bottom: 0, background: "var(--accent-dim)", borderRadius: 6 }} />
-              <div style={{ position: "absolute", left: 0, top: 2, bottom: 2, width: `${(v / maxSeries) * 100}%`, background: v >= fmin ? "var(--success)" : v > 0 ? "var(--accent)" : "transparent", borderRadius: 5 }} />
+              <div className="enche" style={{ position: "absolute", left: 0, top: 2, bottom: 2, width: `${(v / maxSeries) * 100}%`, background: v >= fmin ? "var(--success)" : v > 0 ? "var(--accent)" : "transparent", borderRadius: 5 }} />
             </div>
             <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", color: v ? "var(--text)" : "var(--text-muted)" }}>{v}</span>
           </div>
@@ -462,7 +497,7 @@ function Calendario({ dias, hoje }: { dias: string[]; hoje: string }) {
         {semanas.map((sem) => (
           <div key={sem[0]} style={{ display: "grid", gap: 3 }}>
             {sem.map((x) => (
-              <span key={x} title={dia(x)} style={{ aspectRatio: "1", maxWidth: 22, borderRadius: 4, background: x > hoje ? "transparent" : set.has(x) ? "var(--accent)" : "var(--bg-hover)", outline: x === hoje ? "1px solid var(--text-muted)" : "none" }} />
+              <span key={x} title={dia(x)} className={set.has(x) ? "acende" : undefined} style={{ animationDelay: `${(semanas.findIndex((w) => w.includes(x)) * 35)}ms`, aspectRatio: "1", maxWidth: 22, borderRadius: 4, background: x > hoje ? "transparent" : set.has(x) ? "var(--accent)" : "var(--bg-hover)", outline: x === hoje ? "1px solid var(--text-muted)" : "none" }} />
             ))}
           </div>
         ))}
