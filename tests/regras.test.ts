@@ -819,3 +819,22 @@ test("Treino guiado: carga sugerida, alívio de 10% e rotina limpa (24/11)", asy
   assert.equal(acharExercicio("xablau"), null);
 });
 
+test("Vigia amiga: até 3 linhas, só o que escapou (25/11)", async () => {
+  const { prisma } = await import("../src/lib/prisma");
+  const hoje = new Date(2026, 10, 25, 12);
+  const p = prisma as unknown as Record<string, Record<string, unknown>>;
+  const orig = { corpoLog: p.corpoLog, diaryEntry: p.diaryEntry, rotina: p.rotina, financeEntry: p.financeEntry };
+  p.corpoLog = { findFirst: async (a: { where: { kind: string } }) => (a.where.kind === "academia" ? { at: new Date(2026, 10, 16, 12) } : null), findMany: async () => [] };
+  p.diaryEntry = { findFirst: async () => ({ date: new Date(2026, 10, 25, 12) }) };
+  p.rotina = { findFirst: async () => ({ nome: "Pernas" }) };
+  p.financeEntry = { findMany: async () => [] };
+  try {
+    const { cuidadoLinhas } = await import("../src/lib/corpo");
+    const l = await cuidadoLinhas(hoje);
+    assert.ok(l[0].includes("9 dias sem treino") && l[0].includes("Pernas"), l[0]);
+    assert.ok(l.some((x) => x.includes("sobe na balança")));
+    assert.ok(!l.some((x) => x.includes("diário")));
+    assert.ok(l.length <= 3);
+  } finally { Object.assign(p, orig); }
+});
+

@@ -332,3 +332,48 @@ export async function corpoLinhaSemana(): Promise<string> {
   const peso = agora != null ? `peso ${kg(agora)}${antes != null ? ` (${sinal(agora - antes)})` : ""}` : "sem peso na semana";
   return `💪 *Corpo:* ${peso} · academia ${academia} dia(s) · besteira e delivery ${brl(comida)}`;
 }
+
+/**
+ * Vigia amiga (25/11/2026, ele: "quero me cuidar… é um vigia amigável"): no resumo das 21h, até 3 linhas
+ * com o que escapou — treino parado, comida do dia × meta, besteira/delivery acima da média, diário
+ * esquecido, peso sem medir. Tom de quem cuida, sem sermão; vazio quando está tudo bem.
+ */
+export async function cuidadoLinhas(hoje = todayBRT()): Promise<string[]> {
+  const out: string[] = [];
+  const doDia = { gte: new Date(hoje.getTime() - DIA / 2), lt: new Date(hoje.getTime() + DIA / 2) };
+  const [ultAcad, ultPeso, ultDiario, comidaHoje, rotinaAmanha, meta] = await Promise.all([
+    prisma.corpoLog.findFirst({ where: { kind: "academia" }, orderBy: { at: "desc" } }),
+    prisma.corpoLog.findFirst({ where: { kind: "peso" }, orderBy: { at: "desc" } }),
+    prisma.diaryEntry.findFirst({ orderBy: { date: "desc" } }),
+    prisma.corpoLog.findMany({ where: { kind: "comida", at: doDia } }),
+    prisma.rotina.findFirst({ where: { ativa: true, dia: (hoje.getDay() + 1) % 7 } }),
+    corpoNumeros().then((n) => n.kcal?.meta ?? null).catch(() => null),
+  ]);
+  const dias = (d: Date | undefined | null) => (d ? Math.floor((hoje.getTime() - d.getTime()) / DIA) : null);
+
+  const semTreino = dias(ultAcad?.at);
+  if (semTreino != null && semTreino >= 3) out.push(`🏋️ Faz ${semTreino} dias sem treino. ${rotinaAmanha ? `Amanhã é *${rotinaAmanha.nome}*, bora?` : "Amanhã, nem que sejam 20 minutos?"}`);
+
+  if (comidaHoje.length && meta) {
+    const kcal = comidaHoje.reduce((t, c) => t + (c.value ?? 0), 0);
+    out.push(kcal <= meta ? `🍽️ Hoje ~${Math.round(kcal).toLocaleString("pt-BR")} kcal de ~${meta.toLocaleString("pt-BR")}: dentro da meta 👏` : `🍽️ Hoje passou ~${Math.round(kcal - meta).toLocaleString("pt-BR")} kcal da meta. Tudo bem; amanhã é outro dia.`);
+  }
+
+  // Besteira + delivery dos últimos 7 dias × média das 4 semanas antes.
+  const semanas = await comidaPorSemana(new Date(hoje.getTime() - 35 * DIA));
+  const porDia = [...semanas.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const ult7 = await comidaPorSemana(new Date(hoje.getTime() - 7 * DIA));
+  const agora = [...ult7.values()].reduce((t, c) => t + c.besteira + c.delivery, 0);
+  const antes = porDia.slice(0, -1).map(([, c]) => c.besteira + c.delivery).filter((v) => v > 0);
+  const media = antes.length ? antes.reduce((a, b) => a + b, 0) / antes.length : null;
+  if (media && agora > media * 1.3 && agora - media > 30) out.push(`🍔 Besteira e delivery na semana: ${brl(agora)} (sua média é ${brl(media)}). Só pra você ficar de olho.`);
+
+  const semDiario = dias(ultDiario?.date);
+  if (out.length < 3 && (semDiario == null || semDiario >= 4)) out.push("📓 Faz uns dias que você não escreve. Como você está? Manda: *diário: hoje…*");
+
+  const semPeso = dias(ultPeso?.at);
+  if (out.length < 3 && (semPeso == null || semPeso >= 7)) out.push(semPeso == null ? "⚖️ Quer começar o acompanhamento? Amanhã cedo, sobe na balança e manda: *peso 108,5*" : "⚖️ Uma semana sem se pesar: amanhã cedo, sobe na balança? (*peso 108,5*)");
+
+  return out.slice(0, 3);
+}
+

@@ -15,7 +15,7 @@ import { buildWishList, checkWish } from "./finance-wishes";
 import { findReserveGoal, goalMonthlyNeed, goalsViabilityLine, reserveNow } from "./finance-goals";
 import { listOpenInvoices } from "./invoices";
 import { idadeDoDinheiro } from "./idade-dinheiro";
-import { corpoLinhaSemana } from "./corpo";
+import { corpoLinhaSemana, cuidadoLinhas } from "./corpo";
 
 /**
  * Fechamento de um mês: entrou x saiu, top 3 categorias contra o mês
@@ -444,6 +444,8 @@ export async function buildDailyDigest(): Promise<string> {
   if (scooter) lines.push(scooter);
   const work = await workDigestLine();
   if (work) lines.push(work);
+  const cuidado = await cuidadoLinhas(today).catch(() => []);
+  if (cuidado.length) lines.push(`\n💚 *Cuidando de você*\n${cuidado.join("\n")}`);
   return lines.join("\n");
 }
 
