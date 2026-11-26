@@ -16,7 +16,13 @@ seguir este arquivo: aqui é **refinamento**, não redesign.
 4. **Um dado, um lugar.** Não repetir a mesma informação em dois selos (ex.:
    status e "resolvido" lado a lado). Detalhe secundário vai para a dica (`title`)
    ou para o cartão aberto.
-5. **Quieto.** Cor só para significado (status, urgência, categoria). Nada de
+5. **Vivo, com propósito** (mudou em 26/11/2026; antes era "quieto"; ele: "muito estático e feio"). Cor
+   só para significado (status, urgência, categoria, grupo muscular); nada de gradiente nem brilho. O
+   movimento conta uma coisa, uma vez, ao abrir: barra que **enche** até o valor, número que **conta**
+   até o valor, linha de gráfico que **se desenha**, item feito que **acende**, cartão que **surge**
+   (classes `.enche`, `.conta` via `useConta`, `.traca`, `.acende`, `.surge` no `globals.css`).
+   Nada piscando em loop; urgência pode pulsar. Sempre respeitar `prefers-reduced-motion` (tudo
+   aparece pronto).
    gradiente, brilho ou animação decorativa; animação só para chamar atenção a
    algo vencido/urgente, e respeitando `prefers-reduced-motion`.
 6. **Português simples.** Rótulos curtos, verbos no imperativo ("Salvar",
@@ -47,6 +53,12 @@ Use sempre os tokens; cor nova só se virar token.
 - `.split` / `.split-list` / `.split-empty`: lista + detalhe que empilha no celular.
 - Celular (≤ 760 px): abas embaixo — Hoje, Dinheiro, Trabalho, Scooter e ☰ Mais (o resto + sinal da Saúde). A barra lateral é só do computador.
 - Topo de cada tela: um número que importa em destaque (resultado do mês, fila, folga), o resto abaixo.
+  O número grande (44–60 px, `clamp`) com a unidade menor ao lado; abaixo, o caminho até a meta
+  (barra grossa com marcos, ex.: degraus de 5 kg) e uma linha de contexto (ritmo, previsão).
+- Cartão com `display: grid` leva `gridTemplateColumns: minmax(0, 1fr)`: sem isso um gráfico SVG
+  (useWidth) estica o cartão e a página rola de lado no celular.
+- Listas de itens com ação (exercícios, séries): lado a lado no computador
+  (`repeat(auto-fill, minmax(min(360px, 100%), 1fr))`); campo numérico do tamanho do número, não da tela.
 - Gráficos SVG medem a largura com `useWidth` (`src/lib/use-width.ts`).
 - Espaçamento interno com `.page-pad` ou estilo inline: o reset `* { padding: 0 }`
   do globals.css vence classes utilitárias do Tailwind (`p-4` não funciona).
