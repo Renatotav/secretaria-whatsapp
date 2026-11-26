@@ -13,7 +13,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Secretária", statusBarStyle: "black-translucent" },
 };
 
-export const viewport: Viewport = { themeColor: "#0d0d1a" };
+// viewportFit "cover": o iPhone passa a informar o entalhe e a barra de baixo (env(safe-area-inset-*)).
+export const viewport: Viewport = { themeColor: "#0d0d1a", viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
