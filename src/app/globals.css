@@ -349,3 +349,8 @@ h2 { letter-spacing: -0.005em; }
 @media (prefers-reduced-motion: reduce) {
   .enche, .surge, .traca, .acende { animation: none !important; }
 }
+
+/* iPhone dá zoom sozinho ao tocar num campo com letra < 16 px e a página fica cortada (27/11, print do iPhone do personal). */
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}

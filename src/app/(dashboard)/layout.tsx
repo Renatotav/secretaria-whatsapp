@@ -38,7 +38,7 @@ const TABS = [
 // O personal (irmão) vê só o que é dele.
 const NAV_PERSONAL = [
   { href: "/treino", icon: "🏋️", label: "Treino" },
-  { href: "/corpo", icon: "💪", label: "Corpo" },
+  { href: "/corpo", icon: "🍽️", label: "Nutrição e peso" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
