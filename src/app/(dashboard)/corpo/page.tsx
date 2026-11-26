@@ -176,16 +176,6 @@ function Painel({ d }: { d: Dados }) {
   );
 }
 
-function Kpi({ titulo, valor, dica }: { titulo: string; valor: string; dica: string }) {
-  return (
-    <div style={{ ...card, display: "grid", gap: 2 }}>
-      <span style={muted}>{titulo}</span>
-      <strong style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }}>{valor}</strong>
-      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{dica}</span>
-    </div>
-  );
-}
-
 /** Linha do peso, com a meta tracejada. */
 function GraficoPeso({ pesos, meta, previsao }: { pesos: Dados["pesos"]; meta: number | null; previsao: string | null }) {
   const [ref, w] = useWidth<HTMLDivElement>(640);
@@ -274,82 +264,6 @@ function GraficoSemanas({ semanas: todas }: { semanas: Semana[] }) {
         ) : (
           <span style={{ color: "var(--text-muted)" }}>Toque numa semana para ver os números. Os valores vêm das notas fiscais e dos lançamentos (pela data da compra).</span>
         )}
-      </div>
-    </div>
-  );
-}
-
-/** Plano da semana, exercícios (última carga, recorde, evolução) e o mapa dos dias de academia. */
-function Treinos({ t, semanas }: { t: Treino; semanas: Semana[] }) {
-  const vazio = !t.exercicios.length && !t.plano.length;
-  return (
-    <div style={{ ...card, display: "grid", gap: 12 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 600 }}>🏋️ Treinos</h2>
-      {vazio && (
-        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-          No WhatsApp: <em>supino 3x10 40kg</em> (uma linha por exercício) · <em>plano seg peito, ter costas, qua perna</em> · <em>treino de hoje?</em> · <em>meus recordes</em>
-        </p>
-      )}
-      {t.plano.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {t.plano.map((p) => (
-            <span key={p.dia} style={{ fontSize: 12, padding: "4px 8px", borderRadius: 8, background: "var(--bg-hover)" }}><strong>{p.dia}</strong> · {p.treino}</span>
-          ))}
-        </div>
-      )}
-      {(t.grupos.feitos.length > 0 || t.exercicios.length > 0) && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-          <span style={muted}>Esta semana:</span>
-          {t.grupos.feitos.map(([g, v]) => (
-            <span key={g} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 999, background: "var(--accent-dim)", color: "var(--text)" }}>{g} {v}×</span>
-          ))}
-          {t.grupos.faltam.map((g) => (
-            <span key={g} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 999, border: "1px dashed var(--border)", color: "var(--text-muted)" }}>{g} 0×</span>
-          ))}
-        </div>
-      )}
-      {t.exercicios.length > 0 && (
-        <div style={{ display: "grid", gap: 8 }}>
-          {t.exercicios.map((e) => (
-            <div key={e.nome} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto auto", gap: 12, alignItems: "center", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-              <div style={{ minWidth: 0, display: "grid", gap: 2 }}>
-                <strong style={{ fontSize: 15, textTransform: "capitalize" }}>{e.nome}</strong>
-                <span style={muted}>{e.ultima.desc} · {dia(e.ultima.at)}</span>
-              </div>
-              <Mini pontos={e.historico.map((h) => h.rm).filter((v): v is number => v != null)} />
-              <div style={{ textAlign: "right", minWidth: 64 }} title="Força: carga máxima estimada para 1 repetição">
-                <strong style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }}>{e.recorde != null ? `${n(e.recorde)} kg` : "—"}</strong>
-                <div style={{ ...muted, fontSize: 11 }}>{e.recorde != null ? "🏆 força" : `${e.vezes} vez(es)`}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <Mapa semanas={semanas} />
-    </div>
-  );
-}
-
-/** Linha pequena da força estimada (precisa de 2 pontos). */
-function Mini({ pontos }: { pontos: number[] }) {
-  if (pontos.length < 2) return <span style={{ width: 72 }} />;
-  const w = 72, h = 28, min = Math.min(...pontos), max = Math.max(...pontos);
-  const pts = pontos.map((v, i) => `${(i / (pontos.length - 1)) * w},${h - 3 - ((v - min) / Math.max(1, max - min)) * (h - 6)}`).join(" ");
-  return <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-label="Evolução da força"><polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth={2} /></svg>;
-}
-
-/** Semanas × dias de academia, em quadradinhos (mais escuro = mais dias). */
-function Mapa({ semanas }: { semanas: Semana[] }) {
-  return (
-    <div style={{ display: "grid", gap: 4 }}>
-      <span style={muted}>Dias de academia por semana (últimas {semanas.length})</span>
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-        {semanas.map((s) => (
-          <span key={s.inicio} title={`Semana de ${dia(s.inicio)}: ${s.academia} dia(s)`}
-            style={{ width: 22, height: 22, borderRadius: 5, background: s.academia ? "var(--accent)" : "var(--bg-hover)", opacity: s.academia ? 0.35 + Math.min(1, s.academia / 5) * 0.65 : 1, display: "grid", placeItems: "center", fontSize: 10, color: s.academia ? "var(--bg-card)" : "var(--text-muted)" }}>
-            {s.academia || ""}
-          </span>
-        ))}
       </div>
     </div>
   );
