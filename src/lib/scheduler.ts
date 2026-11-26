@@ -19,6 +19,7 @@ import { classifyPendingGroups } from "./work-groups";
 import { odoReminder } from "./scooter";
 import { creditWarning } from "./ai-credit";
 import { billsDueSpeech, notifyOwner } from "./message-handlers";
+import { perguntarDiario } from "./diario-checkin";
 import { applyMonthResultToReserve, invoiceEveSpeech, notifyAffordableWishes } from "./finance-commands";
 import { pruneProcessedMessages, pruneContactMessages } from "./flow-state";
 import { buildWorkBriefing, buildWorkNewAlerts, meetingTicketBrief } from "./work";
@@ -43,6 +44,7 @@ let lastBuddyInvoiceDate = "";
 let lastInvoiceEveDate = "";
 let lastWorkAlertSlot = "";
 let lastEscalaSync: number | null = null; // fim da última cópia do escala já vista
+let lastCheckinSlot = ""; // "2026-11-27 manha": pergunta do diário já feita
 let lastAnsweredRequest = 0; // pedido do botão já respondido ("nada novo" sai uma vez só)
 
 let ticking = false; // uma volta por vez: se a anterior ainda roda, pula esta
@@ -73,11 +75,12 @@ async function loadFlags(): Promise<void> {
   if (f.lastInvoiceEveDate !== undefined) lastInvoiceEveDate = f.lastInvoiceEveDate as typeof lastInvoiceEveDate;
   if (f.lastWorkAlertSlot !== undefined) lastWorkAlertSlot = f.lastWorkAlertSlot as typeof lastWorkAlertSlot;
   if (f.lastEscalaSync !== undefined) lastEscalaSync = f.lastEscalaSync as typeof lastEscalaSync;
+  if (f.lastCheckinSlot !== undefined) lastCheckinSlot = f.lastCheckinSlot as typeof lastCheckinSlot;
   if (f.lastAnsweredRequest !== undefined) lastAnsweredRequest = f.lastAnsweredRequest as typeof lastAnsweredRequest;
-  flagsJson = JSON.stringify({ lastSummaryDate, lastWeeklyDate, lastFinanceReminderDate, lastMonthClosingDate, lastWishCheckDate, lastReminderHour, lastWorkBriefDate, lastMorningDate, lastTireDate, lastSalaryNudgeDate, lastCreditWarnDate, lastForecastRollDate, lastBuddyInvoiceDate, lastInvoiceEveDate, lastWorkAlertSlot, lastEscalaSync, lastAnsweredRequest });
+  flagsJson = JSON.stringify({ lastSummaryDate, lastWeeklyDate, lastFinanceReminderDate, lastMonthClosingDate, lastWishCheckDate, lastReminderHour, lastWorkBriefDate, lastMorningDate, lastTireDate, lastSalaryNudgeDate, lastCreditWarnDate, lastForecastRollDate, lastBuddyInvoiceDate, lastInvoiceEveDate, lastWorkAlertSlot, lastEscalaSync, lastAnsweredRequest, lastCheckinSlot });
 }
 async function saveFlags(): Promise<void> {
-  const json = JSON.stringify({ lastSummaryDate, lastWeeklyDate, lastFinanceReminderDate, lastMonthClosingDate, lastWishCheckDate, lastReminderHour, lastWorkBriefDate, lastMorningDate, lastTireDate, lastSalaryNudgeDate, lastCreditWarnDate, lastForecastRollDate, lastBuddyInvoiceDate, lastInvoiceEveDate, lastWorkAlertSlot, lastEscalaSync, lastAnsweredRequest });
+  const json = JSON.stringify({ lastSummaryDate, lastWeeklyDate, lastFinanceReminderDate, lastMonthClosingDate, lastWishCheckDate, lastReminderHour, lastWorkBriefDate, lastMorningDate, lastTireDate, lastSalaryNudgeDate, lastCreditWarnDate, lastForecastRollDate, lastBuddyInvoiceDate, lastInvoiceEveDate, lastWorkAlertSlot, lastEscalaSync, lastAnsweredRequest, lastCheckinSlot });
   if (json === flagsJson) return;
   const value = JSON.parse(json);
   await prisma.flowState.upsert({ where: { key: FLAGS_KEY }, create: { key: FLAGS_KEY, value }, update: { value } });
@@ -347,6 +350,17 @@ export function startScheduler(): void {
           await falarPneus();
         } catch (err) {
           console.error("[alexa] aviso dos pneus falhou", err);
+        }
+      }
+
+      // Perguntas do diário (27/11, pedido dele): 7:50 como começa, 21:50 como terminou.
+      const checkin = hhmm === "07:50" ? "manha" : hhmm === "21:50" ? "noite" : null;
+      if (checkin && lastCheckinSlot !== `${todayDate} ${checkin}` && config.ownerPhone) {
+        lastCheckinSlot = `${todayDate} ${checkin}`;
+        try {
+          await notifyOwner(config, await perguntarDiario(checkin, now));
+        } catch (err) {
+          console.error("[diário] pergunta falhou", err);
         }
       }
 

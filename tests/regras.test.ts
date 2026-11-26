@@ -847,3 +847,14 @@ test("Treino: 'fácil' em todas as séries sobe a carga antes do topo da faixa (
   assert.equal(sugestao(item, [{ sets: [set(9, null), set(9, null), set(9, null)] }]).kg, 40);
 });
 
+test("Diário: nota de 1 a 5 no começo da resposta vira o humor (27/11)", async () => {
+  const { humorDaNota, perguntaDaNoite } = await import("../src/lib/diario-checkin");
+  assert.equal(humorDaNota("4 tranquilo"), "bom");
+  assert.equal(humorDaNota("1, péssimo dia"), "pessimo");
+  assert.equal(humorDaNota("5"), "otimo");
+  assert.equal(humorDaNota("15 minutos de treino"), null);
+  assert.equal(humorDaNota("2,5 kg a menos"), null);
+  assert.equal(humorDaNota("cansado"), null);
+  assert.notEqual(perguntaDaNoite(new Date("2026-11-27T12:00:00Z")), perguntaDaNoite(new Date("2026-11-28T12:00:00Z")));
+});
+
