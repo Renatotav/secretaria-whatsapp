@@ -31,6 +31,7 @@ const muted: React.CSSProperties = { fontSize: 12, color: "var(--text-muted)" };
  * besteira/bebida e delivery por semana (das notas e lançamentos). Tudo chega pelo WhatsApp.
  */
 export default function CorpoPage() {
+  const papel = usePapel();
   const [d, setD] = useState<Dados | null>(null);
   const [erro, setErro] = useState(false);
 
@@ -45,9 +46,13 @@ export default function CorpoPage() {
     <div style={{ height: "100%", overflowY: "auto" }}>
       <div style={{ padding: 20, maxWidth: 1100, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>💪 Corpo</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{papel === "personal" ? "🍽️ Nutrição e peso" : "💪 Corpo"}</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            No WhatsApp: <em>peso 108,5</em> · <em>fui na academia</em> · <em>meta de peso 95</em> · <em>como está meu peso?</em>
+            {papel === "personal" ? (
+              "Peso, calorias, o que ele comeu e comprou, e os dias de treino. Atualiza sozinho quando ele registra."
+            ) : (
+              <>No WhatsApp: <em>peso 108,5</em> · <em>fui na academia</em> · <em>meta de peso 95</em> · <em>como está meu peso?</em></>
+            )}
           </p>
         </div>
         {erro && <div style={{ color: "var(--danger)" }}>Não consegui carregar. Atualize a página.</div>}
@@ -89,7 +94,7 @@ function Painel({ d }: { d: Dados }) {
 
   return (
     <>
-      {!ult && (
+      {!ult && papel === "dono" && (
         <div style={{ ...card, display: "grid", gap: 10, borderColor: "var(--accent-border)" }}>
           <strong style={{ fontSize: 18 }}>Comece em 3 mensagens no WhatsApp</strong>
           <ol style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6, fontSize: 14 }}>
@@ -142,7 +147,7 @@ function Painel({ d }: { d: Dados }) {
             <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{n(hoje)}<span style={{ ...muted, fontSize: 13 }}>{metaK ? ` / ${n(metaK)} kcal` : " kcal"}</span></span>
           </div>
           {metaK != null && barra(hoje / metaK, hoje <= metaK ? "var(--success)" : "var(--warning)")}
-          <span style={muted}>{metaK == null ? "Mande o perfil para ter a meta: perfil 1,78 m 38 anos homem" : hoje <= metaK ? `sobram ~${n(metaK - hoje)} kcal` : `passou ~${n(hoje - metaK)} kcal`}{d.cardioHoje > 0 ? ` · 🏃 queimou ~${n(d.cardioHoje)} no cardio` : ""} · anote com: comi 2 coxinhas</span>
+          <span style={muted}>{metaK == null ? (papel === "personal" ? "sem meta de calorias ainda" : "Mande o perfil para ter a meta: perfil 1,78 m 38 anos homem") : hoje <= metaK ? `sobram ~${n(metaK - hoje)} kcal` : `passou ~${n(hoje - metaK)} kcal`}{d.cardioHoje > 0 ? ` · 🏃 queimou ~${n(d.cardioHoje)} no cardio` : ""}{papel === "personal" ? "" : " · anote com: comi 2 coxinhas"}</span>
         </div>
         <div className="surge" style={{ ...card, display: "grid", gap: 10, animationDelay: "160ms" }}>
           <h2 style={{ fontSize: 15, fontWeight: 600 }}>📅 Esta semana</h2>
@@ -287,6 +292,7 @@ function GraficoSemanas({ semanas: todas }: { semanas: Semana[] }) {
 
 /** O que ele anotou que comeu ("comi …" ou foto), por dia, contra a meta. */
 function Comidas({ c, meta }: { c: Dados["comidas"]; meta: number | null }) {
+  const papel = usePapel();
   const porDia = new Map<string, { kcal: number; textos: string[] }>();
   for (const x of c) {
     const k = dia(x.at);
@@ -301,7 +307,7 @@ function Comidas({ c, meta }: { c: Dados["comidas"]; meta: number | null }) {
       <h2 style={{ fontSize: 15, fontWeight: 600 }}>🍽️ O que comi</h2>
       {!dias.length && (
         <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-          No WhatsApp: <em>comi 2 coxinhas e uma coca</em> · foto do prato com a legenda <em>comi isso</em> · <em>quanto comi hoje?</em> · <em>monta meu cardápio</em> · <em>o que cozinho hoje?</em>
+          {papel === "personal" ? "Ainda sem comida registrada nesta semana." : <>No WhatsApp: <em>comi 2 coxinhas e uma coca</em> · foto do prato com a legenda <em>comi isso</em> · <em>quanto comi hoje?</em> · <em>monta meu cardápio</em> · <em>o que cozinho hoje?</em></>}
         </p>
       )}
       {dias.map(([d, v]) => (

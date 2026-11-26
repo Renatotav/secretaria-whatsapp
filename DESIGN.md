@@ -60,12 +60,19 @@ Use sempre os tokens; cor nova só se virar token.
 - Listas de itens com ação (exercícios, séries): lado a lado no computador
   (`repeat(auto-fill, minmax(min(360px, 100%), 1fr))`); campo numérico do tamanho do número, não da tela.
 - Gráficos SVG medem a largura com `useWidth` (`src/lib/use-width.ts`).
+- Personal (irmão, desde 27/11/2026): `usePapel()` (`src/lib/use-papel.ts`) diz quem está vendo. Para ele, o menu
+  e as abas de baixo têm só 🏋️ Treino e 🍽️ Nutrição e peso. Nada de botão que leva a tela bloqueada, e nada de
+  dica de WhatsApp (as dicas são do dono). Texto de apoio fala do Renato em terceira pessoa.
+- Caixa "💬 Pergunte" no fim das abas que têm IA (Corpo, Treino, Ar, Scooter, Parcelas, Dinheiro): título
+  com quem responde ("ao treinador") e três exemplos de pergunta em chips.
 - Espaçamento interno com `.page-pad` ou estilo inline: o reset `* { padding: 0 }`
   do globals.css vence classes utilitárias do Tailwind (`p-4` não funciona).
 
 ## Letra
 
 - IBM Plex Sans (carregada em `src/app/layout.tsx`), números tabulares. Título da tela: 22 px negrito, igual em todas (regra no `globals.css`).
+- Campo de texto no celular (toque): 16 px no mínimo (regra `pointer: coarse` no `globals.css`). Abaixo disso o
+  iPhone dá zoom ao tocar e a tela fica cortada dos lados (visto no iPhone do personal, 27/11).
 
 ## Formatos
 
@@ -75,4 +82,4 @@ Use sempre os tokens; cor nova só se virar token.
 ## Conferência
 
 Antes de entregar: print em 390 px e em 1280 px (container `pw-chrome`), um só
-round de ajustes. Sem print do dono não dá por visto.
+round de ajustes. Mudou o que o personal vê? Conferir também logado com a senha dele. Sem print do dono não dá por visto.

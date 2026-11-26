@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWidth } from "@/lib/use-width";
 import { PerguntaIA } from "../pergunta-ia";
+import { usePapel } from "@/lib/use-papel";
 
 type Item = { exercicio: string; series: number; repMin: number; repMax: number; descanso: number; segundos?: number | null };
 type Feita = { id: string; kg: number | null; reps: number | null; segundos: number | null; rir: number | null };
@@ -55,6 +56,7 @@ async function post(body: object) {
  * recorde na hora), rotinas da semana e evolução. Feita para o celular, dentro da academia.
  */
 export default function TreinoPage() {
+  const papel = usePapel();
   const [d, setD] = useState<Dados | null>(null);
   const [erro, setErro] = useState(false);
   const [aba, setAba] = useState<"hoje" | "rotinas" | "evolucao">("hoje");
@@ -73,7 +75,7 @@ export default function TreinoPage() {
       <div style={{ padding: 20, paddingBottom: 140, maxWidth: 1180, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>🏋️ Treino</h1>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Marque cada série com ✓. Também vale pelo WhatsApp: <em>supino 3x10 40kg</em>.</p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{papel === "personal" ? "Rotinas, cargas e evolução do Renato. Monte ou ajuste as rotinas em Rotinas." : <>Marque cada série com ✓. Também vale pelo WhatsApp: <em>supino 3x10 40kg</em>.</>}</p>
         </div>
         <div role="tablist" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 4 }}>
           {([["hoje", "Hoje"], ["rotinas", "Rotinas"], ["evolucao", "Evolução"]] as const).map(([k, t]) => (
