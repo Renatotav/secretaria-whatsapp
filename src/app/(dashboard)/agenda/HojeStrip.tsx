@@ -35,15 +35,15 @@ export function HojeStrip() {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
-      <Link href="/finance" style={caixa}>
+      <Link href="/finance" className="surge" style={{ ...caixa, animationDelay: "0ms" }}>
         <span style={rotulo}>💰 Gasto hoje</span>
         <span style={valor}>{gasto == null ? "…" : brl(gasto)}</span>
       </Link>
-      <Link href="/scooter" style={caixa}>
+      <Link href="/scooter" className="surge" style={{ ...caixa, animationDelay: "80ms" }}>
         <span style={rotulo}>🛵 Folga</span>
         <span style={{ ...valor, color: corFolga }}>{folga == null ? "—" : folga <= 0 ? "carregar" : `~${Math.round(folga)} km`}</span>
       </Link>
-      <Link href="/ar" style={caixa}>
+      <Link href="/ar" className="surge" style={{ ...caixa, animationDelay: "160ms" }}>
         <span style={rotulo}>❄️ Ar hoje</span>
         <span style={valor}>{ar == null ? "—" : brl(ar)}</span>
       </Link>

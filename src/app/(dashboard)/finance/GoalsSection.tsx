@@ -135,7 +135,7 @@ export function GoalsSection() {
                 </div>
               )}
               <div style={{ height: 6, background: "var(--bg-hover)", borderRadius: 4, overflow: "hidden", marginBottom: g.deadline && !conquered ? 6 : 12 }}>
-                <div style={{ height: "100%", background: g.color, width: `${percent}%`, transition: "width 0.3s" }} />
+                <div className="enche" style={{ height: "100%", background: g.color, width: `${percent}%`, transition: "width 0.3s" }} />
               </div>
               {g.deadline && !conquered && (() => {
                 // Quanto guardar por mês até o prazo.

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWidth } from "@/lib/use-width";
+import { useConta } from "@/lib/use-conta";
 import { brl } from "@/lib/format";
 import { PerguntaIA } from "../pergunta-ia";
 
@@ -21,24 +22,6 @@ type Dados = { academiaDias: string[]; hoje: string; cardioHoje: number; comidas
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
 const TZ = { timeZone: "America/Sao_Paulo" } as const;
 const dia = (s: string) => new Date(s).toLocaleDateString("pt-BR", { ...TZ, day: "2-digit", month: "2-digit" });
-/** Número que conta até o valor ao abrir (sem animação se o celular pede menos movimento). */
-function useConta(alvo: number, ms = 900): number {
-  const [v, setV] = useState(alvo);
-  useEffect(() => {
-    if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setV(alvo); return; }
-    const ini = performance.now(), de = alvo * 0.92;
-    let raf = 0;
-    const passo = (t: number) => {
-      const k = Math.min(1, (t - ini) / ms), e = 1 - Math.pow(1 - k, 3);
-      setV(de + (alvo - de) * e);
-      if (k < 1) raf = requestAnimationFrame(passo);
-    };
-    raf = requestAnimationFrame(passo);
-    return () => cancelAnimationFrame(raf);
-  }, [alvo, ms]);
-  return v;
-}
-
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 };
 const muted: React.CSSProperties = { fontSize: 12, color: "var(--text-muted)" };
 

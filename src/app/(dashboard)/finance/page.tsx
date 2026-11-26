@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react";
 import Link from "next/link";
+import { useConta } from "@/lib/use-conta";
 import { GoalsSection } from "./GoalsSection";
 import { BudgetsManager } from "./BudgetsManager";
 import { CreditCardsSection } from "./CreditCardsSection";
@@ -205,6 +206,10 @@ export default function FinancePage() {
   const income = entries.filter((e) => e.type === "income").reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter((e) => e.type === "expense").reduce((s, e) => s + e.amount, 0);
   const monthBalance = income - expense;
+  // Os três números do topo contam até o valor ao abrir (sem animação se o celular pede menos movimento).
+  const saldoAnim = useConta(monthBalance);
+  const entrouAnim = useConta(income);
+  const saiuAnim = useConta(expense);
   const accumulatedBalance = previousBalance + monthBalance;
 
   // Lista segue o DIA DA COMPRA (mais recente primeiro) — pela fatura quase tudo
@@ -445,21 +450,21 @@ export default function FinancePage() {
         {selectedInvoiceId && <InvoiceDrawer entryId={selectedInvoiceId} onClose={() => setSelectedInvoiceId(null)} />}
 
         {/* Resultado do mês em destaque; entrou/saiu e o saldo acumulado logo abaixo */}
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: "18px 18px 16px", marginBottom: 20, display: "grid", gap: 6 }}>
+        <div className="surge" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, padding: "18px 18px 16px", marginBottom: 20, display: "grid", gap: 6 }}>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Resultado do mês</p>
-          <p style={{ fontSize: 36, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.1, color: monthBalance >= 0 ? "var(--success)" : "var(--danger)" }}>
-            {monthBalance >= 0 ? "+" : ""}{formatMoney(monthBalance)}
+          <p style={{ fontSize: "clamp(34px, 10vw, 44px)", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.05, fontVariantNumeric: "tabular-nums", color: monthBalance >= 0 ? "var(--success)" : "var(--danger)" }}>
+            {monthBalance >= 0 ? "+" : ""}{formatMoney(saldoAnim)}
           </p>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{monthBalance >= 0 ? "Entrou mais do que saiu." : "Saiu mais do que entrou."}</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(140px, 100%), 1fr))", gap: 10, marginTop: 8 }}>
             {/* "De onde veio?": tocar mostra os lançamentos que somam o valor */}
             <button type="button" onClick={() => verLancamentos("income")} title="Ver os lançamentos que somam isso" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", background: "var(--bg-hover)", border: "1px solid transparent", borderRadius: 12, padding: "10px 12px" }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Entrou · ver de onde ›</p>
-              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--success)" }}>{formatMoney(income)}</p>
+              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--success)", fontVariantNumeric: "tabular-nums" }}>{formatMoney(entrouAnim)}</p>
             </button>
             <button type="button" onClick={() => verLancamentos("expense")} title="Ver os lançamentos que somam isso" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer", background: "var(--bg-hover)", border: "1px solid transparent", borderRadius: 12, padding: "10px 12px" }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saiu · ver de onde ›</p>
-              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--danger)" }}>{formatMoney(expense)}</p>
+              <p style={{ fontSize: 18, fontWeight: 600, color: "var(--danger)", fontVariantNumeric: "tabular-nums" }}>{formatMoney(saiuAnim)}</p>
             </button>
             <div style={{ background: "var(--bg-hover)", borderRadius: 12, padding: "10px 12px" }}>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Saldo acumulado</p>
