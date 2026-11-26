@@ -32,15 +32,35 @@ export async function createSessionToken(): Promise<string> {
   return `${expires}.${await sign(expires)}`;
 }
 
-export async function verifySessionToken(token: string | undefined | null): Promise<boolean> {
-  if (!token) return false;
-  const [expires, sig] = token.split(".");
-  if (!expires || !sig || !/^\d+$/.test(expires) || Number(expires) < Date.now()) return false;
-  const expected = await sign(expires);
+async function sameSig(payload: string, sig: string): Promise<boolean> {
+  const expected = await sign(payload);
   if (expected.length !== sig.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
   return diff === 0;
+}
+
+export async function verifySessionToken(token: string | undefined | null): Promise<boolean> {
+  if (!token) return false;
+  const [expires, sig] = token.split(".");
+  if (!expires || !sig || !/^\d+$/.test(expires) || Number(expires) < Date.now()) return false;
+  return sameSig(expires, sig);
+}
+
+// Login do personal (o irmão, 27/11): "p<expira>-<geração>.<HMAC>". Só abre Treino e Corpo; nunca passa
+// no verifySessionToken (o começo não é só número). A geração vale enquanto o acesso não for tirado.
+export const PERSONAL_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+
+export async function createPersonalToken(gen: string): Promise<string> {
+  const payload = `p${Date.now() + PERSONAL_MAX_AGE_SECONDS * 1000}-${gen}`;
+  return `${payload}.${await sign(payload)}`;
+}
+
+/** Geração do acesso do personal, se o cookie for dele e válido (a rota confere se ainda é a geração atual). */
+export async function personalGen(token: string | undefined | null): Promise<string | null> {
+  const m = token?.match(/^(p(\d+)-([0-9a-f]{16}))\.([0-9a-f]+)$/);
+  if (!m || Number(m[2]) < Date.now()) return null;
+  return (await sameSig(m[1], m[4])) ? m[3] : null;
 }
 
 /** Lê o valor de um cookie no cabeçalho "cookie" (sem confundir nomes parecidos). */

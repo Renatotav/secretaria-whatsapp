@@ -858,3 +858,14 @@ test("Diário: nota de 1 a 5 no começo da resposta vira o humor (27/11)", async
   assert.notEqual(perguntaDaNoite(new Date("2026-11-27T12:00:00Z")), perguntaDaNoite(new Date("2026-11-28T12:00:00Z")));
 });
 
+
+test("Login do personal: cookie dele nunca vale como o do dono e não aceita adulteração (27/11)", async () => {
+  process.env.SESSION_SECRET = "teste-segredo";
+  const { createSessionToken, createPersonalToken, verifySessionToken, personalGen } = await import("../src/lib/session-token");
+  const p = await createPersonalToken("0123456789abcdef");
+  assert.equal(await verifySessionToken(p), false);
+  assert.equal(await personalGen(p), "0123456789abcdef");
+  assert.equal(await personalGen(p.replace("0123456789abcdef", "fedcba9876543210")), null);
+  assert.equal(await personalGen(await createSessionToken()), null);
+  assert.equal(await personalGen(p.replace(/^p\d+/, "p1")), null);
+});

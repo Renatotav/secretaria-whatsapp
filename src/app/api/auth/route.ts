@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { createSession, clearSession } from "@/lib/auth";
+import { createSession, clearSession, createPersonalSession } from "@/lib/auth";
+import { senhaDoPersonal } from "@/lib/acesso-personal";
 import { prisma } from "@/lib/prisma";
 import { notifyOwner } from "@/lib/message-handlers";
 
@@ -52,6 +53,12 @@ export async function POST(request: Request) {
   const password = String(body.password ?? "").trim();
   const adminPassword = (process.env.ADMIN_PASSWORD ?? "admin").trim();
 
+  const personal = password && !samePassword(password, adminPassword) ? await senhaDoPersonal(password) : null;
+  if (personal) {
+    byIp.delete(ip);
+    await createPersonalSession(personal);
+    return NextResponse.json({ ok: true, ir: "/treino" });
+  }
   if (!password || !samePassword(password, adminPassword)) {
     ipFails.push(Date.now());
     byIp.set(ip, ipFails);

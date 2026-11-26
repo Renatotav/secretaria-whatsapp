@@ -20,7 +20,8 @@ export default function LoginPage() {
     });
 
     if (res.ok) {
-      router.push("/");
+      const j = await res.json().catch(() => ({}));
+      router.push(j.ir === "/treino" ? "/treino" : "/");
       router.refresh();
     } else {
       setError(res.status === 429 ? "Muitas tentativas. Espere alguns minutos e tente de novo." : "Senha incorreta");

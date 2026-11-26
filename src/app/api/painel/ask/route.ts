@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticated, isAuthenticatedOuPersonal } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
 import { generateResponse } from "@/lib/openai";
 import { airconData } from "@/lib/aircon";
@@ -19,9 +19,11 @@ import { answerFinanceQuestion, type ContaSql } from "@/lib/assistant-chat";
 const ABAS: Record<string, string> = { ar: "Ar-condicionado", scooter: "Scooter", finance: "Financeiro", parcelas: "Parcelas", corpo: "Corpo", treino: "Treino" };
 
 export const POST = withErrorHandling(async (request: Request) => {
-  if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!(await isAuthenticatedOuPersonal(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const body = await request.json().catch(() => null);
   const aba = typeof body?.aba === "string" && ABAS[body.aba] ? (body.aba as string) : null;
+  // O personal só pergunta sobre Treino e Corpo.
+  if (aba !== "treino" && aba !== "corpo" && !(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const pergunta = String(body?.pergunta ?? "").trim().slice(0, 300);
   if (!aba || pergunta.length < 3) return NextResponse.json({ error: "Escreva a pergunta." }, { status: 400 });
   const grafico = body?.grafico && typeof body.grafico.titulo === "string" ? { titulo: String(body.grafico.titulo).slice(0, 120), dados: body.grafico.dados } : null;

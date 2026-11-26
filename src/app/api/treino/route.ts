@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticatedOuPersonal } from "@/lib/auth";
 import { withErrorHandling } from "@/lib/api-handler";
 import { limpaItens, registrarSerie, resumoSessao, treinoAba } from "@/lib/treino-guiado";
 import { GRUPOS } from "@/lib/exercicios";
@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 
 /** Aba Treino: tudo de uma vez (rotina de hoje com sugestões, rotinas, biblioteca, estatísticas). */
 export const GET = withErrorHandling(async (request: Request) => {
-  if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!(await isAuthenticatedOuPersonal(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   return NextResponse.json(await treinoAba(new URL(request.url).searchParams.get("rotina")));
 });
 
 /** Ações: serie | apagarSerie | finalizar | salvarRotina | apagarRotina | criarExercicio. */
 export const POST = withErrorHandling(async (request: Request) => {
-  if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!(await isAuthenticatedOuPersonal(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   switch (b.acao) {
     case "serie":
