@@ -21,6 +21,12 @@ export const POST = withErrorHandling(async (request: Request) => {
     case "serie":
       if (typeof b.exercicio !== "string") return NextResponse.json({ error: "Falta o exercício." }, { status: 400 });
       return NextResponse.json(await registrarSerie({ sessaoId: b.sessaoId as string | null, exercicio: b.exercicio, ordem: Number(b.ordem) || 1, reps: b.reps as number, kg: b.kg as number, segundos: b.segundos as number, rir: b.rir as number }));
+    case "rir": {
+      // "Como foi?": fácil (3), ok (1), no limite (0).
+      const rir = Math.min(5, Math.max(0, Math.round(Number(b.rir))));
+      await prisma.treinoSerie.updateMany({ where: { id: String(b.id), sessaoId: { not: null } }, data: { rir } });
+      return NextResponse.json({ ok: true });
+    }
     case "apagarSerie":
       await prisma.treinoSerie.deleteMany({ where: { id: String(b.id), sessaoId: { not: null } } });
       return NextResponse.json({ ok: true });

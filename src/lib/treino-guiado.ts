@@ -10,7 +10,7 @@ import { grande, grupoDo, nomeExercicio, umRM } from "./treino";
 
 const DIA = 86_400_000;
 export type ItemRotina = { exercicio: string; series: number; repMin: number; repMax: number; descanso: number; segundos?: number | null };
-type Serie = { id: string; at: Date; exercicio: string; reps: number | null; kg: number | null; segundos: number | null; sessaoId: string | null; ordem: number | null; series: number };
+type Serie = { id: string; at: Date; exercicio: string; reps: number | null; kg: number | null; segundos: number | null; sessaoId: string | null; ordem: number | null; series: number; rir?: number | null };
 
 const arred = (v: number) => Math.round(v / 2.5) * 2.5;
 
@@ -55,6 +55,9 @@ export function sugestao(item: ItemRotina, anteriores: { sets: Serie[] }[]): { k
   if (item.segundos != null) return { kg: carga || null, reps: 0, motivo: "por tempo" };
   const todasNoTopo = ult.sets.length >= item.series && ult.sets.every((s) => (s.reps ?? 0) >= item.repMax);
   if (todasNoTopo && carga > 0) return { kg: carga + (grande(item.exercicio) ? 5 : 2.5), reps: item.repMin, motivo: `fechou ${item.repMax} em todas: sobe a carga` };
+  // "fácil" (RIR ≥ 3) em todas as séries, dentro da faixa: dá para subir mesmo sem chegar no topo.
+  const todasFaceis = ult.sets.length >= item.series && ult.sets.every((s) => (s.rir ?? -1) >= 3 && (s.reps ?? 0) >= item.repMin);
+  if (todasFaceis && carga > 0) return { kg: carga + (grande(item.exercicio) ? 5 : 2.5), reps: item.repMin, motivo: "da última vez estava fácil: sobe a carga" };
   const total = (x: { sets: Serie[] }) => x.sets.reduce((t, s) => t + (s.reps ?? 0), 0);
   const tres = anteriores.slice(0, 3);
   const parado = tres.length === 3 && tres.every((x) => Math.max(...x.sets.map((s) => s.kg ?? 0)) === carga) && total(tres[0]) <= total(tres[2]);
@@ -95,7 +98,7 @@ export async function treinoAba(rotinaId?: string | null) {
       sugestao: sugestao(item, anteriores),
       ultima: anteriores[0] ? { dia: anteriores[0].dia, sets: anteriores[0].sets.map((s) => ({ kg: s.kg, reps: s.reps, segundos: s.segundos })) } : null,
       recorde: melhorRM(hist.filter((s) => s.at.toISOString().slice(0, 10) !== hojeIso)) || null,
-      feitas: feitas.map((s) => ({ id: s.id, kg: s.kg, reps: s.reps, segundos: s.segundos })),
+      feitas: feitas.map((s) => ({ id: s.id, kg: s.kg, reps: s.reps, segundos: s.segundos, rir: s.rir ?? null })),
     };
   });
 

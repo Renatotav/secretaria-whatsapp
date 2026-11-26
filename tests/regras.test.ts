@@ -838,3 +838,12 @@ test("Vigia amiga: até 3 linhas, só o que escapou (25/11)", async () => {
   } finally { Object.assign(p, orig); }
 });
 
+test("Treino: 'fácil' em todas as séries sobe a carga antes do topo da faixa (26/11)", async () => {
+  const { sugestao } = await import("../src/lib/treino-guiado");
+  const item = { exercicio: "Supino reto com barra", series: 3, repMin: 8, repMax: 12, descanso: 90, segundos: null };
+  const set = (reps: number, rir: number | null) => ({ id: "x", at: new Date(), exercicio: item.exercicio, reps, kg: 40, segundos: null, sessaoId: "s", ordem: 1, series: 1, rir });
+  assert.equal(sugestao(item, [{ sets: [set(9, 3), set(9, 3), set(9, 4)] }]).kg, 42.5);
+  assert.equal(sugestao(item, [{ sets: [set(9, 3), set(9, 1), set(9, 3)] }]).kg, 40);
+  assert.equal(sugestao(item, [{ sets: [set(9, null), set(9, null), set(9, null)] }]).kg, 40);
+});
+

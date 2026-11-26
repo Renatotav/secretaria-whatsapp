@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWidth } from "@/lib/use-width";
 
 type Item = { exercicio: string; series: number; repMin: number; repMax: number; descanso: number; segundos?: number | null };
-type Feita = { id: string; kg: number | null; reps: number | null; segundos: number | null };
+type Feita = { id: string; kg: number | null; reps: number | null; segundos: number | null; rir: number | null };
 type ItemSessao = Item & {
   grupo: string;
   sugestao: { kg: number | null; reps: number; motivo: string };
@@ -229,7 +229,24 @@ function CartaoExercicio({ item, marcar, recarregar, atraso = 0 }: { item: ItemS
               <button type="button" aria-label="Desfazer série" title="Desfazer" className="acende" style={{ ...btn, background: "var(--success)", padding: "10px 0" }}
                 onClick={async () => { await post({ acao: "apagarSerie", id: f.id }); recarregar(); }}>✓</button>
             </div>
-          ) : i === item.feitas.length ? (
+          ) : null;
+        }).flatMap((el, i) => {
+          const f = item.feitas[i];
+          // Logo depois da última série feita: "Como foi?" (vira o RIR e ajuda a decidir quando subir a carga).
+          const pergunta = f && i === item.feitas.length - 1 && f.rir == null && !tempo ? (
+            <div key={`rir${f.id}`} className="surge" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 13, paddingLeft: 32 }}>
+              <span style={muted}>Como foi?</span>
+              {([["fácil", 3], ["ok", 1], ["no limite", 0]] as const).map(([t, v]) => (
+                <button key={t} type="button" onClick={async () => { await post({ acao: "rir", id: f.id, rir: v }); recarregar(); }}
+                  style={{ padding: "4px 10px", borderRadius: 999, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", cursor: "pointer", font: "inherit", fontSize: 13 }}>{t}</button>
+              ))}
+            </div>
+          ) : f && f.rir != null && !tempo ? <span key={`rv${f.id}`} style={{ ...muted, paddingLeft: 32 }}>{f.rir >= 3 ? "😌 fácil" : f.rir >= 1 ? "👍 ok" : "🔥 no limite"}</span> : null;
+          return [el, pergunta];
+        })}
+        {Array.from({ length: Math.max(linhas, item.feitas.length) }, (_, i) => {
+          if (i < item.feitas.length) return null;
+          return i === item.feitas.length ? (
             <LinhaNova key={`n${i}`} n={i + 1} kg={kgPadrao} reps={repsPadrao} tempo={tempo} onOk={(kg, reps) => marcar(item, i + 1, kg, reps)} />
           ) : (
             <div key={`p${i}`} style={{ display: "grid", gridTemplateColumns: COLS, gap: 6, alignItems: "center", ...muted }}>

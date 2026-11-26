@@ -107,14 +107,15 @@ export async function comidaPorFoto(base64: string, mimetype: string, caption: s
   const resp = await generateVisionResponse(
     base64,
     mimetype,
-    `Foto de um prato de comida. Liste os alimentos visíveis e estime as gramas de cada um, e diga uma faixa de calorias do prato inteiro (mínimo e máximo realistas). Legenda dele: "${caption}". Responda só JSON: {"itens":[{"alimento":"arroz branco","gramas":150}],"min":500,"max":800}`,
+    `Foto de um prato de comida. Liste os alimentos visíveis e estime as gramas de cada um, e diga uma faixa de calorias do prato inteiro (mínimo e máximo realistas). Legenda dele: "${caption}". Estime também a proteína do prato em gramas. Responda só JSON: {"itens":[{"alimento":"arroz branco","gramas":150}],"min":500,"max":800,"prot":35}`,
     opts,
   );
-  const j = JSON.parse(resp.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { itens?: { alimento: string; gramas: number }[]; min?: number; max?: number };
+  const j = JSON.parse(resp.match(/\{[\s\S]*\}/)?.[0] ?? "{}") as { itens?: { alimento: string; gramas: number }[]; min?: number; max?: number; prot?: number };
   if (!j.itens?.length || !j.min || !j.max) return "📸 Não consegui ver bem o prato. Se quiser, escreva: *comi arroz, feijão e frango*.";
   const meio = (j.min + j.max) / 2;
-  await registrar(`foto: ${j.itens.map((i) => i.alimento).join(", ")}`, meio, 0, [j.min, j.max]);
-  return `📸🍽️ Vi: ${j.itens.map((i) => `${i.alimento} (~${k(i.gramas)} g)`).join(", ")}.\nEntre *${k(j.min)} e ${k(j.max)} kcal* — anotei ~${k(meio)}.\n${await linhaDoDia()}\n_Por foto a conta erra bastante; escrevendo (ex.: comi 2 conchas de feijão) fica mais certo._`;
+  const prot = j.prot && j.prot > 0 && j.prot < 300 ? j.prot : 0;
+  await registrar(`foto: ${j.itens.map((i) => i.alimento).join(", ")}`, meio, prot, [j.min, j.max]);
+  return `📸🍽️ Vi: ${j.itens.map((i) => `${i.alimento} (~${k(i.gramas)} g)`).join(", ")}.\nEntre *${k(j.min)} e ${k(j.max)} kcal* — anotei ~${k(meio)}${prot ? ` · ~${k(prot)} g de proteína` : ""}.\n${await linhaDoDia()}\n_Por foto a conta erra bastante; escrevendo (ex.: comi 2 conchas de feijão) fica mais certo._`;
 }
 
 /** Cardápio/receita com o que ele comprou nas notas dos últimos 14 dias e a meta de calorias. */
