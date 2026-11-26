@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useWidth } from "@/lib/use-width";
 import { useConta } from "@/lib/use-conta";
+import { usePapel } from "@/lib/use-papel";
 import { brl } from "@/lib/format";
 import { PerguntaIA } from "../pergunta-ia";
 
@@ -58,6 +59,7 @@ export default function CorpoPage() {
 }
 
 function Painel({ d }: { d: Dados }) {
+  const papel = usePapel(); // o relógio (Strava) é só do dono
   const ult = d.pesos.at(-1);
   const primeiro = d.pesos[0];
   const falta = ult && d.meta != null ? ult.value - d.meta : null;
@@ -183,7 +185,7 @@ function Painel({ d }: { d: Dados }) {
         <span style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600 }}>Abrir ›</span>
       </a>
       <GraficoSemanas semanas={d.semanas} />
-      <Relogio />
+      {papel === "dono" && <Relogio />}
     </>
   );
 }

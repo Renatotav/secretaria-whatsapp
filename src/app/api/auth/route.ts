@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
-import { createSession, clearSession, createPersonalSession } from "@/lib/auth";
+import { createSession, clearSession, createPersonalSession, isAuthenticated, isAuthenticatedOuPersonal } from "@/lib/auth";
 import { senhaDoPersonal } from "@/lib/acesso-personal";
 import { prisma } from "@/lib/prisma";
 import { notifyOwner } from "@/lib/message-handlers";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
   const personal = password && !samePassword(password, adminPassword) ? await senhaDoPersonal(password) : null;
   if (personal) {
-    byIp.delete(ip);
+    // Não zera as falhas do IP: acertar a senha do personal não pode liberar mais chutes na do dono.
     await createPersonalSession(personal);
     return NextResponse.json({ ok: true, ir: "/treino" });
   }
@@ -80,6 +80,12 @@ export async function POST(request: Request) {
   byIp.delete(ip);
   await createSession();
   return NextResponse.json({ ok: true });
+}
+
+/** Quem está logado: o painel mostra ao personal só Treino e Corpo. */
+export async function GET(request: Request) {
+  const papel = (await isAuthenticated(request)) ? "dono" : (await isAuthenticatedOuPersonal(request)) ? "personal" : null;
+  return NextResponse.json({ papel });
 }
 
 export async function DELETE() {

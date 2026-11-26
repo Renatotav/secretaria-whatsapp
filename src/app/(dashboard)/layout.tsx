@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { usePapel } from "@/lib/use-papel";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar_collapsed";
 
@@ -34,8 +35,18 @@ const TABS = [
   { href: "/scooter", icon: "🛵", label: "Scooter" },
 ];
 
+// O personal (irmão) vê só o que é dele.
+const NAV_PERSONAL = [
+  { href: "/treino", icon: "🏋️", label: "Treino" },
+  { href: "/corpo", icon: "💪", label: "Corpo" },
+];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const papel = usePapel();
+  // Até saber quem é, menu vazio (o personal nunca vê as abas do dono piscando).
+  const nav = papel === "personal" ? NAV_PERSONAL : papel ? NAV : [];
+  const abas = papel === "personal" ? NAV_PERSONAL : papel ? [...TABS, { href: "/mais", icon: "☰", label: "Mais" }] : [];
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -125,7 +136,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
@@ -191,8 +202,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </main>
 
       <nav className="tab-bar" aria-label="Abas">
-        {[...TABS, { href: "/mais", icon: "☰", label: "Mais" }].map((t) => {
-          const naAba = TABS.some((x) => pathname === x.href || pathname.startsWith(x.href + "/"));
+        {abas.map((t) => {
+          const naAba = abas.some((x) => x.href !== "/mais" && (pathname === x.href || pathname.startsWith(x.href + "/")));
           const ativo = t.href === "/mais" ? !naAba : pathname === t.href || pathname.startsWith(t.href + "/");
           return (
             <Link key={t.href} href={t.href} aria-current={ativo ? "page" : undefined} className={ativo ? "tab ativo" : "tab"}>

@@ -18,15 +18,26 @@ import { answerFinanceQuestion, type ContaSql } from "@/lib/assistant-chat";
 // Nada é gravado. Dado do trabalho não passa aqui (tem a caixa própria, com ZDR).
 const ABAS: Record<string, string> = { ar: "Ar-condicionado", scooter: "Scooter", finance: "Financeiro", parcelas: "Parcelas", corpo: "Corpo", treino: "Treino" };
 
+// Teto de perguntas do personal por dia (o crédito da IA é do dono). Fica na memória: reinício zera.
+const PERSONAL_POR_DIA = 30;
+let cota = { dia: "", n: 0 };
+function cotaDoPersonal(): boolean {
+  const dia = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+  if (cota.dia !== dia) cota = { dia, n: 0 };
+  return ++cota.n <= PERSONAL_POR_DIA;
+}
+
 export const POST = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticatedOuPersonal(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const body = await request.json().catch(() => null);
   const aba = typeof body?.aba === "string" && ABAS[body.aba] ? (body.aba as string) : null;
-  // O personal só pergunta sobre Treino e Corpo.
-  if (aba !== "treino" && aba !== "corpo" && !(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // O personal só pergunta sobre Treino e Corpo, com os dados do servidor (nada de gráfico mandado por ele) e com teto por dia.
+  const dono = await isAuthenticated(request);
+  if (!dono && aba !== "treino" && aba !== "corpo") return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!dono && !cotaDoPersonal()) return NextResponse.json({ error: "Chegou no limite de perguntas de hoje. Amanhã libera de novo." }, { status: 429 });
   const pergunta = String(body?.pergunta ?? "").trim().slice(0, 300);
   if (!aba || pergunta.length < 3) return NextResponse.json({ error: "Escreva a pergunta." }, { status: 400 });
-  const grafico = body?.grafico && typeof body.grafico.titulo === "string" ? { titulo: String(body.grafico.titulo).slice(0, 120), dados: body.grafico.dados } : null;
+  const grafico = dono && body?.grafico && typeof body.grafico.titulo === "string" ? { titulo: String(body.grafico.titulo).slice(0, 120), dados: body.grafico.dados } : null;
 
   const config = await prisma.agentConfig.findFirst();
   if (!config) return NextResponse.json({ error: "Secretária sem configuração." }, { status: 500 });
@@ -45,7 +56,8 @@ export const POST = withErrorHandling(async (request: Request) => {
     dados = { ...(await scooterNumbers()), registros: (await prisma.scooterLog.findMany({ orderBy: { at: "desc" }, take: 40 })).map((l) => ({ dia: l.at, tipo: l.kind, odo: l.odo, kwh: l.kwh, horas: l.hours, psi: l.psiFront != null ? `${l.psiFront}/${l.psiRear}` : null })) };
   else if (aba === "corpo") {
     // Corpo (24/11, ele: "colocar o openrouter para ajudar lá também"): todos os números da aba + o que ele comprou de comida nas notas recentes.
-    const itens = await prisma.invoiceItem.findMany({ where: { amount: { gt: 0 }, financeEntry: { purchaseDate: { gte: new Date(Date.now() - 14 * 86_400_000) } } }, select: { name: true }, take: 80 });
+    // Só comida (sem higiene, limpeza, farmácia): é o que serve à treinadora e é o que o personal pode ver.
+    const itens = await prisma.invoiceItem.findMany({ where: { amount: { gt: 0 }, category: { notIn: ["Higiene Pessoal", "Higiene e beleza", "Limpeza", "Farmácia", "Descontos", "Desconto / Ajuste", "Essenciais"] }, financeEntry: { purchaseDate: { gte: new Date(Date.now() - 14 * 86_400_000) } } }, select: { name: true }, take: 80 });
     dados = { ...(await corpoPainel()), comprasRecentes: [...new Set(itens.map((i) => i.name))] };
   } else if (aba === "treino") {
     // Treino (27/11, pedido dele): rotinas, sessão de hoje e evolução; a biblioteca vai só com nome e grupo para caber.
