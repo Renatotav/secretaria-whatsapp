@@ -21,6 +21,24 @@ type Dados = { academiaDias: string[]; hoje: string; cardioHoje: number; comidas
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
 const TZ = { timeZone: "America/Sao_Paulo" } as const;
 const dia = (s: string) => new Date(s).toLocaleDateString("pt-BR", { ...TZ, day: "2-digit", month: "2-digit" });
+/** Número que conta até o valor ao abrir (sem animação se o celular pede menos movimento). */
+function useConta(alvo: number, ms = 900): number {
+  const [v, setV] = useState(alvo);
+  useEffect(() => {
+    if (typeof window === "undefined" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setV(alvo); return; }
+    const ini = performance.now(), de = alvo * 0.92;
+    let raf = 0;
+    const passo = (t: number) => {
+      const k = Math.min(1, (t - ini) / ms), e = 1 - Math.pow(1 - k, 3);
+      setV(de + (alvo - de) * e);
+      if (k < 1) raf = requestAnimationFrame(passo);
+    };
+    raf = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(raf);
+  }, [alvo, ms]);
+  return v;
+}
+
 const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 14 };
 const muted: React.CSSProperties = { fontSize: 12, color: "var(--text-muted)" };
 
@@ -73,12 +91,16 @@ function Painel({ d }: { d: Dados }) {
   const hoje = d.comidas.filter((c) => dia(c.at) === dia(new Date().toISOString())).reduce((t, c) => t + c.kcal, 0);
   const metaK = d.numeros.kcal?.meta ?? null;
   const semanaAtual = d.semanas.at(-1);
-  const big: React.CSSProperties = { fontSize: 44, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" };
-  const barra = (pct: number, cor: string) => (
-    <div style={{ height: 10, borderRadius: 5, background: "var(--bg-hover)", overflow: "hidden" }}>
-      <div style={{ width: `${Math.max(0, Math.min(1, pct)) * 100}%`, height: "100%", background: cor, borderRadius: 5 }} />
+  const big: React.CSSProperties = { fontSize: "clamp(44px, 12vw, 60px)", fontWeight: 700, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" };
+  const barra = (pct: number, cor: string, alto = 10) => (
+    <div style={{ height: alto, borderRadius: alto / 2, background: "var(--bg-hover)", overflow: "hidden" }}>
+      <div className="enche" style={{ width: `${Math.max(0, Math.min(1, pct)) * 100}%`, height: "100%", background: cor, borderRadius: alto / 2 }} />
     </div>
   );
+  const pesoAnim = useConta(ult?.value ?? 0);
+  // Degraus de 5 kg entre o começo e a meta (o caminho em pedaços que dá para alcançar).
+  const degraus = primeiro && d.meta != null && primeiro.value > d.meta ? Array.from({ length: Math.floor((primeiro.value - d.meta) / 5) }, (_, i) => Math.ceil(primeiro.value / 5) * 5 - 5 * (i + 1)).filter((v) => v > d.meta! && v < primeiro.value) : [];
+  const proxDegrau = ult ? degraus.find((v) => v < ult.value) ?? d.meta : null;
 
   return (
     <>
@@ -94,24 +116,31 @@ function Painel({ d }: { d: Dados }) {
         </div>
       )}
       {/* O número que importa: o peso, e o caminho até a meta. */}
-      {ult && <div style={{ ...card, display: "grid", gap: 12, borderColor: "var(--accent-border)" }}>
+      {ult && <div className="surge" style={{ ...card, display: "grid", gap: 14, borderColor: "var(--accent-border)", padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <span style={muted}>Peso {ult ? `em ${dia(ult.at)}` : ""}</span>
-            <span style={big}>{ult ? `${n(ult.value, 1)} kg` : "—"}</span>
+            <span style={big}>{n(pesoAnim, 1)}<span style={{ fontSize: "0.45em", fontWeight: 600, color: "var(--text-muted)", marginLeft: 4 }}>kg</span></span>
           </div>
           <div style={{ display: "grid", gap: 2, textAlign: "right" }}>
-            {d.pesos.length > 1 && <strong style={{ fontSize: 18, color: perdeu > 0 ? "var(--success)" : "var(--warning)", fontVariantNumeric: "tabular-nums" }}>{perdeu > 0 ? "−" : "+"}{n(Math.abs(perdeu), 1)} kg</strong>}
+            {d.pesos.length > 1 && <strong style={{ fontSize: 22, color: perdeu > 0 ? "var(--success)" : "var(--warning)", fontVariantNumeric: "tabular-nums" }}>{perdeu > 0 ? "↓ " : "↑ "}{n(Math.abs(perdeu), 1)} kg</strong>}
             <span style={muted}>{primeiro && d.pesos.length > 1 ? `desde ${dia(primeiro.at)}` : "mande: peso 108,5"}</span>
           </div>
         </div>
         {caminho != null && d.meta != null && (
           <div style={{ display: "grid", gap: 6 }}>
-            {barra(caminho, "var(--accent)")}
+            <div style={{ position: "relative" }}>
+              {barra(caminho, "var(--accent)", 14)}
+              {degraus.map((v) => (
+                <span key={v} title={`degrau ${v} kg`} style={{ position: "absolute", top: -3, bottom: -3, width: 2, borderRadius: 1, left: `${((primeiro!.value - v) / (primeiro!.value - d.meta!)) * 100}%`, background: ult!.value <= v ? "var(--success)" : "var(--border)" }} />
+              ))}
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
-              <span>{n(primeiro!.value, 1)} kg</span>
-              <span style={{ color: "var(--text)" }}>{n(caminho * 100)}% do caminho · faltam {n(ult!.value - d.meta, 1)} kg</span>
+              <span>começo {n(primeiro!.value, 1)} kg</span>
               <span>meta {n(d.meta, 1)} kg</span>
+            </div>
+            <div style={{ fontSize: 14 }}>
+              <strong>{n(caminho * 100)}%</strong> do caminho · próximo degrau <strong style={{ color: "var(--accent)" }}>{n(proxDegrau ?? d.meta, 0)} kg</strong> <span style={muted}>(faltam {n(ult!.value - (proxDegrau ?? d.meta), 1)} kg)</span>
             </div>
           </div>
         )}
@@ -122,7 +151,7 @@ function Painel({ d }: { d: Dados }) {
 
       {/* Hoje e esta semana, lado a lado no computador. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 12 }}>
-        <div style={{ ...card, display: "grid", gap: 8 }}>
+        <div className="surge" style={{ ...card, display: "grid", gap: 8, animationDelay: "80ms" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <h2 style={{ fontSize: 15, fontWeight: 600 }}>🍽️ Hoje</h2>
             <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{n(hoje)}<span style={{ ...muted, fontSize: 13 }}>{metaK ? ` / ${n(metaK)} kcal` : " kcal"}</span></span>
@@ -130,7 +159,7 @@ function Painel({ d }: { d: Dados }) {
           {metaK != null && barra(hoje / metaK, hoje <= metaK ? "var(--success)" : "var(--warning)")}
           <span style={muted}>{metaK == null ? "Mande o perfil para ter a meta: perfil 1,78 m 38 anos homem" : hoje <= metaK ? `sobram ~${n(metaK - hoje)} kcal` : `passou ~${n(hoje - metaK)} kcal`}{d.cardioHoje > 0 ? ` · 🏃 queimou ~${n(d.cardioHoje)} no cardio` : ""} · anote com: comi 2 coxinhas</span>
         </div>
-        <div style={{ ...card, display: "grid", gap: 10 }}>
+        <div className="surge" style={{ ...card, display: "grid", gap: 10, animationDelay: "160ms" }}>
           <h2 style={{ fontSize: 15, fontWeight: 600 }}>📅 Esta semana</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }} aria-label={`${d.academia7} dias de academia nos últimos 7`}>
             {Array.from({ length: 7 }, (_, i) => {
@@ -139,7 +168,7 @@ function Painel({ d }: { d: Dados }) {
               const foi = d.academiaDias.includes(iso);
               return (
                 <div key={iso} style={{ display: "grid", gap: 4, justifyItems: "center" }} title={`${dia(iso + "T12:00:00")}: ${foi ? "academia" : "sem academia"}`}>
-                  <span style={{ width: "100%", height: 28, borderRadius: 6, background: foi ? "var(--accent)" : "var(--bg-hover)", outline: i === 6 ? "1px solid var(--border)" : "none" }} />
+                  <span className={foi ? "acende" : undefined} style={{ width: "100%", height: 30, borderRadius: 7, background: foi ? "var(--accent)" : "var(--bg-hover)", outline: i === 6 ? "1px solid var(--border)" : "none", animationDelay: `${300 + i * 70}ms` }} />
                   <span style={{ fontSize: 11, color: i === 6 ? "var(--text)" : "var(--text-muted)", fontWeight: i === 6 ? 600 : 400 }}>{"DSTQQSS"[dt.getDay()]}</span>
                 </div>
               );
@@ -162,9 +191,9 @@ function Painel({ d }: { d: Dados }) {
           {d.numeros.kcal && <p style={{ marginTop: 6, lineHeight: 1.5 }}>Gasto em repouso (Mifflin-St Jeor) {n(d.numeros.kcal.tmb)} kcal × {n(d.numeros.kcal.fator, 3)} de atividade ({n(d.numeros.academiaPorSemana, 1)} dia(s) de academia por semana) = {n(d.numeros.kcal.gasto)} kcal. A meta tira 500 kcal por dia. São estimativas: o ritmo do peso é quem confirma.</p>}
         </details>
       )}
-      <PerguntaIA aba="corpo" titulo="💬 Pergunte à treinadora" exemplos={["O que eu janto hoje para fechar a meta?", "Monta meu treino de perna com o que eu já faço", "Estou no ritmo certo para a meta?"]} />
       <GraficoPeso pesos={d.pesos} meta={d.meta} previsao={d.numeros.previsao} />
       <Comidas c={d.comidas} meta={d.numeros.kcal?.meta ?? null} />
+      <PerguntaIA aba="corpo" titulo="💬 Pergunte à treinadora" exemplos={["O que eu janto hoje para fechar a meta?", "Monta meu treino de perna com o que eu já faço", "Estou no ritmo certo para a meta?"]} />
       {/* Treino tem aba própria (24/11: "ficou confuso a parte do treino"). Aqui só o atalho. */}
       <a href="/treino" style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, textDecoration: "none", color: "var(--text)" }}>
         <span><strong style={{ fontSize: 15 }}>🏋️ Treino</strong><br /><span style={muted}>treino guiado, rotinas, cargas e evolução</span></span>
@@ -190,8 +219,9 @@ function GraficoPeso({ pesos, meta, previsao }: { pesos: Dados["pesos"]; meta: n
   const x = (s: string) => left + ((new Date(s).getTime() - t0) / Math.max(1, t1 - t0)) * (w - left - right);
   const y = (v: number) => top + ((max - v) / (max - min)) * (base - top);
   const linha = pesos.map((p) => `${x(p.at)},${y(p.value)}`).join(" ");
+  const comprimento = pesos.slice(1).reduce((t, p, i) => t + Math.hypot(x(p.at) - x(pesos[i].at), y(p.value) - y(pesos[i].value)), 0);
   return (
-    <div style={card}>
+    <div className="surge" style={{ ...card, animationDelay: "240ms" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
         <h2 style={{ fontSize: 15, fontWeight: 600 }}>📈 Peso</h2>
         {meta != null && <span style={muted}>meta {n(meta, 1)} kg{previsao ? ` · ~${new Date(previsao + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" })}` : ""}</span>}
@@ -205,8 +235,9 @@ function GraficoPeso({ pesos, meta, previsao }: { pesos: Dados["pesos"]; meta: n
             </g>
           ))}
           {meta != null && meta >= min && <line x1={left} x2={w - right} y1={y(meta)} y2={y(meta)} stroke="var(--success)" strokeDasharray="5 4" />}
-          <polyline points={linha} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinejoin="round" />
-          {pesos.map((p) => <circle key={p.at} cx={x(p.at)} cy={y(p.value)} r={3.5} fill="var(--accent)" />)}
+          <polygon points={`${x(pesos[0].at)},${base} ${linha} ${x(pesos.at(-1)!.at)},${base}`} fill="var(--accent-dim)" className="surge" style={{ animationDelay: "500ms" }} />
+          <polyline points={linha} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" className="traca" style={{ ["--len" as string]: `${Math.ceil(comprimento)}` }} />
+          {pesos.map((p, i) => <circle key={p.at} cx={x(p.at)} cy={y(p.value)} r={i === pesos.length - 1 ? 5 : 3} fill="var(--accent)" stroke={i === pesos.length - 1 ? "var(--bg-card)" : "none"} strokeWidth={2} className="acende" style={{ animationDelay: `${600 + (i / pesos.length) * 800}ms`, transformOrigin: `${x(p.at)}px ${y(p.value)}px` }} />)}
           <text x={left} y={h - 6} fontSize={10} fill="var(--text-muted)">{dia(pesos[0].at)}</text>
           <text x={w - right} y={h - 6} textAnchor="end" fontSize={10} fill="var(--text-muted)">{dia(pesos.at(-1)!.at)}</text>
         </svg>
