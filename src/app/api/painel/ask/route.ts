@@ -6,6 +6,7 @@ import { generateResponse } from "@/lib/openai";
 import { airconData } from "@/lib/aircon";
 import { scooterNumbers } from "@/lib/scooter";
 import { corpoPainel } from "@/lib/corpo";
+import { treinoAba } from "@/lib/treino-guiado";
 import { getProviderOpts } from "@/lib/message-handlers";
 import { answerFinanceQuestion, type ContaSql } from "@/lib/assistant-chat";
 
@@ -15,7 +16,7 @@ import { answerFinanceQuestion, type ContaSql } from "@/lib/assistant-chat";
 //   a consulta e as linhas ("🔍 Ver a conta");
 // - abas Scooter e Ar: os números da aba inteira.
 // Nada é gravado. Dado do trabalho não passa aqui (tem a caixa própria, com ZDR).
-const ABAS: Record<string, string> = { ar: "Ar-condicionado", scooter: "Scooter", finance: "Financeiro", parcelas: "Parcelas", corpo: "Corpo" };
+const ABAS: Record<string, string> = { ar: "Ar-condicionado", scooter: "Scooter", finance: "Financeiro", parcelas: "Parcelas", corpo: "Corpo", treino: "Treino" };
 
 export const POST = withErrorHandling(async (request: Request) => {
   if (!(await isAuthenticated(request))) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -44,6 +45,10 @@ export const POST = withErrorHandling(async (request: Request) => {
     // Corpo (24/11, ele: "colocar o openrouter para ajudar lá também"): todos os números da aba + o que ele comprou de comida nas notas recentes.
     const itens = await prisma.invoiceItem.findMany({ where: { amount: { gt: 0 }, financeEntry: { purchaseDate: { gte: new Date(Date.now() - 14 * 86_400_000) } } }, select: { name: true }, take: 80 });
     dados = { ...(await corpoPainel()), comprasRecentes: [...new Set(itens.map((i) => i.name))] };
+  } else if (aba === "treino") {
+    // Treino (27/11, pedido dele): rotinas, sessão de hoje e evolução; a biblioteca vai só com nome e grupo para caber.
+    const { biblioteca, ...t } = await treinoAba();
+    dados = { ...t, exerciciosDisponiveis: biblioteca.map((e) => `${e.nome} (${e.grupo})`) };
   } else return NextResponse.json({ error: "Escolha um gráfico para perguntar." }, { status: 400 });
 
   const hoje = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
@@ -57,7 +62,10 @@ export const POST = withErrorHandling(async (request: Request) => {
     (aba === "corpo"
       ? " Aqui você é a treinadora e nutricionista prática dele: pode sugerir o que comer, montar treino, ajustar carga e explicar o ritmo do peso, usando os números (peso, meta, calorias, treinos, o que comeu, comprasRecentes). Até 8 linhas, direto, com números. kcal.meta = calorias por dia para perder ~0,5 kg/semana. Força = carga máxima estimada para 1 repetição. Não fale de médico nem de remédio; sem julgar comida ou bebida."
       : "") +
+    (aba === "treino"
+      ? " Aqui você é o treinador dele de academia (ele está recomeçando): monta e ajusta treino, explica a carga sugerida e o que fazer quando estagnar, usando as rotinas, a sessão de hoje e a evolução. Prefira exercícios de exerciciosDisponiveis. Até 8 linhas, direto, com séries × repetições e kg. rir: 3 = fácil, 1 = ok, 0 = no limite. Não fale de médico nem de remédio."
+      : "") +
     "\n\nDADOS:\n" + JSON.stringify(dados).slice(0, 12_000);
-  const r = await generateResponse([{ role: "user", content: pergunta }], sistema, 0.2, aba === "corpo" ? 700 : 400, opts);
+  const r = await generateResponse([{ role: "user", content: pergunta }], sistema, 0.2, aba === "corpo" || aba === "treino" ? 700 : 400, opts);
   return NextResponse.json({ resposta: r.content.trim(), ...(grafico ? { dados: grafico.dados } : {}) });
 });

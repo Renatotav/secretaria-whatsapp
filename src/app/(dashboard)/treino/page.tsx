@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWidth } from "@/lib/use-width";
+import { PerguntaIA } from "../pergunta-ia";
 
 type Item = { exercicio: string; series: number; repMin: number; repMax: number; descanso: number; segundos?: number | null };
 type Feita = { id: string; kg: number | null; reps: number | null; segundos: number | null; rir: number | null };
@@ -87,6 +88,7 @@ export default function TreinoPage() {
         {d && aba === "hoje" && <Hoje d={d} rotinaSel={rotinaSel} setRotinaSel={setRotinaSel} recarregar={() => carregar(rotinaSel)} irRotinas={() => setAba("rotinas")} />}
         {d && aba === "rotinas" && <Rotinas d={d} recarregar={() => carregar(rotinaSel)} />}
         {d && aba === "evolucao" && <Evolucao d={d} />}
+        {d && <PerguntaIA aba="treino" titulo="💬 Pergunte ao treinador" exemplos={["Monta um treino de 3 dias para quem está recomeçando", "Por que a carga do supino não subiu?", "O que eu faço hoje se só tenho 40 minutos?"]} />}
       </div>
     </div>
   );
