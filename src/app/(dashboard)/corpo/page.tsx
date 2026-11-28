@@ -18,7 +18,7 @@ type Numeros = {
 };
 type Exercicio = { nome: string; vezes: number; recorde: number | null; ultima: { at: string; rm: number | null; desc: string }; historico: { at: string; rm: number | null; desc: string }[] };
 type Treino = { grupos: { feitos: [string, number][]; faltam: string[] }; exercicios: Exercicio[]; plano: { dia: string; treino: string }[] };
-type Dados = { academiaDias: string[]; hoje: string; cardioHoje: number; comidas: { at: string; kcal: number; texto: string }[]; treino: Treino; numeros: Numeros; pesos: { at: string; value: number }[]; meta: number | null; academia7: number; semanas: Semana[] };
+type Dados = { academiaDias: string[]; hoje: string; cardioHoje: number; comidas: { at: string; kcal: number; prot: number; texto: string }[]; treino: Treino; numeros: Numeros; pesos: { at: string; value: number }[]; meta: number | null; academia7: number; semanas: Semana[] };
 
 const n = (v: number, d = 0) => v.toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
 const TZ = { timeZone: "America/Sao_Paulo" } as const;
@@ -35,12 +35,12 @@ export default function CorpoPage() {
   const [d, setD] = useState<Dados | null>(null);
   const [erro, setErro] = useState(false);
 
-  useEffect(() => {
+  const carregar = () =>
     fetch("/api/corpo")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setD)
       .catch(() => setErro(true));
-  }, []);
+  useEffect(() => { carregar(); }, []);
 
   return (
     <div style={{ height: "100%", overflowY: "auto" }}>
@@ -57,13 +57,13 @@ export default function CorpoPage() {
         </div>
         {erro && <div style={{ color: "var(--danger)" }}>Não consegui carregar. Atualize a página.</div>}
         {!d && !erro && <div style={{ color: "var(--text-muted)" }}>Carregando...</div>}
-        {d && <Painel d={d} />}
+        {d && <Painel d={d} recarregar={carregar} />}
       </div>
     </div>
   );
 }
 
-function Painel({ d }: { d: Dados }) {
+function Painel({ d, recarregar }: { d: Dados; recarregar: () => void }) {
   const papel = usePapel(); // o relógio (Strava) é só do dono
   const ult = d.pesos.at(-1);
   const primeiro = d.pesos[0];
@@ -78,7 +78,11 @@ function Painel({ d }: { d: Dados }) {
   const perdeu = ult && primeiro ? primeiro.value - ult.value : 0;
   const caminho = ult && primeiro && d.meta != null && primeiro.value > d.meta ? Math.max(0, Math.min(1, perdeu / (primeiro.value - d.meta))) : null;
   const prev = d.numeros.previsao ? new Date(d.numeros.previsao + "T12:00:00").toLocaleDateString("pt-BR", { month: "short", year: "numeric" }) : null;
-  const hoje = d.comidas.filter((c) => dia(c.at) === dia(new Date().toISOString())).reduce((t, c) => t + c.kcal, 0);
+  const deHoje = d.comidas.filter((c) => dia(c.at) === dia(new Date().toISOString()));
+  const hoje = deHoje.reduce((t, c) => t + c.kcal, 0);
+  const protHoje = deHoje.reduce((t, c) => t + (c.prot || 0), 0);
+  // Proteína para perder gordura sem perder músculo: ~1,6 g por kg do peso da meta (ou do atual, sem meta).
+  const metaProt = Math.round(1.6 * (d.meta ?? ult?.value ?? 0)) || null;
   const metaK = d.numeros.kcal?.meta ?? null;
   const semanaAtual = d.semanas.at(-1);
   const big: React.CSSProperties = { fontSize: "clamp(44px, 12vw, 60px)", fontWeight: 700, lineHeight: 0.95, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" };
@@ -139,14 +143,29 @@ function Painel({ d }: { d: Dados }) {
         </div>
       </div>}
 
+      {papel === "dono" && <RegistrarPeso ultimo={ult?.value ?? null} recarregar={recarregar} />}
+
       {/* Hoje e esta semana, lado a lado no computador. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: 12 }}>
         <div className="surge" style={{ ...card, display: "grid", gap: 8, animationDelay: "80ms" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600 }}>🍽️ Hoje</h2>
-            <span style={{ fontSize: 20, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{n(hoje)}<span style={{ ...muted, fontSize: 13 }}>{metaK ? ` / ${n(metaK)} kcal` : " kcal"}</span></span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div>
+              <h2 style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--text-muted)" }}>🍽️ Calorias hoje</h2>
+              <div style={{ fontSize: 34, fontWeight: 700, lineHeight: 1.05, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>{n(hoje)}<span style={{ ...muted, fontSize: 14, fontWeight: 500 }}>{metaK ? ` / ${n(metaK)}` : " kcal"}</span></div>
+            </div>
+            {metaK != null && (
+              <span style={{ fontSize: 13, fontWeight: 600, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap", color: hoje <= metaK ? "var(--success)" : "var(--warning)", background: "color-mix(in srgb, currentColor 12%, transparent)", border: "1px solid color-mix(in srgb, currentColor 35%, transparent)" }}>
+                {hoje <= metaK ? `🔥 faltam ${n(metaK - hoje)}` : `passou ${n(hoje - metaK)}`}
+              </span>
+            )}
           </div>
           {metaK != null && barra(hoje / metaK, hoje <= metaK ? "var(--success)" : "var(--warning)")}
+          {(metaK != null || metaProt != null) && (
+            <div style={{ display: "flex", justifyContent: "space-around", gap: 12, padding: "4px 0" }}>
+              {metaK != null && <Anel pct={hoje / metaK} cor={hoje <= metaK ? "var(--success)" : "var(--warning)"} valor={`${n(hoje)}`} rotulo={`kcal / ${n(metaK)}`} />}
+              {metaProt != null && <Anel pct={protHoje / metaProt} cor="var(--accent)" valor={`${n(protHoje)} g`} rotulo={`proteína / ${n(metaProt)} g`} />}
+            </div>
+          )}
           <span style={muted}>{metaK == null ? (papel === "personal" ? "sem meta de calorias ainda" : "Mande o perfil para ter a meta: perfil 1,78 m 38 anos homem") : hoje <= metaK ? `sobram ~${n(metaK - hoje)} kcal` : `passou ~${n(hoje - metaK)} kcal`}{d.cardioHoje > 0 ? ` · 🏃 queimou ~${n(d.cardioHoje)} no cardio` : ""}{papel === "personal" ? "" : " · anote com: comi 2 coxinhas"}</span>
         </div>
         <div className="surge" style={{ ...card, display: "grid", gap: 10, animationDelay: "160ms" }}>
@@ -402,3 +421,58 @@ function Relogio() {
   );
 }
 
+
+/** Anel de progresso (calorias, proteína): enche até o valor ao abrir. */
+function Anel({ pct, cor, valor, rotulo }: { pct: number; cor: string; valor: string; rotulo: string }) {
+  const r = 30, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct || 0));
+  return (
+    <div style={{ display: "grid", justifyItems: "center", gap: 4 }}>
+      <svg width="76" height="76" viewBox="0 0 76 76" role="img" aria-label={`${valor} ${rotulo}`}>
+        <circle cx="38" cy="38" r={r} fill="none" stroke="var(--bg-hover)" strokeWidth="7" />
+        <circle className="anel" cx="38" cy="38" r={r} fill="none" stroke={cor} strokeWidth="7" strokeLinecap={p > 0 ? "round" : "butt"}
+          strokeDasharray={`${c * p} ${c}`} transform="rotate(-90 38 38)" />
+        <text x="38" y="43" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text)">{Math.round(p * 100)}%</text>
+      </svg>
+      <strong style={{ fontSize: 15, fontVariantNumeric: "tabular-nums" }}>{valor}</strong>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{rotulo}</span>
+    </div>
+  );
+}
+
+/** Registrar o peso aqui mesmo (só o dono): − e + de 0,1 kg a partir do último. */
+function RegistrarPeso({ ultimo, recarregar }: { ultimo: number | null; recarregar: () => void }) {
+  const [kg, setKg] = useState(ultimo ?? 100);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const passo = (v: number) => setKg((k) => Math.round((k + v) * 10) / 10);
+  const salvar = async () => {
+    setOcupado(true);
+    setMsg(null);
+    const r = await fetch("/api/corpo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ peso: kg }) }).catch(() => null);
+    setOcupado(false);
+    if (!r?.ok) return setMsg("Não consegui salvar. Tente de novo.");
+    setMsg("✅ Peso anotado.");
+    recarregar();
+  };
+  const botao: React.CSSProperties = { height: 48, borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 22, cursor: "pointer", font: "inherit" };
+  return (
+    <div className="surge" style={{ ...card, display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <h2 style={{ fontSize: 15, fontWeight: 600 }}>⚖️ Registrar peso</h2>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>de manhã, em jejum</span>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "56px 1fr 56px", gap: 8, alignItems: "center", width: "100%", maxWidth: 420, justifySelf: "center" }}>
+        <button type="button" aria-label="Menos 0,1 kg" style={botao} onClick={() => passo(-0.1)}>−</button>
+        <div style={{ textAlign: "center", fontSize: 34, fontWeight: 700, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }} aria-live="polite">
+          {kg.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}<span style={{ fontSize: 14, color: "var(--text-muted)", fontWeight: 500 }}> kg</span>
+        </div>
+        <button type="button" aria-label="Mais 0,1 kg" style={botao} onClick={() => passo(0.1)}>+</button>
+      </div>
+      <button type="button" disabled={ocupado} onClick={salvar}
+        style={{ width: "100%", maxWidth: 420, justifySelf: "center", height: 46, borderRadius: 10, border: "none", background: "var(--accent)", color: "#fff", fontWeight: 600, fontSize: 15, cursor: "pointer", font: "inherit", opacity: ocupado ? 0.6 : 1 }}>
+        {ocupado ? "Salvando…" : "Anotar peso"}
+      </button>
+      {msg && <span style={{ fontSize: 13, color: msg.startsWith("✅") ? "var(--success)" : "var(--danger)" }}>{msg}</span>}
+    </div>
+  );
+}

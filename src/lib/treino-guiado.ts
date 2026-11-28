@@ -10,7 +10,7 @@ import { grande, grupoDo, nomeExercicio, umRM } from "./treino";
 
 const DIA = 86_400_000;
 export type ItemRotina = { exercicio: string; series: number; repMin: number; repMax: number; descanso: number; segundos?: number | null };
-type Serie = { id: string; at: Date; exercicio: string; reps: number | null; kg: number | null; segundos: number | null; sessaoId: string | null; ordem: number | null; series: number; rir?: number | null };
+type Serie = { id: string; at: Date; exercicio: string; reps: number | null; kg: number | null; segundos: number | null; sessaoId: string | null; ordem: number | null; series: number; rir?: number | null; createdAt?: Date };
 
 const arred = (v: number) => Math.round(v / 2.5) * 2.5;
 
@@ -124,6 +124,8 @@ export async function treinoAba(rotinaId?: string | null) {
     rotinas: rotinas.map((r) => ({ id: r.id, nome: r.nome, dia: r.dia, itens: r.itens as unknown as ItemRotina[] })),
     rotinaHoje: doDia ? { id: doDia.id, nome: doDia.nome } : null,
     sessaoId,
+    // Hora real da 1ª série de hoje (createdAt; "at" guarda só o dia): o cronômetro do treino conta dela.
+    inicio: deHoje.length ? new Date(Math.min(...deHoje.map((s) => (s.createdAt ?? s.at).getTime()))).toISOString() : null,
     sessao,
     stats: { dias, seriesGrupo, faixa: SERIES_SEMANA, evolucao },
   };

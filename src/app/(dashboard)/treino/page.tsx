@@ -23,6 +23,7 @@ type Dados = {
   rotinas: Rotina[];
   rotinaHoje: { id: string; nome: string } | null;
   sessaoId: string | null;
+  inicio: string | null;
   sessao: ItemSessao[];
   stats: { dias: string[]; seriesGrupo: Record<string, number>; faixa: [number, number]; evolucao: Evol[] };
 };
@@ -140,7 +141,7 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
       <div style={{ ...card, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <strong style={{ fontSize: 22, letterSpacing: "-0.01em" }}>{d.rotinaHoje ? d.rotinaHoje.nome : "Treino livre"}</strong>
-          <span style={muted}>{DIAS[new Date(d.hoje + "T12:00:00").getDay()]}, {dia(d.hoje)}</span>
+          <span style={muted}>{DIAS[new Date(d.hoje + "T12:00:00").getDay()]}, {dia(d.hoje)}{d.inicio && <> · <Cronometro desde={d.inicio} /></>}</span>
         </div>
         {planejadas > 0 && (
           <div style={{ display: "grid", gap: 4 }}>
@@ -172,8 +173,22 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
         </div>
       )}
 
+      {itens.length > 1 && (
+        <nav aria-label="Exercícios de hoje" style={{ position: "sticky", top: 0, zIndex: 5, background: "var(--bg)", padding: "6px 0", margin: "-6px 0", display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none" }}>
+          {itens.map((item, i) => {
+            const feito = item.feitas.length >= item.series;
+            return (
+              <button key={item.exercicio} type="button" onClick={() => document.getElementById(`ex-${i}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 6, padding: "6px 12px 6px 6px", borderRadius: 999, border: `1px solid ${feito ? "var(--success)" : "var(--border)"}`, background: "var(--bg-card)", color: "var(--text)", font: "inherit", fontSize: 13, cursor: "pointer", maxWidth: 200 }}>
+                <span style={{ width: 22, height: 22, borderRadius: 999, display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, background: feito ? "var(--success)" : "var(--bg-hover)", color: feito ? "#fff" : "var(--text-muted)" }}>{feito ? "✓" : i + 1}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.exercicio}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(360px, 100%), 1fr))", gap: 12 }}>
-        {itens.map((item, i) => <CartaoExercicio key={item.exercicio} item={item} marcar={marcar} recarregar={recarregar} atraso={i * 60} />)}
+        {itens.map((item, i) => <CartaoExercicio key={item.exercicio} item={item} marcar={marcar} recarregar={recarregar} atraso={i * 60} ancora={`ex-${i}`} />)}
       </div>
 
       <AdicionarExercicio biblioteca={d.biblioteca} onAdd={(lib) => setExtras((x) => [...x, { exercicio: lib.nome, grupo: lib.grupo, series: 3, repMin: 8, repMax: 12, descanso: 90, segundos: lib.tempo ? 30 : null, sugestao: { kg: null, reps: 10, motivo: "novo hoje" }, ultima: null, recorde: null, feitas: [] }])} />
@@ -189,7 +204,7 @@ function Hoje({ d, rotinaSel, setRotinaSel, recarregar, irRotinas }: { d: Dados;
   );
 }
 
-function CartaoExercicio({ item, marcar, recarregar, atraso = 0 }: { item: ItemSessao; marcar: (i: ItemSessao, ordem: number, kg: string, reps: string) => Promise<void>; recarregar: () => void; atraso?: number }) {
+function CartaoExercicio({ item, marcar, recarregar, atraso = 0, ancora }: { item: ItemSessao; marcar: (i: ItemSessao, ordem: number, kg: string, reps: string) => Promise<void>; recarregar: () => void; atraso?: number; ancora?: string }) {
   const tempo = item.segundos != null;
   const [extra, setExtra] = useState(0);
   const linhas = Math.max(item.series + extra, item.feitas.length + (item.feitas.length >= item.series + extra ? 0 : 0));
@@ -198,7 +213,7 @@ function CartaoExercicio({ item, marcar, recarregar, atraso = 0 }: { item: ItemS
   const repsPadrao = tempo ? (ultimaFeita?.segundos ?? item.segundos ?? 30) : (ultimaFeita?.reps ?? item.sugestao.reps);
   const completo = item.feitas.length >= item.series;
   return (
-    <div className="surge" style={{ ...card, display: "grid", gap: 10, alignContent: "start", borderColor: completo ? "var(--success)" : "var(--border)", animationDelay: `${atraso}ms` }}>
+    <div id={ancora} className="surge" style={{ ...card, display: "grid", gap: 10, alignContent: "start", scrollMarginTop: 56, borderColor: completo ? "var(--success)" : "var(--border)", animationDelay: `${atraso}ms` }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
         <div style={{ minWidth: 0, display: "grid", gap: 4 }}>
           <strong style={{ fontSize: 17, lineHeight: 1.25 }}>{completo ? "✅ " : ""}{item.exercicio}</strong>
@@ -548,4 +563,13 @@ function GraficoForca({ ex }: { ex: Evol }) {
       <span style={muted}>Força estimada (kg) por treino · {ex.vezes} treino(s)</span>
     </div>
   );
+}
+
+/** Tempo de treino desde a 1ª série de hoje (para de contar depois de 3 h: treino esquecido aberto). */
+function Cronometro({ desde }: { desde: string }) {
+  const [agora, setAgora] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setAgora(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const seg = Math.max(0, Math.min(3 * 3600, Math.floor((agora - new Date(desde).getTime()) / 1000)));
+  const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), x = seg % 60;
+  return <span style={{ fontVariantNumeric: "tabular-nums", color: "var(--accent)", fontWeight: 600 }}>⏱ {h ? `${h}:${String(m).padStart(2, "0")}` : m}:{String(x).padStart(2, "0")}</span>;
 }
